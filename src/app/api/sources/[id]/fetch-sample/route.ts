@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { PREVIEW_MAX_BYTES } from "@/lib/constants";
-import { detectFormat } from "@/lib/format-detector";
-import { fetchWithGuard, sanitizeUrl } from "@/lib/http-client";
+import { sanitizeUrl } from "@/lib/http-client";
+import { findConnector } from "@/connectors/registry";
+import { targetUrlOf } from "@/connectors/types";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-/** サンプル取得: レスポンス先頭プレビューと形式判定結果を保存する */
+/** サンプル取得: コネクタ経由で取得し、プレビューと形式判定結果を保存する */
 export async function POST(_request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const source = await prisma.dataSource.findUnique({ where: { id } });
@@ -14,14 +15,14 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const targetUrl = source.endpointUrl ?? source.officialUrl;
-  const result = await fetchWithGuard(targetUrl, { method: "GET", readBody: true });
+  const connector = findConnector(source);
+  const result = await connector.fetchSample(source);
 
   const log = await prisma.fetchLog.create({
     data: {
       dataSourceId: source.id,
       executionType: "sample",
-      requestUrl: sanitizeUrl(targetUrl),
+      requestUrl: sanitizeUrl(result.finalUrl ?? targetUrlOf(source)),
       method: "GET",
       statusCode: result.statusCode ?? null,
       success: result.success,
@@ -30,14 +31,14 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       contentType: result.contentType ?? null,
       errorType: result.errorType ?? null,
       errorMessage: result.errorMessage ?? null,
+      note: `connector: ${connector.name}`,
     },
   });
 
   let sampleId: string | null = null;
-  let detectedFormat: string | null = null;
+  const detectedFormat = result.detectedFormat ?? null;
   if (result.success) {
     const preview = (result.previewText ?? "").slice(0, PREVIEW_MAX_BYTES);
-    detectedFormat = detectFormat(result.contentType ?? null, preview);
     const sample = await prisma.sampleResponse.create({
       data: {
         dataSourceId: source.id,
@@ -65,6 +66,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     responseSizeBytes: result.responseSizeBytes ?? null,
     detectedFormat,
     sampleId,
+    connector: connector.name,
     errorType: result.errorType ?? null,
     message: result.errorMessage ?? null,
     logId: log.id,

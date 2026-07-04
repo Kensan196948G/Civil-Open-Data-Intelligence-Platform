@@ -34,30 +34,40 @@ function getPinnedAgent(): Agent {
     pinnedAgent = new Agent({
       connect: {
         lookup(hostname, options, callback) {
+          // 呼び出し元 (node:net) は options.all の有無でコールバック形式が変わる:
+          // autoSelectFamily (Node 20+ 既定) は (err, addresses[]) を期待する
+          const cb = callback as unknown as (
+            err: NodeJS.ErrnoException | null,
+            address?: string | dns.LookupAddress[],
+            family?: number,
+          ) => void;
           dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
             if (err) {
-              callback(err, "", 4);
+              cb(err);
               return;
             }
             const list = Array.isArray(addresses)
               ? addresses
               : [{ address: addresses as unknown as string, family: 4 }];
             if (list.length === 0) {
-              callback(Object.assign(new Error("no address"), { code: "ENOTFOUND" }), "", 4);
+              cb(Object.assign(new Error("no address"), { code: "ENOTFOUND" }));
               return;
             }
             const blocked = list.find((a) => isPrivateIp(a.address));
             if (blocked) {
-              callback(
+              cb(
                 Object.assign(new Error("接続先が非公開アドレスに解決されたため拒否しました"), {
                   code: PRIVATE_ADDR_CODE,
                 }),
-                "",
-                4,
               );
               return;
             }
-            callback(null, list[0].address, list[0].family);
+            // 検証済みリストのみを返すため、どのアドレスが選ばれてもピン留めが維持される
+            if ((options as { all?: boolean }).all) {
+              cb(null, list);
+            } else {
+              cb(null, list[0].address, list[0].family);
+            }
           });
         },
       },
