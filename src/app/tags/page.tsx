@@ -25,7 +25,7 @@ export default async function TagsPage() {
           {tags.map((tag) => (
             <Link
               key={tag.id}
-              href={`/sources?q=&tag=${tag.id}`}
+              href={`/sources?tag=${tag.id}`}
               className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1 text-sm hover:bg-slate-50"
             >
               <span

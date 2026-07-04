@@ -14,6 +14,7 @@ type SearchParams = Promise<{
   dataFormat?: string;
   requiresApiKey?: string;
   status?: string;
+  tag?: string;
 }>;
 
 export default async function SourcesPage({ searchParams }: { searchParams: SearchParams }) {
@@ -32,8 +33,9 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
   if (sp.requiresApiKey === "true") where.requiresApiKey = true;
   if (sp.requiresApiKey === "false") where.requiresApiKey = false;
   if (sp.status) where.status = sp.status;
+  if (sp.tag) where.tags = { some: { tagId: sp.tag } };
 
-  const [sources, providers] = await Promise.all([
+  const [sources, providers, tags] = await Promise.all([
     prisma.dataSource.findMany({
       where,
       include: { provider: true, tags: { include: { tag: true } } },
@@ -41,6 +43,7 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
       take: 200,
     }),
     prisma.provider.findMany({ orderBy: { name: "asc" } }),
+    prisma.tag.findMany({ orderBy: { name: "asc" } }),
   ]);
 
   const selectCls = "rounded border border-slate-300 px-2 py-1.5 text-sm";
@@ -114,6 +117,17 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
             ))}
           </select>
         </div>
+        <div>
+          <label className="mb-1 block text-xs text-slate-500">🏷️ タグ</label>
+          <select name="tag" defaultValue={sp.tag ?? ""} className={selectCls}>
+            <option value="">すべて</option>
+            {tags.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </div>
         <button type="submit" className="rounded bg-slate-800 px-3 py-1.5 text-sm text-white hover:bg-slate-700">
           🔍 検索
         </button>
@@ -148,9 +162,13 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
                   </Link>
                   <div className="mt-0.5 flex flex-wrap gap-1">
                     {s.tags.map(({ tag }) => (
-                      <span key={tag.id} className="rounded-full bg-slate-100 px-1.5 text-[10px] text-slate-600">
+                      <Link
+                        key={tag.id}
+                        href={`/sources?tag=${tag.id}`}
+                        className="rounded-full bg-slate-100 px-1.5 text-[10px] text-slate-600 hover:bg-slate-200"
+                      >
                         {tag.name}
-                      </span>
+                      </Link>
                     ))}
                   </div>
                 </td>
