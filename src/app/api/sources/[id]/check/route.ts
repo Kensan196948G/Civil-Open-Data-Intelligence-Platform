@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { fetchWithGuard, sanitizeUrl } from "@/lib/http-client";
+import { sanitizeUrl } from "@/lib/http-client";
+import { findConnector } from "@/connectors/registry";
+import { targetUrlOf } from "@/connectors/types";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-/** 接続確認: 登録済みURLに対して疎通確認を実行し fetch_logs に記録する */
+/** 接続確認: データソースに対応するコネクタで疎通確認し fetch_logs に記録する */
 export async function POST(_request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const source = await prisma.dataSource.findUnique({ where: { id } });
@@ -12,14 +14,14 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const targetUrl = source.endpointUrl ?? source.officialUrl;
-  const result = await fetchWithGuard(targetUrl, { method: "GET", readBody: true });
+  const connector = findConnector(source);
+  const result = await connector.check(source);
 
   const log = await prisma.fetchLog.create({
     data: {
       dataSourceId: source.id,
       executionType: "check",
-      requestUrl: sanitizeUrl(targetUrl),
+      requestUrl: sanitizeUrl(result.finalUrl ?? targetUrlOf(source)),
       method: "GET",
       statusCode: result.statusCode ?? null,
       success: result.success,
@@ -28,6 +30,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       contentType: result.contentType ?? null,
       errorType: result.errorType ?? null,
       errorMessage: result.errorMessage ?? null,
+      note: `connector: ${connector.name}`,
     },
   });
 
@@ -45,6 +48,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     responseTimeMs: result.responseTimeMs ?? null,
     contentType: result.contentType ?? null,
     responseSizeBytes: result.responseSizeBytes ?? null,
+    connector: connector.name,
     errorType: result.errorType ?? null,
     message: result.errorMessage ?? null,
     logId: log.id,
