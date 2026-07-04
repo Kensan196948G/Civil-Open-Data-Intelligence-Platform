@@ -25,6 +25,8 @@ data/exports/*
 
 # test
 coverage/
+test-results/
+playwright-report/
 
 # local tooling
 .claude/
