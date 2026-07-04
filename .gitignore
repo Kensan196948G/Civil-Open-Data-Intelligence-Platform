@@ -30,3 +30,6 @@ coverage/
 .claude/
 .mcp.json
 state.json
+
+# claudeos internal reports
+reports/
