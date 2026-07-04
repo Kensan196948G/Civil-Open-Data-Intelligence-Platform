@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
   const dataFormat = sp.get("dataFormat")?.trim();
   const requiresApiKey = sp.get("requiresApiKey");
   const status = sp.get("status")?.trim();
+  const tagId = sp.get("tag")?.trim();
   const trustLevel = intParam(sp, "trustLevel", 0, 1, 5);
   const take = intParam(sp, "take", 100, 1, 1000);
   const skip = intParam(sp, "skip", 0, 0, 1_000_000);
@@ -50,6 +51,7 @@ export async function GET(request: NextRequest) {
   if (requiresApiKey === "true") where.requiresApiKey = true;
   if (requiresApiKey === "false") where.requiresApiKey = false;
   if (status) where.status = status;
+  if (tagId) where.tags = { some: { tagId } };
   if (trustLevel > 0) where.trustLevel = { gte: trustLevel };
 
   const [items, total] = await Promise.all([
