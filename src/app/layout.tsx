@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 const NAV_ITEMS = [
   { href: "/", label: "🏠 ダッシュボード" },
   { href: "/sources", label: "📚 データソース" },
+  { href: "/map", label: "🗺️ 地図" },
   { href: "/logs", label: "🧾 取得ログ" },
   { href: "/tags", label: "🏷️ タグ" },
   { href: "/settings", label: "⚙️ 設定" },
