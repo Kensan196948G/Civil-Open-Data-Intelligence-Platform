@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Provider {
+  id               String       @id @default(cuid())
+  name             String       @unique
+  organizationType String // national / local / private / community
+  officialUrl      String?
+  country          String?
+  note             String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  dataSources      DataSource[]
+
+  @@map("providers")
+}
+
+model DataSource {
+  id                  String    @id @default(cuid())
+  providerId          String
+  provider            Provider  @relation(fields: [providerId], references: [id])
+  name                String
+  nameEn              String?
+  description         String?
+  officialUrl         String
+  endpointUrl         String?
+  documentationUrl    String?
+  category            String // gis / 3d-city / road / map-elevation / weather / statistics / map / municipality / research / construction
+  dataFormat          String // JSON / XML / CSV / GeoJSON / HTML / PDF / CityGML / PNG / Shapefile / other
+  accessType          String // API / download / tile / web / manual
+  requiresApiKey      Boolean   @default(false)
+  apiKeyEnvName       String? // .env のキー名のみ保持。値は保持しない
+  licenseName         String?
+  commercialUse       String    @default("unknown") // allowed / restricted / unknown
+  attributionRequired Boolean   @default(true)
+  updateFrequency     String?
+  lastCheckedAt       DateTime?
+  status              String    @default("unknown") // active / unstable / deprecated / unknown
+  trustLevel          Int       @default(3) // 1-5
+  qualityScore        Int       @default(0) // 0-100
+  note                String?
+  updatedBy           String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  tags            DataSourceTag[]
+  fetchLogs       FetchLog[]
+  sampleResponses SampleResponse[]
+  qualityChecks   QualityCheck[]
+  relatedUseCases RelatedUseCase[]
+
+  @@map("data_sources")
+}
+
+model Tag {
+  id        String          @id @default(cuid())
+  name      String          @unique
+  color     String?
+  createdAt DateTime        @default(now())
+  sources   DataSourceTag[]
+
+  @@map("tags")
+}
+
+model DataSourceTag {
+  dataSourceId String
+  tagId        String
+  dataSource   DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+  tag          Tag        @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([dataSourceId, tagId])
+  @@map("data_source_tags")
+}
+
+model FetchLog {
+  id                String     @id @default(cuid())
+  dataSourceId      String
+  dataSource        DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+  executionType     String     @default("check") // check / sample
+  requestUrl        String
+  method            String     @default("GET")
+  statusCode        Int?
+  success           Boolean
+  responseTimeMs    Int?
+  responseSizeBytes Int?
+  contentType       String?
+  errorType         String? // timeout / network / invalid_url / auth_required / parse_error / rate_limited / unknown
+  errorMessage      String?
+  note              String?
+  executedAt        DateTime   @default(now())
+
+  sampleResponses SampleResponse[]
+
+  @@map("fetch_logs")
+}
+
+model SampleResponse {
+  id             String     @id @default(cuid())
+  dataSourceId   String
+  dataSource     DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+  fetchLogId     String?
+  fetchLog       FetchLog?  @relation(fields: [fetchLogId], references: [id])
+  previewText    String?
+  filePath       String?
+  detectedFormat String?
+  createdAt      DateTime   @default(now())
+
+  @@map("sample_responses")
+}
+
+model QualityCheck {
+  id                         String     @id @default(cuid())
+  dataSourceId               String
+  dataSource                 DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+  officialSourceScore        Int // 0-20
+  freshnessScore             Int // 0-15
+  accessibilityScore         Int // 0-15
+  licenseClarityScore        Int // 0-15
+  formatUsabilityScore       Int // 0-15
+  constructionRelevanceScore Int // 0-20
+  totalScore                 Int // 0-100
+  checkNote                  String?
+  checkedAt                  DateTime   @default(now())
+
+  @@map("quality_checks")
+}
+
+model RelatedUseCase {
+  id           String     @id @default(cuid())
+  dataSourceId String
+  dataSource   DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+  useCaseName  String
+  targetSystem String?
+  description  String?
+
+  @@map("related_use_cases")
+}
