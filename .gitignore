@@ -1,0 +1,35 @@
+# dependencies
+node_modules/
+
+# next.js
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# env / secrets (絶対にコミットしない)
+.env
+.env.local
+.env*.local
+
+# database
+*.db
+*.db-journal
+prisma/dev.db*
+
+# fetched sample data
+data/samples/*
+data/exports/*
+!data/samples/.gitkeep
+!data/exports/.gitkeep
+
+# test
+coverage/
+
+# local tooling
+.claude/
+.mcp.json
+state.json
+
+# claudeos internal reports
+reports/

@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "file:./dev.db"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Migrate & seed (smoke)
+        run: |
+          npx prisma migrate deploy
+          npx prisma db seed
+
+      - name: Build
+        run: npm run build
+
+      - name: Secret scan (.env must not be committed)
+        run: |
+          if git ls-files | grep -E '(^|/)\.env$'; then
+            echo "::error::.env がコミットされています"
+            exit 1
+          fi
+          echo "OK: .env is not tracked"
