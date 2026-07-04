@@ -14,20 +14,34 @@ describe("isPrivateIp", () => {
     "100.64.0.1",
     "224.0.0.1",
     "::1",
+    "::",
     "fc00::1",
     "fd12:3456::1",
     "fe80::1",
     "::ffff:192.168.0.1",
+    "::ffff:7f00:1",
+    "::ffff:a9fe:a9fe",
+    "::ffff:0a00:0001",
+    "0:0:0:0:0:ffff:127.0.0.1",
+    "::127.0.0.1",
+    "64:ff9b::7f00:1",
+    "64:ff9b::10.0.0.1",
   ])("非公開IP %s を検出する", (ip) => {
     expect(isPrivateIp(ip)).toBe(true);
   });
 
-  it.each(["8.8.8.8", "1.1.1.1", "172.15.0.1", "172.32.0.1", "203.0.113.10", "2001:4860:4860::8888"])(
-    "公開IP %s は許可する",
-    (ip) => {
-      expect(isPrivateIp(ip)).toBe(false);
-    },
-  );
+  it.each([
+    "8.8.8.8",
+    "1.1.1.1",
+    "172.15.0.1",
+    "172.32.0.1",
+    "203.0.113.10",
+    "2001:4860:4860::8888",
+    "::ffff:8.8.8.8",
+    "::ffff:808:808",
+  ])("公開IP %s は許可する", (ip) => {
+    expect(isPrivateIp(ip)).toBe(false);
+  });
 });
 
 describe("validateUrl", () => {
@@ -59,6 +73,9 @@ describe("validateUrl", () => {
     "http://192.168.10.1/admin",
     "http://169.254.169.254/latest/meta-data/",
     "http://[::1]/",
+    "http://[::ffff:7f00:1]/",
+    "http://[::ffff:a9fe:a9fe]/",
+    "http://[64:ff9b::7f00:1]/",
     "http://server.local/",
     "http://intra.internal/",
   ])("SSRF対象 %s を拒否する", (url) => {

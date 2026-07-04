@@ -3,6 +3,20 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { dataSourceCreateSchema } from "@/lib/validators";
 
+function intParam(
+  sp: URLSearchParams,
+  name: string,
+  fallback: number,
+  min: number,
+  max: number,
+): number | null {
+  const raw = sp.get(name);
+  if (raw === null || raw === "") return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < min || n > max) return null;
+  return n;
+}
+
 export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams;
   const q = sp.get("q")?.trim();
@@ -11,9 +25,15 @@ export async function GET(request: NextRequest) {
   const dataFormat = sp.get("dataFormat")?.trim();
   const requiresApiKey = sp.get("requiresApiKey");
   const status = sp.get("status")?.trim();
-  const trustLevel = sp.get("trustLevel");
-  const take = Math.min(Number(sp.get("take") ?? 100), 1000);
-  const skip = Math.max(Number(sp.get("skip") ?? 0), 0);
+  const trustLevel = intParam(sp, "trustLevel", 0, 1, 5);
+  const take = intParam(sp, "take", 100, 1, 1000);
+  const skip = intParam(sp, "skip", 0, 0, 1_000_000);
+  if (trustLevel === null || take === null || skip === null) {
+    return NextResponse.json(
+      { error: "validation_error", message: "trustLevel/take/skip の値が不正です" },
+      { status: 400 },
+    );
+  }
 
   const where: Prisma.DataSourceWhereInput = {};
   if (q) {
@@ -30,7 +50,7 @@ export async function GET(request: NextRequest) {
   if (requiresApiKey === "true") where.requiresApiKey = true;
   if (requiresApiKey === "false") where.requiresApiKey = false;
   if (status) where.status = status;
-  if (trustLevel) where.trustLevel = { gte: Number(trustLevel) };
+  if (trustLevel > 0) where.trustLevel = { gte: trustLevel };
 
   const [items, total] = await Promise.all([
     prisma.dataSource.findMany({
