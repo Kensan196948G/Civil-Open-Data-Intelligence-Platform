@@ -126,16 +126,16 @@ export function SourceForm({
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-          <label className={labelCls}>📚 データソース名 *</label>
-          <input required className={inputCls} value={values.name} onChange={(e) => set("name", e.target.value)} />
+          <label htmlFor="ds-name" className={labelCls}>📚 データソース名 *</label>
+          <input id="ds-name" required className={inputCls} value={values.name} onChange={(e) => set("name", e.target.value)} />
         </div>
         <div>
           <label className={labelCls}>英語名</label>
           <input className={inputCls} value={values.nameEn} onChange={(e) => set("nameEn", e.target.value)} />
         </div>
         <div>
-          <label className={labelCls}>🏛️ 提供元（既存から選択）*</label>
-          <select className={inputCls} value={values.providerId} onChange={(e) => set("providerId", e.target.value)}>
+          <label htmlFor="ds-providerId" className={labelCls}>🏛️ 提供元（既存から選択）*</label>
+          <select id="ds-providerId" className={inputCls} value={values.providerId} onChange={(e) => set("providerId", e.target.value)}>
             <option value="">-- 新規提供元を入力 --</option>
             {providers.map((p) => (
               <option key={p.id} value={p.id}>
@@ -158,8 +158,8 @@ export function SourceForm({
           <textarea rows={3} className={inputCls} value={values.description} onChange={(e) => set("description", e.target.value)} />
         </div>
         <div>
-          <label className={labelCls}>🔗 公式URL *</label>
-          <input required type="url" className={inputCls} value={values.officialUrl} onChange={(e) => set("officialUrl", e.target.value)} />
+          <label htmlFor="ds-officialUrl" className={labelCls}>🔗 公式URL *</label>
+          <input id="ds-officialUrl" required type="url" className={inputCls} value={values.officialUrl} onChange={(e) => set("officialUrl", e.target.value)} />
         </div>
         <div>
           <label className={labelCls}>🔌 APIエンドポイントURL</label>
@@ -170,8 +170,8 @@ export function SourceForm({
           <input type="url" className={inputCls} value={values.documentationUrl} onChange={(e) => set("documentationUrl", e.target.value)} />
         </div>
         <div>
-          <label className={labelCls}>カテゴリ *</label>
-          <select className={inputCls} value={values.category} onChange={(e) => set("category", e.target.value)}>
+          <label htmlFor="ds-category" className={labelCls}>カテゴリ *</label>
+          <select id="ds-category" className={inputCls} value={values.category} onChange={(e) => set("category", e.target.value)}>
             {CATEGORIES.map((c) => (
               <option key={c.value} value={c.value}>
                 {c.label}
@@ -180,8 +180,8 @@ export function SourceForm({
           </select>
         </div>
         <div>
-          <label className={labelCls}>データ形式 *</label>
-          <select className={inputCls} value={values.dataFormat} onChange={(e) => set("dataFormat", e.target.value)}>
+          <label htmlFor="ds-dataFormat" className={labelCls}>データ形式 *</label>
+          <select id="ds-dataFormat" className={inputCls} value={values.dataFormat} onChange={(e) => set("dataFormat", e.target.value)}>
             {DATA_FORMATS.map((f) => (
               <option key={f} value={f}>
                 {f}
@@ -190,8 +190,8 @@ export function SourceForm({
           </select>
         </div>
         <div>
-          <label className={labelCls}>アクセス方式 *</label>
-          <select className={inputCls} value={values.accessType} onChange={(e) => set("accessType", e.target.value)}>
+          <label htmlFor="ds-accessType" className={labelCls}>アクセス方式 *</label>
+          <select id="ds-accessType" className={inputCls} value={values.accessType} onChange={(e) => set("accessType", e.target.value)}>
             {ACCESS_TYPES.map((a) => (
               <option key={a} value={a}>
                 {a}
