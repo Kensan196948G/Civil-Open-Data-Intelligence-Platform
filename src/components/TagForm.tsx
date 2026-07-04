@@ -37,8 +37,9 @@ export function TagForm() {
   return (
     <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2">
       <div>
-        <label className="mb-1 block text-xs font-medium text-slate-600">🏷️ タグ名</label>
+        <label htmlFor="tag-name" className="mb-1 block text-xs font-medium text-slate-600">🏷️ タグ名</label>
         <input
+          id="tag-name"
           required
           value={name}
           onChange={(e) => setName(e.target.value)}
