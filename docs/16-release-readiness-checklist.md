@@ -88,6 +88,30 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | CI再実行結果 | run `29237264877` (CI) / `29237265144` (CodeQL) 双方success。`verify`・`e2e`・`postgresql-compat`・`docker-preview`・`docker-image-security` すべて `pass` に復帰 |
 | 学習 | lockfile生成・検証は、コミット前にCI実行環境と同一のNode/npmバージョン (`nvm use <ci-node-version>`) で行うことで、ローカル/CI間のnpmバージョン差に起因する `npm ci` 失敗を未然に防げる |
 
+### 2026-07-13 CodeRabbit Agentレビュー(コミット済み差分)結果と対応
+
+`coderabbit:code-reviewer` エージェント(バックグラウンド実行、`coderabbit review --agent --base main --type committed` をラップ)により、mainとの差分5コミット(`04ee580`〜`e2f5041`)を対象とした独立レビューを実施した。`npx tsc --noEmit`・`npm test`・`npm run lint`・`npm audit`・`npx wrangler types` の実測値、およびCloudflare Terraform provider公式スキーマドキュメントとの照合による検証済みレビュー。
+
+| 重大度 | 件数 | 内容 | 対応 |
+| --- | --- | --- | --- |
+| Critical | 0 | 該当なし。シークレット漏洩なし、`npm audit` 0 vulnerabilities | - |
+| High | 1 | `infra/cloudflare/access.tf`: Terraform provider v5に存在しない `application_id`/`precedence` を使用し、`include` をv4形式の `dynamic` ブロックで記述していたため、human operatorの初回 `terraform apply` が確実に失敗する構成だった | 修正済み(commit `00d66e8`)。`include` をv5のAttributes Set形式に書き換え、ポリシー→アプリケーションの関連付けをv5仕様どおり `cloudflare_zero_trust_access_application.policies` 側に反転 |
+| Medium | 1 | `infra/cloudflare/variables.tf`: `allowed_emails`・`allowed_email_domains` が両方空でも `terraform apply` を止める検証がなく、Access保護が実質無効なポリシーが無警告で作られ得る | 修正済み(commit `00d66e8`)。`allowed_email_domains` にcross-variable `validation` を追加。`versions.tf` の `required_version` を `>= 1.9` に引き上げ(cross-variable validationはTerraform 1.9.0以降の機能のため) |
+| Low | 2 | (1) `docs/13-deployment-and-operations.md` 112行目に旧「Cloudflare Pages/Workers」表記が残存し、同ファイル19行目の採用方針説明と矛盾。(2) `tsconfig.json`/`eslint.config.mjs` の除外設定自体は正しいとの確認のみ | (1) 修正済み(commit `00d66e8`)、「Cloudflare Workers」表記に統一。(2) コード変更不要と判断。CodeRabbit CLIの代替提案(`compilerOptions.types` へ追加)は `NodeJS.ProcessEnv` グローバル汚染を再発させるため不採用と明記されており、現状の `exclude` ベースを維持 |
+
+**High指摘の二重検証**: CodeRabbit Agent自身が「サンドボックスに `terraform` 未インストールのためドキュメント照合による推論」と申告していたため、以下2点で独立検証を行った。
+
+1. Cloudflare Terraform provider公式ドキュメント(`zero_trust_access_policy.md`・`zero_trust_access_application.md`)をWebFetchで直接照合し、`application_id`/`precedence` が同リソースに存在しないこと、`include`/`policies` がそれぞれAttributes Set/Attributes Listであることを確認
+2. Terraform 1.9.8を一時的にスクラッチパスへ導入し、`infra/cloudflare` で `terraform init && terraform validate` を実機実行して `Success! The configuration is valid.` を確認(provider `cloudflare/cloudflare` v5.22.0)。`.terraform.lock.hcl` は `terraform providers lock -platform=linux_amd64 -platform=darwin_amd64 -platform=darwin_arm64 -platform=windows_amd64` で4プラットフォーム分のチェックサムを含めて生成しコミットした
+
+| 項目 | 記録 |
+| --- | --- |
+| レビュー対象 | `agent/release-readiness-postgis-ci` の main との差分5コミット(`04ee580`〜`e2f5041`) |
+| 修正commit SHA | `00d66e8` |
+| 実機検証 | `terraform validate` success (provider cloudflare/cloudflare v5.22.0、Terraform 1.9.8) |
+| 未対応 | なし。Critical/High/Medium/Lowすべて対応完了 |
+| 残課題 | Codexレビュー(通常・対抗)は `disable-model-invocation` によりCTOから自律起動不可のため未実施。人間への実行依頼が必要 |
+
 ### 実ターゲットリリース時の記録欄
 
 | 項目 | 記録 |
