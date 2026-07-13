@@ -6,18 +6,27 @@
 | --- | --- |
 | ランタイム | Node.js |
 | フレームワーク | Next.js 15, React 19, TypeScript |
-| DB | SQLite / Prisma |
+| DB | SQLite / Prisma。PostgreSQL/PostGIS previewは別schemaとcomposeで検証 |
 | テスト | Vitest, Playwright |
 
 ## 2. セットアップ
 
 ```bash
-npm install
+npm ci
 cp .env.example .env
 DATABASE_URL='file:./dev.db' npm run db:migrate
 DATABASE_URL='file:./dev.db' npm run db:seed
 DATABASE_URL='file:./dev.db' npm run dev
 ```
+
+通常の開発URLは `http://localhost:3000`。管理操作をブラウザで試す場合は、32文字以上の `CODIP_ADMIN_TOKEN` を設定して起動し、`/settings` で管理セッションを開始する。
+
+```bash
+export CODIP_ADMIN_TOKEN="change-this-very-long-random-token-32"
+DATABASE_URL='file:./dev.db' npm run dev
+```
+
+Docker previewの標準URLは、SQLite previewが `http://localhost:3100`、PostgreSQL/PostGIS previewが `http://localhost:3102`。PostGIS投入環境では `release:smoke -- --expect-standard-records` を使い、`/api/v1` の標準レコード読取を確認する。
 
 ## 3. よく使うコマンド
 

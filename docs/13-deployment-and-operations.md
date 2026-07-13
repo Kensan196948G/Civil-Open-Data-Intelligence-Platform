@@ -72,7 +72,27 @@ MVPではローカル、CI、Docker previewで品質を確認する。Cloudflare
 
 CIではpreview検証に加え、SSL付きPostgreSQL URLの合成値で `npm run release:validate-env:production` を実行し、production環境変数検査ロジックの形状を確認する。これは実Neon/本番Secretsの検証ではないため、stagingまたはproduction deploy前には、対象環境のSecrets/Variablesを読み込んだジョブで `npm run release:validate-env:production-target` を実行し、その結果をリリース証跡へ記録する。この実ターゲット検証は `CODIP_DEPLOY_TARGET`、実HTTPS `CODIP_BASE_URL`、Cloudflare Hyperdrive binding、Neon branch、migration direct URL、外部PostgreSQL SSLを必須にし、example/ci/placeholder/local値を拒否する。Docker imageの起動時も `node scripts/tools/validate-env.js --mode ${CODIP_ENV_MODE:-production}` を先に実行する。本番コンテナは `runner` stage を使い、`npm ci --omit=dev` により開発依存を含めない。migrationとseedはone-off release jobで実行し、共有previewの単一インスタンス検証時だけ `preview-runner` stage と `CODIP_RUN_MIGRATIONS_ON_START=true` を明示する。CIの `docker-preview` job では、preview-runnerでPostgreSQL/PostGISへmigration/seedを適用した後、production `runner` imageを `CODIP_ENV_MODE=production` で起動し、`/api/ready` と `release:smoke` を実行する。`docker-image-security` job はproduction runner imageをpush前にTrivyで固定可能なHigh/Critical CVE検査にかける。main push時の `docker-supply-chain` job は主要ゲート成功後にGHCRへproduction runner imageをpushし、BuildxのSBOM attestationと `mode=max` provenanceを付与する。GitHub ActionsはタグではなくコミットSHAへ固定し、`release:check-github-actions-contract` で再混入を検出する。
 
-## 2.3 共有プレビュー構成
+## 2.3 現在のリリース証跡
+
+2026-07-13時点のDraft PR #17では、PRで実行される通常ゲートは成功している。
+
+| 項目 | 状態 |
+| --- | --- |
+| branch | `agent/release-readiness-postgis-ci` |
+| commit | `e2c007f4772235b77f9228805714d8aee4f8404d` |
+| CI run | `29232542066` success |
+| CodeQL run | `29232541952` success |
+| verify | pass |
+| e2e | pass |
+| postgresql-compat | pass。PostGIS migration、seed、`/api/v1` standard_records modeを確認 |
+| docker-preview | pass。PostgreSQL/PostGIS preview-runnerとproduction runner smokeを確認 |
+| docker-image-security | pass。Trivy High/Critical CVE checkを確認 |
+| production-target-env | skipped。実staging/production Secretsを使う `workflow_dispatch` 専用 |
+| docker-supply-chain | skipped。`main` push後のGHCR push、SBOM、provenance専用 |
+
+CodeQL workflowは成功しているが、現在のworkflowはリポジトリのcode scanning設定差異でrelease gate全体を止めないために `continue-on-error` を持つ。SASTをmerge必須条件として扱う前には、GitHub code scanningを有効化し、alert状態の確認または `continue-on-error` の撤廃をrelease判断へ含める。
+
+## 2.4 共有プレビュー構成
 
 正式な本番構成はCloudflare Pages/WorkersとNeon PostgreSQL/PostGISを目標にする。ただし、MVPの画面・API・運用手順を関係者へ確認してもらう共有プレビューでは、Node.jsコンテナと永続ボリューム上のSQLiteを限定利用できる。
 
@@ -104,7 +124,9 @@ docker compose -f docker-compose.postgresql-preview.yml up --build
 
 アプリ実行時は `DATABASE_URL` に応じてSQLite ClientまたはPostgreSQL Clientを選択する。production deploy前には、CIのPostgreSQL runtime smoke、Docker PostgreSQL preview smoke、staging `/api/ready`、`/api/sources`、`/api/v1` standard_records mode、管理API確認を必須にする。PostGIS投入環境では `release:smoke -- --expect-standard-records` を使い、標準レコード検索、地点照会、レイヤー、FeatureCollection、properties sanitizationを確認する。Docker build context は `.env*` を除外し、`.env.example` だけを許可する。SBOM/provenance attestationはregistry push時の成果物として扱い、local `docker build --load` の代替証跡にはしない。
 
-## 2.4 監視エンドポイント
+Prisma schemaはSQLite用 `prisma/schema.prisma` とPostgreSQL用 `prisma/postgresql/schema.prisma` の双方で `binaryTargets = ["native", "debian-openssl-3.0.x"]` を生成する。これは開発ホストのnative clientだけでなく、Debian系Docker runner上でPrisma Clientが起動できることを保証するためである。Docker runnerには生成済み `.prisma` とproduction依存を同梱し、起動時に `npx prisma generate` を実行しない。
+
+## 2.5 監視エンドポイント
 
 | URL | 用途 | アラート条件 |
 | --- | --- | --- |

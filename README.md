@@ -10,7 +10,7 @@
 
 **CODIP** は、国土交通省、国土地理院、気象庁、自治体、道路、河川、防災、都市計画、インフラ、環境などに分散している公開データを、土木建設業務で再利用しやすい形に整理するための共通データ基盤です。
 
-現行MVPは **データソース台帳、取得確認、取得ログ、地図プレビュー、品質状態、後続API契約** を中心に実装しています。原本保存基盤、標準レコード本体、Cloudflare/Neon本番運用は次フェーズで段階投入します。
+現行MVPは **データソース台帳、取得確認、取得ログ、地図プレビュー、品質状態、後続API、PostgreSQL/PostGIS標準レコード読取経路** を中心に実装しています。ローカルSQLiteは台帳中心の軽量preview、CI/PostGIS previewは検証用 `standard_records` を投入した後続API smoke、本番Cloudflare/Neonと実データ原本保存は次フェーズで段階投入します。
 
 > 公開データを探すだけのサイトではなく、土木建設システムが公開データを安全に再利用するための共通データハブです。
 
@@ -74,9 +74,9 @@ flowchart LR
 | --- | --- | --- |
 | 台帳 | ✅ 実装済み | 拡充 |
 | 取得確認 | ✅ 実装済み | 定期取得 |
-| 地図 | ✅ 2Dプレビュー | PostGIS連携 |
-| 標準レコード | ⚠️ 契約提示 | 本体投入 |
-| 空間判定 | ⚠️ `not_standardized` warning | 地点・範囲検索 |
+| 地図 | ✅ 2Dプレビュー | 実データレイヤー拡充 |
+| 標準レコード | ✅ PostGIS読取MVP | 実データ投入・履歴管理 |
+| 空間判定 | ✅ PostGIS環境で地点照会MVP | 範囲検索・重複判定拡充 |
 
 ### 4. 🔬 土木建設研究者向け
 
@@ -133,6 +133,29 @@ flowchart TD
 
 ---
 
+## 🚦 最新リリースゲート証跡
+
+2026-07-13時点のDraft PR #17では、通常PRで実行される主要ゲートは成功しています。
+
+| 区分 | 状態 | 証跡 |
+| --- | --- | --- |
+| PR | 🟢 Draft PR #17 | `agent/release-readiness-postgis-ci` |
+| commit | 🟢 `e2c007f` | `align docker smoke admin token` |
+| CI run | 🟢 success | `29232542066` |
+| CodeQL run | 🟢 success | `29232541952` |
+| verify | 🟢 pass | lint、型、単体、契約、build、smoke |
+| e2e | 🟢 pass | Playwright CI browser |
+| postgresql-compat | 🟢 pass | PostGIS migration、seed、`/api/v1` standard_records smoke |
+| docker-preview | 🟢 pass | preview-runner migration/seed、production runner smoke |
+| docker-image-security | 🟢 pass | Trivy High/Critical CVE check |
+| production-target-env | ⚪ skipped | `workflow_dispatch` で実staging/production Secretsを読む手動ゲート |
+| docker-supply-chain | ⚪ skipped | `main` push後のGHCR push、SBOM、provenance gate |
+| CodeRabbit | ⚪ draft skipped | PRをReady化後、または `@coderabbitai review` でレビュー対象 |
+
+⚠️ `production-target-env` と `docker-supply-chain` はPR greenだけでは完了しません。Cloudflare/Neon実ターゲット検証とGHCR供給網証跡は、staging/production移行時に別途記録します。
+
+---
+
 ## 🔐 セキュリティ方針
 
 | 項目 | 方針 |
@@ -161,6 +184,13 @@ WebUI:
 
 ```text
 http://localhost:3000
+```
+
+現在の共有確認用ローカルpreview:
+
+```text
+http://localhost:3104
+http://192.168.0.185:3104
 ```
 
 管理操作をローカルで試す場合:
@@ -232,10 +262,10 @@ production `runner` は `npm ci --omit=dev` を使い、起動時migrationを行
 
 | API | 用途 | 現行MVPの注意 |
 | --- | --- | --- |
-| `/api/v1/records/search` | 台帳メタデータを標準レコード風に検索 | `catalog_metadata_only` warning |
-| `/api/v1/records/point` | 地点照会契約 | 空間判定未実行、`not_standardized` warning |
-| `/api/v1/layers` | レイヤー一覧 | `catalog_only` |
-| `/api/v1/layers/{id}/features` | GeoJSON FeatureCollection | featuresは空、未標準化を明示 |
+| `/api/v1/records/search` | 標準レコード検索 | PostGIS環境は `standard_records`、SQLite/未投入時は `catalog_metadata_only` warning |
+| `/api/v1/records/point` | 地点照会 | PostGIS環境は空間評価、SQLite/未投入時は `not_standardized` warning |
+| `/api/v1/layers` | レイヤー一覧 | PostGIS環境は標準レコード由来、SQLite/未投入時は `catalog_only` |
+| `/api/v1/layers/{id}/features` | GeoJSON FeatureCollection | PostGIS環境はFeature返却、SQLite/未投入時は未標準化を明示 |
 | `/api/v1/sources/{id}/freshness` | 鮮度・品質状態 | 出典と品質確認用 |
 
 ---

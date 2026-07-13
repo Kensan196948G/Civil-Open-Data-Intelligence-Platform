@@ -114,6 +114,16 @@ Next.jsの全レスポンスに次のヘッダーを付与する。
 
 MVPのCSPはNext.jsとLeaflet/地理院タイルを動かすため `unsafe-inline` を一部許容する。本番では `unsafe-eval` を許可しない。release smokeでは `object-src 'none'`、`frame-ancestors 'none'`、地理院許可先、HSTSなど主要値を確認する。Cloudflare本番化時はnonceベースへさらに強化する。
 
+## 3.2 SASTと供給網
+
+| 項目 | 現行方針 |
+| --- | --- |
+| CodeQL | GitHub Actionsで実行し、2026-07-13時点のPR #17ではworkflow successを確認済み |
+| Code scanning gate | リポジトリ側のcode scanning設定差異でCI全体を止めないよう、現行workflowは `continue-on-error` を含む |
+| Release前条件 | SASTを必須gateにする場合は、GitHub code scanningを有効化し、alert状態確認または `continue-on-error` 撤廃を判断する |
+| Docker scan | `docker-image-security` jobでproduction runner imageをTrivy High/Critical CVE検査にかける |
+| SBOM/provenance | PRでは契約検査のみ。`main` push後の `docker-supply-chain` jobでGHCR push、SBOM、provenanceを証跡化する |
+
 ## 4. 公開データ利用条件
 
 | 観点 | 管理内容 |

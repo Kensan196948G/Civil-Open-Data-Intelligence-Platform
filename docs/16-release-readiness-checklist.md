@@ -11,7 +11,7 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | 単体テスト | `npm run test` | 全テスト成功 |
 | 依存監査 | `npm audit --audit-level=moderate` | moderate以上0件 |
 | DB事前確認 | `DATABASE_URL=file:./dev.db npm run db:check-duplicates` | 公式URL重複0件 |
-| 標準レコード方針 | `npm run db:check-standard-record-policy` | 現行MVPの `/api/v1` 未標準化契約とDB状態が一致 |
+| 標準レコード方針 | `npm run db:check-standard-record-policy` | SQLite fallbackとPostgreSQL/PostGIS `standard_records` 読取MVPの契約がDB状態と一致 |
 | PostgreSQL schema確認 | `npm run db:compare-schemas && npm run db:pg:validate && npm run db:pg:generate` | 中核モデルとPostgreSQL schemaが妥当 |
 | PostgreSQL drift確認 | `npm run db:pg:check-drift` | 適用済みDBと `prisma/postgresql/schema.prisma` に差分がない |
 | PostGIS DDL確認 | `npm run db:pg:check-postgis-ddl` | `standard_records` のPostGIS extension、SRID、index、JSONB defaultが一致 |
@@ -32,10 +32,32 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | Docker supply chain | GitHub Actions `docker-supply-chain` job | GHCR image push、SBOM attestation、`mode=max` provenance、sha tag/digestが確認できる |
 | PostGIS service image | CI service / PostgreSQL preview compose | `postgis/postgis@sha256:...` でdigest固定されている |
 | Secret scan | GitHub Actions verify job | gitleaksと `.env` 追跡検出が成功 |
-| SAST | GitHub Actions CodeQL | CodeQLが成功 |
+| SAST | GitHub Actions CodeQL | CodeQL workflowが成功。code scanning alert gateとして扱う場合はリポジトリ側でcode scanningを有効化し、`continue-on-error` の扱いをrelease前に再確認 |
 | E2E | `npm run test:e2e` | CIまたはブラウザ実行可能環境で成功 |
 
 ## 1.1 リリース証跡
+
+### 2026-07-13 Draft PR #17 証跡
+
+| 項目 | 記録 |
+| --- | --- |
+| PR | #17 `agent/release-readiness-postgis-ci` |
+| commit SHA | `e2c007f4772235b77f9228805714d8aee4f8404d` |
+| commit message | `align docker smoke admin token` |
+| CI run | `29232542066` success |
+| CodeQL run | `29232541952` success |
+| verify | pass |
+| e2e | pass |
+| postgresql-compat | pass。PostGIS migration、seed、`/api/v1` standard_records smokeを確認 |
+| docker-preview | pass。preview-runner migration/seed、production runner smokeを確認 |
+| docker-image-security | pass。Trivy High/Critical CVE checkを確認 |
+| production-target-env | skipped。PRでは実ターゲットSecretsを読まず、`workflow_dispatch` 実行時に記録 |
+| docker-supply-chain | skipped。PRではpushせず、`main` push後にGHCR tag/digest/SBOM/provenanceを記録 |
+| CodeRabbit | Draft PRのためreview skipped。Ready化後または `@coderabbitai review` で実レビュー |
+| ローカルread-only smoke | `http://127.0.0.1:3104` に対して63 checks成功 |
+| ローカルDocker | Docker daemon未接続のためローカル実行不可。CI `docker-preview` を証跡に採用 |
+
+### 実ターゲットリリース時の記録欄
 
 | 項目 | 記録 |
 | --- | --- |
@@ -61,11 +83,11 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | `/api/health` | プロセス生存確認 | `200` と `status: ok` |
 | `/api/ready` | DB接続を含むレディネス | `200` と `status: ready` |
 | `/api/openapi` | API契約公開 | OpenAPI `3.1.0` を返す |
-| `/api/v1/records/search` | 後続システム向け検索 | `data.records`、`meta.requestId`、`warnings` を返す |
-| `/api/v1/records/point` | 地点照会 | `records=[]` 時も `spatialEvaluation.evaluated=false` と `not_standardized` warningを返す |
+| `/api/v1/records/search` | 後続システム向け検索 | PostGIS投入時は `standard_records` 由来の `data.records` を返す。SQLite/未投入時も `data.records`、`meta.requestId`、`warnings` を返す |
+| `/api/v1/records/point` | 地点照会 | PostGIS投入時は空間評価を返す。未投入時は `records=[]`、`spatialEvaluation.evaluated=false`、`not_standardized` warningを返す |
 | `/api/v1/sources/{id}/freshness` | 鮮度API | 品質状態、最終成功日時、連続失敗数を返す |
 | `/api/v1/layers` | レイヤー一覧 | `data.layers`、`dataAvailability`、`geometryStatus`、`featuresUrl` を返す |
-| `/api/v1/layers/{id}/features` | レイヤー地物 | GeoJSON FeatureCollectionを返し、未標準化時は `not_standardized` warningを返す |
+| `/api/v1/layers/{id}/features` | レイヤー地物 | PostGIS投入時はGeoJSON FeatureCollectionに地物を返す。未標準化時は `not_standardized` warningを返す |
 | `/` | ダッシュボード | `200` |
 | `/sources` | 台帳検索 | `200` |
 | `/map` | 地図プレビュー | `200` |
@@ -127,8 +149,8 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 
 | 制約 | 対応方針 |
 | --- | --- |
-| ローカルPlaywright Chromiumが一部環境で `SIGTRAP` になる | CIまたはブラウザ実行可能環境でE2Eを実行し、Issueで追跡 |
-| MVP DBはSQLite | 本番スケール時はNeon PostgreSQL/PostGISへ移行 |
+| ローカルPlaywright Chromiumが一部環境で `SIGTRAP` になる | CIではE2E成功済み。ローカル実行不能環境はIssue証跡で追跡 |
+| ローカルDBはSQLite preview | 本番スケール時はNeon PostgreSQL/PostGISへ移行。PostGIS migration/seed/runtime smokeはCIで検証済み |
 | ローカルSQLite seedは `standard_records` 未投入 | PostGIS seed/CIでは検証用標準レコードを投入し、`--expect-standard-records` smokeで読取APIを確認 |
 | PostgreSQL runtime smoke | CIまたはPostGIS利用可能なstagingで、PostgreSQL Clientによる `/api/ready`、`/api/sources`、`/api/v1` standard_records modeを確認 |
 | Docker previewはSQLite単一インスタンス | 関係者検証用に限定し、本番利用しない。起動時migrationはpreviewのみ許可 |
