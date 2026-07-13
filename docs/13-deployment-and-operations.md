@@ -109,7 +109,7 @@ CodeQL workflowは成功しているが、現在のworkflowはリポジトリの
 
 ## 2.4 共有プレビュー構成
 
-正式な本番構成はCloudflare Pages/WorkersとNeon PostgreSQL/PostGISを目標にする。ただし、MVPの画面・API・運用手順を関係者へ確認してもらう共有プレビューでは、Node.jsコンテナと永続ボリューム上のSQLiteを限定利用できる。
+正式な本番構成はCloudflare WorkersとNeon PostgreSQL/PostGISを目標にする。ただし、MVPの画面・API・運用手順を関係者へ確認してもらう共有プレビューでは、Node.jsコンテナと永続ボリューム上のSQLiteを限定利用できる。
 
 ```bash
 export CODIP_ADMIN_TOKEN="change-this-very-long-random-token-32"

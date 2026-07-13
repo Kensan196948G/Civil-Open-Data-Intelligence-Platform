@@ -33,4 +33,9 @@ variable "allowed_email_domains" {
   description = "許可するメールドメイン一覧 (例: [\"example.com\"])"
   type        = list(string)
   default     = []
+
+  validation {
+    condition     = length(var.allowed_emails) > 0 || length(var.allowed_email_domains) > 0
+    error_message = "allowed_emails または allowed_email_domains の少なくとも一方を指定してください (両方空の場合、誰もAccessを通過できないポリシーになります)。"
+  }
 }

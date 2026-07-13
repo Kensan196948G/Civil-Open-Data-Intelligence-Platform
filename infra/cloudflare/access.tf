@@ -5,6 +5,20 @@
 #       CTO/Supervisor はこのディレクトリの内容を自律生成できるが、適用 (apply) は行わない
 #       (Human Final Decision Boundary: 外部サービスのリソース作成は人間が実行)。
 
+resource "cloudflare_zero_trust_access_policy" "codip_allow" {
+  account_id = var.cloudflare_account_id
+  name       = "codip-${var.environment}-allow"
+  decision   = "allow"
+
+  # v5 の include は Attributes Set (list of object)。email/email_domain は
+  # それぞれ { email = { email = "..." } } / { email_domain = { domain = "..." } }
+  # という入れ子構造を取る (公式スキーマ: zero_trust_access_policy.md)。
+  include = concat(
+    [for email in var.allowed_emails : { email = { email = email } }],
+    [for domain in var.allowed_email_domains : { email_domain = { domain = domain } }]
+  )
+}
+
 resource "cloudflare_zero_trust_access_application" "codip" {
   account_id                = var.cloudflare_account_id
   name                      = "codip-${var.environment}"
@@ -12,26 +26,11 @@ resource "cloudflare_zero_trust_access_application" "codip" {
   domain                    = var.application_domain
   session_duration          = var.session_duration
   auto_redirect_to_identity = false
-}
 
-resource "cloudflare_zero_trust_access_policy" "codip_allow" {
-  account_id     = var.cloudflare_account_id
-  application_id = cloudflare_zero_trust_access_application.codip.id
-  name           = "codip-${var.environment}-allow"
-  decision       = "allow"
-  precedence     = 1
-
-  dynamic "include" {
-    for_each = length(var.allowed_emails) > 0 ? [1] : []
-    content {
-      email = var.allowed_emails
-    }
-  }
-
-  dynamic "include" {
-    for_each = length(var.allowed_email_domains) > 0 ? [1] : []
-    content {
-      email_domain = var.allowed_email_domains
-    }
-  }
+  # v5 ではアプリケーション側が policies (Attributes List) でポリシーIDを列挙する
+  # (v4 の application_id によるポリシー→アプリ参照から仕様が反転している)。
+  policies = [{
+    id         = cloudflare_zero_trust_access_policy.codip_allow.id
+    precedence = 1
+  }]
 }
