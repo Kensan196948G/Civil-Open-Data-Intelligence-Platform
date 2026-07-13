@@ -112,6 +112,36 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | 未対応 | なし。Critical/High/Medium/Lowすべて対応完了 |
 | 残課題 | Codexレビュー(通常・対抗)は `disable-model-invocation` によりCTOから自律起動不可のため未実施。人間への実行依頼が必要 |
 
+### 2026-07-13 CodeRabbit全体レビュー(--type all、mainとの全差分)結果と対応
+
+`coderabbit:code-reviewer` エージェント(バックグラウンド実行、`coderabbit review --agent --base main --type all` をラップ、PID監視で完了検知)により、`agent/release-readiness-postgis-ci` ブランチの main との全差分(156ファイル、約18.2k行、所要約13分)を対象とした包括レビューを実施した。JSONL形式の出力(finding単位でストリーム、最終行に `status: review_completed` サマリー)をパースして全件を確認。
+
+| 重大度 | 件数 | 内容 |
+| --- | --- | --- |
+| Critical | 0 | 該当なし |
+| Major | 6 | `scripts/db/sqlite-backup.sh` 3件(sqlite3不在時の不安全な`cp`フォールバック・バックアップファイル名衝突・umask未設定)、`src/lib/url-safety.ts` 1件(URL解析失敗時のfail-openパターン)、`playwright.config.ts` 1件(`reuseExistingServer`が既存サーバーの設定を未検証のまま再利用)、`scripts/tools/compare-prisma-models.js` 1件(PostgreSQL専用フィールドの許可リストがフィールド名のみ検証し型・リレーション定義を見ない) |
+| Minor | 2 | `src/lib/standard-records.ts` 2件(GeoJSON feature化で`safeProperties`のスプレッド順序が逆で生プロパティが正規フィールドを上書き可能・`standardRecordsAvailable`が空結果を永続キャッシュし後続の取り込みを反映しない) |
+
+**対応内容(major 6件・minor 2件、計8件すべて対応済み)**:
+
+| ファイル | 対応 |
+| --- | --- |
+| `scripts/db/sqlite-backup.sh` | `sqlite3`不在時は`cp`フォールバックせず`exit 1`(WALモードでの破損コピー防止)、`mktemp`でバックアップパスの一意性を保証、`umask 077`でowner-only権限を強制。実機検証: 同一秒内2回連続実行でファイル名衝突がないこと、ディレクトリ700・ファイル600権限になることを確認 |
+| `src/lib/url-safety.ts` | `hasUrlCredentials`・`hasSecretQueryParams`はURL解析失敗時に`true`(安全側)を返すよう変更、`sanitizeUrl`は解析失敗時に元の入力ではなく固定文字列`"[invalid-url]"`を返すよう変更(fail-open→fail-closed)。専用テストが存在しなかったため`tests/unit/url-safety.test.ts`を新規追加(12件) |
+| `src/lib/standard-records.ts` | GeoJSON feature化で`...safeProperties(row.properties)`を正規フィールドより先にスプレッドするよう順序を修正(`standardRecordDto`と同じパターンに統一)。`standardRecordsAvailable`は`true`の結果のみキャッシュし、`false`は毎回再評価するよう変更。`tests/unit/standard-records-availability.test.ts`を新規追加(4件、false→true遷移を含む) |
+| `playwright.config.ts` | `webServer.reuseExistingServer`を`!process.env.CI`から`false`固定に変更。PlaywrightはURL疎通しか確認できずDB/admin token/allowed-origin設定を検証できないため、常に指定`command`でサーバーを起動し直す |
+| `scripts/tools/compare-prisma-models.js` | `allowedPostgresOnlyFields`を`Set<string>`(フィールド名のみ)から`Map<string, string>`(フィールド名→期待される正規化済みシグネチャ)に変更し、型・リレーション定義の不一致も検知するよう修正。実機検証: 現行スキーマでexit code 0、シグネチャを意図的に壊した改変版でexit code 1になることを確認 |
+
+既存テスト`tests/unit/http-client.test.ts`の`sanitizeUrl`旧仕様(fail-open)を前提にしたケースも新しい安全側の期待値に更新した。
+
+| 項目 | 記録 |
+| --- | --- |
+| レビュー対象 | `agent/release-readiness-postgis-ci` の main との全差分(156ファイル、約18.2k行) |
+| 修正commit SHA | `fbf81b9` |
+| ローカル検証 | lint clean・`tsc --noEmit` clean・vitest 222/222 pass(新規16件含む)・production build success |
+| 未対応 | なし。Critical/Major/Minorすべて対応完了 |
+| 残課題 | Codexレビュー(通常・対抗)は `disable-model-invocation` によりCTOから自律起動不可のため未実施。人間への実行依頼が必要(§91行目と同一課題) |
+
 ### 実ターゲットリリース時の記録欄
 
 | 項目 | 記録 |
