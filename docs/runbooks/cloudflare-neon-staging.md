@@ -6,12 +6,25 @@ CODIPをCloudflare + Neon/PostGISへ出す前のstaging確認手順である。�
 
 | 用途 | 接続先 | 方針 |
 | --- | --- | --- |
-| Runtime | Cloudflare Hyperdrive経由Neon pooled endpoint | `CODIP_HYPERDRIVE_BINDING` をCloudflare側Binding名として管理 |
+| Runtime | Cloudflare Hyperdrive経由Neon pooled endpoint | `CODIP_HYPERDRIVE_BINDING` をCloudflare側Binding名として管理。**未解決**: Prisma Client側に `driverAdapters` preview featureが未導入のため、Hyperdrive bindingは現状不活性 (Issue #18で追跡、解消までWorkers本番切替不可) |
 | Migration | Neon direct endpoint | `CODIP_MIGRATION_DATABASE_URL` をCI/CD secretで管理し、`sslmode=require` または `verify-full` を必須 |
 | Staging DB | Neon branch | `CODIP_NEON_BRANCH` にbranch名を記録 |
 | 管理入口 | Cloudflare Access | Access allowlist + `x-codip-proxy-secret` + 管理メールallowlist |
 
 runtimeとmigrationの接続文字列は分離する。migrationはHyperdriveを経由せず、Neon branchに対して一回限りのrelease jobで実行する。
+
+## 1.1 Build & Deploy
+
+```bash
+npm run cf:typegen
+npm run cf:build
+npm run cf:preview   # ローカルでWorkersランタイムを模したプレビュー確認
+npm run cf:deploy    # 実際のCloudflareアカウントへdeploy (人間が実行)
+```
+
+`wrangler.jsonc` の `env.preview` / `env.production` named environmentを使う場合は `--env preview` / `--env production` を各コマンドに付与する。Hyperdrive binding IDは `wrangler hyperdrive create <name> --connection-string="$CODIP_MIGRATION_DATABASE_URL"` で払い出し、`wrangler.jsonc` のプレースホルダーを置き換えてから `cf:deploy` する。秘密情報は `wrangler secret put <name> [--env preview|production]` で登録し、`wrangler.jsonc` にはコミットしない。
+
+Cloudflare Access保護は `infra/cloudflare/` のTerraformテンプレートを使う (`infra/cloudflare/README.md` 参照)。`terraform apply` は人間が実行する。
 
 ## 2. 事前Freeze
 

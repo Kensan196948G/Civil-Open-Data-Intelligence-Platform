@@ -6,12 +6,17 @@
 | --- | --- | --- |
 | Local | 開発 | Next.js, SQLite |
 | 現行共有Preview | 関係者検証 | Node.jsコンテナ、SQLiteまたはPostgreSQL/PostGIS compose、Cloudflare Access相当の前段保護 |
-| 将来Staging | Cloudflare/Neon検証 | Cloudflare Pages/Workers、Access、Neon PostgreSQL/PostGIS staging branch |
-| Production目標 | 本番 | Cloudflare Pages/Workers、Access、Neon PostgreSQL/PostGIS、Cloudflare Cron Triggers |
+| 将来Staging | Cloudflare/Neon検証 | Cloudflare Workers (`@opennextjs/cloudflare`)、Access、Neon PostgreSQL/PostGIS staging branch |
+| Production目標 | 本番 | Cloudflare Workers (`@opennextjs/cloudflare`)、Access、Neon PostgreSQL/PostGIS、Cloudflare Cron Triggers |
 
 ## 2. デプロイ方針
 
-MVPではローカル、CI、Docker previewで品質を確認する。Cloudflare Pages/WorkersとNeon/PostGISは本番目標構成であり、現行リポジトリには `wrangler`、OpenNext、Cloudflare Pages adapterはまだ導入していない。取得処理は将来Cloudflare Cron TriggersとWorkersへ分離する。
+MVPではローカル、CI、Docker previewで品質を確認する。Cloudflare WorkersとNeon/PostGISは本番目標構成であり、`wrangler.jsonc`、`open-next.config.ts`、`infra/cloudflare/` (Terraformテンプレート) は導入済みで、`npm run cf:build` / `cf:preview` / `cf:deploy` / `cf:typegen` から実行できる。ただし以下の2点は未解決のアプリケーションコード側の制約であり、Workers本番切替前に解消が必須 (詳細はIssue #18):
+
+- `src/lib/url-guard.ts` / `src/lib/http-client.ts` のSSRFガード・DNSピン留めが `dns.lookup()` に依存しており、Workers `nodejs_compat` では未実装 (fail-closedのため脆弱性化はしないが、外部URL取得機能がWorkers上で動作しない)
+- `prisma/postgresql/schema.prisma` に `driverAdapters` preview featureが未設定のため、Prisma ClientがCloudflare Hyperdrive bindingを消費できない (`wrangler.jsonc` の `hyperdrive` bindingは宣言のみで現状は不活性)
+
+Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、Cloudflareが現在推奨するNext.jsデプロイ経路が `@opennextjs/cloudflare` アダプタ経由のWorkersであり、レガシーの `@cloudflare/next-on-pages` ではないため。取得処理は将来Cloudflare Cron TriggersとWorkersへ分離する。
 
 ## 2.1 環境変数
 
@@ -38,6 +43,16 @@ MVPではローカル、CI、Docker previewで品質を確認する。Cloudflare
 | `CODIP_NEON_BRANCH` | Staging/Production evidence | Neon branch名を証跡として記録 |
 | `CODIP_MIGRATION_DATABASE_URL` | Migration | Hyperdriveを経由しないNeon direct endpoint。CI/CD secretで管理 |
 | `ESTAT_APP_ID` | Optional | e-Stat API利用時のアプリケーションID |
+
+## 2.1a Cloudflare Workers IaC構成
+
+| ファイル | 内容 |
+| --- | --- |
+| `wrangler.jsonc` | Workers実行構成。`env.preview`/`env.production` named environment、Hyperdrive binding宣言 (idはプレースホルダー、`wrangler hyperdrive create` の払い出し値へ人間が置換) |
+| `open-next.config.ts` | `@opennextjs/cloudflare` の最小ビルド設定 |
+| `infra/cloudflare/` | Cloudflare Access保護のTerraformテンプレート (v5 provider、`cloudflare_zero_trust_access_application`/`_policy`)。適用 (`terraform apply`) は人間が実行 |
+
+秘密情報 (`CODIP_ADMIN_TOKEN`、`CODIP_TRUST_PROXY_SECRET`、`CODIP_MIGRATION_DATABASE_URL`、`DATABASE_URL` 等) は `wrangler.jsonc` の `vars` に書かず、`wrangler secret put <name>` (production/preview) または `.dev.vars` (local、gitignore対象) で管理する。
 
 ## 2.2 現在のCIゲート
 
