@@ -165,6 +165,17 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | 未対応 | なし |
 | 残課題 | Codexレビュー(通常・対抗)自体は未実施のまま(上記と同一課題)。今回の独立レビューはCodexの代替であって同一ではなく、人間によるCodex実行判断は引き続き必要 |
 
+### 2026-07-13 証跡commit・PR本文への反映確認
+
+上記2件(CodeRabbit全体レビュー対応・独立レビュー対応)のドキュメント証跡commitに対するCI結果、およびPR本文への反映を記録する。
+
+| 項目 | 記録 |
+| --- | --- |
+| 証跡commit | `e616fe9`(CodeRabbit分)、`f3d0608`(独立レビュー分) |
+| `f3d0608` CI結果 | GitHub Actions 全項目 pass(analyze / docker-image-security / docker-preview / e2e / postgresql-compat / verify)。`docker-supply-chain` / `production-target-env` は条件付きskip(想定通り) |
+| PR #17 本文 | CodeRabbit全体レビュー結果と独立レビュー結果(silent-failure-hunter / code-reviewer)を追記し、`gh api ... -X PATCH`で更新済み |
+| PR状態 | draft継続。Codexレビュー(通常・対抗)が人間未実行のため、CTO判断でreadyへの遷移は保留 |
+
 ### 実ターゲットリリース時の記録欄
 
 | 項目 | 記録 |
