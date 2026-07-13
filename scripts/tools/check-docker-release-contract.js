@@ -22,8 +22,10 @@ requireText("Dockerfile", dockerfile, "FROM node:22-bookworm-slim@sha256:53ada14
 requireText("Dockerfile", dockerfile, "FROM node:22-bookworm-slim@sha256:53ada149d435c38b14476cb57e4a7da73c15595aba79bd6971b547ceb6d018bf AS runtime-base");
 requireText("Dockerfile", dockerfile, "RUN npm ci --omit=dev");
 requireText("Dockerfile", dockerfile, "FROM runtime-base AS runner");
+requireText("Dockerfile", dockerfile, "RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx");
 requireText("Dockerfile", dockerfile, "USER node");
 requireText("Dockerfile", dockerfile, "node scripts/tools/validate-env.js --mode ${CODIP_ENV_MODE:-production}");
+requireText("Dockerfile", dockerfile, "node node_modules/next/dist/bin/next start --hostname 0.0.0.0 --port ${PORT}");
 if (dockerfile.includes("chown -R node:node /data /app") || dockerfile.includes("chown -R node:node /app")) {
   errors.push("Dockerfile must not make /app writable by the runtime node user");
 }
@@ -40,6 +42,7 @@ requireText("CI workflow", ci, "id-token: write");
 requireText("CI workflow", ci, "aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8");
 requireText("CI workflow", ci, "postgis/postgis@sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5");
 requireText("CI workflow", ci, "image-ref: codip-production-scan");
+requireText("CI workflow", ci, 'grep -q "accepting connections"');
 requireText("CI workflow", ci, "severity: CRITICAL,HIGH");
 requireText("CI workflow", ci, "ignore-unfixed: true");
 requireText("CI workflow", ci, 'exit-code: "1"');

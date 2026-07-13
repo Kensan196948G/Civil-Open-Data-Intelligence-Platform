@@ -34,7 +34,7 @@
     "db:compare-schemas": "node scripts/tools/compare-prisma-models.js",
     "db:pg:validate": "DATABASE_URL='postgresql://codip:codip@localhost:5432/codip?schema=public' prisma validate --schema prisma/postgresql/schema.prisma",
     "db:pg:generate": "DATABASE_URL='postgresql://codip:codip@localhost:5432/codip?schema=public' prisma generate --schema prisma/postgresql/schema.prisma",
-    "db:pg:check-drift": "prisma migrate diff --from-url \"$DATABASE_URL\" --to-schema-datamodel prisma/postgresql/schema.prisma --exit-code",
+    "db:pg:check-drift": "node scripts/tools/check-postgresql-migration-drift.js",
     "db:pg:seed": "tsx prisma/seed-postgresql.ts",
     "db:prune": "node scripts/db/prune-operational-data.js",
     "db:migrate": "DATABASE_URL='file:./dev.db' prisma migrate deploy",

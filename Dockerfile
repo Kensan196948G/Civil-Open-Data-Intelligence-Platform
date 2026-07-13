@@ -46,6 +46,7 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/next.config.ts ./next.config.ts
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 USER node
 EXPOSE 3100
-CMD ["sh", "-c", "node scripts/tools/validate-env.js --mode ${CODIP_ENV_MODE:-production} && npm run start -- --hostname 0.0.0.0 --port ${PORT}"]
+CMD ["sh", "-c", "node scripts/tools/validate-env.js --mode ${CODIP_ENV_MODE:-production} && node node_modules/next/dist/bin/next start --hostname 0.0.0.0 --port ${PORT}"]

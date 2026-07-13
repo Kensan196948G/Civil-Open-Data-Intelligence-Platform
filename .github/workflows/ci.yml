@@ -22,6 +22,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   verify:
@@ -199,7 +200,7 @@ jobs:
 
       - name: Prepare database
         run: |
-          npx prisma generate
+          npm run db:generate
           npx prisma migrate deploy
           npx prisma db seed
 
@@ -340,7 +341,7 @@ jobs:
 
           docker compose -f docker-compose.postgresql-preview.yml up -d postgres
           for _ in {1..60}; do
-            if docker compose -f docker-compose.postgresql-preview.yml exec -T postgres pg_isready -U codip -d codip >/dev/null 2>&1; then
+            if docker compose -f docker-compose.postgresql-preview.yml exec -T postgres pg_isready -U codip -d codip 2>/dev/null | grep -q "accepting connections"; then
               break
             fi
             sleep 2
