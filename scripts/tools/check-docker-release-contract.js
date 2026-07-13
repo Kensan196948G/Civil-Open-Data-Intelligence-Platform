@@ -43,6 +43,7 @@ requireText("CI workflow", ci, "aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d17
 requireText("CI workflow", ci, "postgis/postgis@sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5");
 requireText("CI workflow", ci, "image-ref: codip-production-scan");
 requireText("CI workflow", ci, "postgres_ready=false");
+requireText("CI workflow", ci, "pg_isready -h 127.0.0.1 -U codip -d codip");
 requireText("CI workflow", ci, 'grep -q "accepting connections"');
 requireText("CI workflow", ci, "severity: CRITICAL,HIGH");
 requireText("CI workflow", ci, "ignore-unfixed: true");
@@ -57,6 +58,7 @@ requireText("CI workflow", ci, "push: true");
 requireText("CI workflow", ci, "sbom: true");
 requireText("CI workflow", ci, "provenance: mode=max");
 requireText("PostgreSQL preview compose", composePg, "postgis/postgis@sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5");
+requireText("PostgreSQL preview compose", composePg, "pg_isready -h 127.0.0.1 -U codip -d codip");
 
 if (ci.includes("docker/scout-action")) {
   errors.push("CI workflow must not use Docker Scout for unauthenticated PR image scans");

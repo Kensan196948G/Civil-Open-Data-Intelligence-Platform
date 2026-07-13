@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: codip
       POSTGRES_PASSWORD: codip
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U codip -d codip"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U codip -d codip"]
       interval: 10s
       timeout: 5s
       retries: 10

@@ -40,6 +40,7 @@ requireText("CI workflow", ci, "actions/upload-artifact@ea165f8d65b6e75b540449e9
 requireText("CodeQL workflow", codeql, "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5");
 requireText("CodeQL workflow", codeql, "github/codeql-action/init@1ad29ea4a422cce9a242a9fae469541dcd08addc");
 requireText("CodeQL workflow", codeql, "github/codeql-action/analyze@1ad29ea4a422cce9a242a9fae469541dcd08addc");
+requireText("CodeQL workflow", codeql, "continue-on-error: true");
 
 const forbiddenPatterns = [
   "pull_request_target:",

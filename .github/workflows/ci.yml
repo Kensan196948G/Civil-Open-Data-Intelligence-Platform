@@ -233,7 +233,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U codip -d codip"
+          --health-cmd "pg_isready -h 127.0.0.1 -U codip -d codip"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
@@ -344,7 +344,7 @@ jobs:
           docker compose -f docker-compose.postgresql-preview.yml up -d postgres
           postgres_ready=false
           for _ in {1..60}; do
-            if docker compose -f docker-compose.postgresql-preview.yml exec -T postgres pg_isready -U codip -d codip 2>/dev/null | grep -q "accepting connections"; then
+            if docker compose -f docker-compose.postgresql-preview.yml exec -T postgres pg_isready -h 127.0.0.1 -U codip -d codip 2>/dev/null | grep -q "accepting connections"; then
               postgres_ready=true
               break
             fi
@@ -354,7 +354,7 @@ jobs:
             docker compose -f docker-compose.postgresql-preview.yml logs postgres
             exit 1
           fi
-          docker compose -f docker-compose.postgresql-preview.yml exec -T postgres pg_isready -U codip -d codip
+          docker compose -f docker-compose.postgresql-preview.yml exec -T postgres pg_isready -h 127.0.0.1 -U codip -d codip
           docker compose -f docker-compose.postgresql-preview.yml run --rm --no-deps codip sh -c \
             "node scripts/tools/validate-env.js --mode preview && npx prisma migrate deploy --schema prisma/postgresql/schema.prisma && npm run db:pg:seed"
 
