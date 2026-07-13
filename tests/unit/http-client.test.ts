@@ -110,6 +110,14 @@ describe("sanitizeUrl", () => {
     );
     expect(sanitizeUrl("https://api.example.com/?api_key=abc&token=xyz")).toContain("api_key=***");
     expect(sanitizeUrl("https://api.example.com/?api_key=abc&token=xyz")).toContain("token=***");
+    expect(
+      sanitizeUrl(
+        "https://api.example.com/?client_secret=abc&signature=sig&subscription-key=sub",
+      ),
+    ).toBe("https://api.example.com/?client_secret=***&signature=***&subscription-key=***");
+    expect(sanitizeUrl("https://user:pass@example.com/data?key=abc")).toBe(
+      "https://example.com/data?key=***",
+    );
   });
 
   it("通常のパラメータは変更しない", () => {

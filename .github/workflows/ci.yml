@@ -5,16 +5,44 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: "staging or production environment to validate"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      expect_standard_records:
+        description: "Run read-only smoke with --expect-standard-records against the target"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
 
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       DATABASE_URL: "file:./dev.db"
+      CODIP_ADMIN_TOKEN: "ci-release-admin-token-123456789012"
+      CODIP_ACCEPT_SQLITE_PREVIEW: "true"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
-      - uses: actions/setup-node@v4
+      - name: Lint GitHub Actions workflows
+        shell: bash
+        run: |
+          curl -fsSLO https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  actionlint_1.7.12_linux_amd64.tar.gz" | sha256sum -c -
+          tar -xzf actionlint_1.7.12_linux_amd64.tar.gz
+          ./actionlint -color
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           cache: npm
@@ -22,11 +50,35 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate Prisma Client
-        run: npx prisma generate
+      - name: Dependency audit
+        run: npm audit --audit-level=moderate
+
+      - name: Validate local env contract
+        run: npm run release:validate-env:local
+
+      - name: Generate Prisma Clients
+        run: npm run db:generate
+
+      - name: Validate PostgreSQL/PostGIS schema
+        run: |
+          npm run db:compare-schemas
+          npm run db:pg:validate
+          npm run db:pg:generate
+
+      - name: Validate v1 and docs API contracts
+        run: |
+          npm run release:check-v1-contract
+          npm run release:check-doc-api-contract
+          npm run release:check-openapi-coverage
+          npm run release:check-docker-contract
+          npm run release:check-cloudflare-contract
+          npm run release:check-github-actions-contract
 
       - name: Lint
         run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc --noEmit
 
       - name: Unit tests
         run: npm run test
@@ -35,26 +87,109 @@ jobs:
         run: |
           npx prisma migrate deploy
           npx prisma db seed
+          npm run db:check-duplicates
+          npm run db:check-standard-record-policy
+          npm run db:prune -- --dry-run
 
       - name: Build
         run: npm run build
 
+      - name: Validate preview env contract
+        run: npm run release:validate-env:preview
+
+      - name: Validate production env contract
+        env:
+          DATABASE_URL: "postgresql://codip:codip@example.com:5432/codip?schema=public&sslmode=require"
+          CODIP_ADMIN_TOKEN: "ci-production-admin-token-1234567890"
+          CODIP_ALLOW_INSECURE_ADMIN: "false"
+          CODIP_ACCEPT_SQLITE_PREVIEW: "false"
+        run: npm run release:validate-env:production
+
+      - name: SQLite preview start smoke
+        env:
+          CODIP_ENV_MODE: "preview"
+          CODIP_ACCEPT_SQLITE_PREVIEW: "true"
+          CODIP_ALLOWED_ORIGINS: "http://127.0.0.1:3100"
+        run: |
+          trap 'if [ -f /tmp/codip-start.pid ]; then kill "$(cat /tmp/codip-start.pid)" 2>/dev/null || true; fi' EXIT
+          npm run start:checked -- --hostname 127.0.0.1 --port 3100 > /tmp/codip-start.log 2>&1 &
+          echo $! > /tmp/codip-start.pid
+          for _ in {1..60}; do
+            if curl --connect-timeout 3 --max-time 10 -fsS http://127.0.0.1:3100/api/ready >/tmp/codip-ready.json; then
+              break
+            fi
+            sleep 1
+          done
+          cat /tmp/codip-ready.json
+          npm run release:smoke -- --base-url http://127.0.0.1:3100
+
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Secret scan (.env must not be committed)
         run: |
-          if git ls-files | grep -E '(^|/)\.env$'; then
-            echo "::error::.env がコミットされています"
+          if git ls-files | grep -E '(^|/)\.env(\..*)?$' | grep -v -E '(^|/)\.env\.example$'; then
+            echo "::error::.env / .env.* がコミットされています（.env.exampleのみ許可）"
             exit 1
           fi
-          echo "OK: .env is not tracked"
+          echo "OK: private .env files are not tracked"
+
+  production-target-env:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.deploy_target }}
+    env:
+      CODIP_DEPLOY_TARGET: ${{ inputs.deploy_target }}
+      DATABASE_URL: ${{ secrets.CODIP_DATABASE_URL }}
+      CODIP_MIGRATION_DATABASE_URL: ${{ secrets.CODIP_MIGRATION_DATABASE_URL }}
+      CODIP_BASE_URL: ${{ vars.CODIP_BASE_URL }}
+      CODIP_HYPERDRIVE_BINDING: ${{ vars.CODIP_HYPERDRIVE_BINDING }}
+      CODIP_NEON_BRANCH: ${{ vars.CODIP_NEON_BRANCH }}
+      CODIP_ADMIN_TOKEN: ${{ secrets.CODIP_ADMIN_TOKEN }}
+      CODIP_TRUST_PROXY_AUTH: ${{ vars.CODIP_TRUST_PROXY_AUTH }}
+      CODIP_TRUST_PROXY_SECRET: ${{ secrets.CODIP_TRUST_PROXY_SECRET }}
+      CODIP_ADMIN_EMAILS: ${{ vars.CODIP_ADMIN_EMAILS }}
+      CODIP_ADMIN_EMAIL_DOMAINS: ${{ vars.CODIP_ADMIN_EMAIL_DOMAINS }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate real production target env
+        run: npm run release:validate-env:production-target
+
+      - name: Verify target PostGIS DDL
+        run: npm run db:pg:check-postgis-ddl
+
+      - name: Verify target PostgreSQL migration drift
+        run: npm run db:pg:check-drift
+
+      - name: Read-only target smoke
+        run: npm run release:smoke -- --read-only --base-url "$CODIP_BASE_URL"
+
+      - name: Read-only target standard records smoke
+        if: inputs.expect_standard_records == true
+        run: npm run release:smoke -- --read-only --base-url "$CODIP_BASE_URL" --expect-standard-records
 
   e2e:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       DATABASE_URL: "file:./dev.db"
+      CODIP_ALLOW_INSECURE_ADMIN: "true"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           cache: npm
@@ -76,8 +211,275 @@ jobs:
 
       - name: Upload traces on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: playwright-traces
           path: test-results/
           retention-days: 7
+
+  postgresql-compat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgis/postgis@sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5
+        env:
+          POSTGRES_DB: codip
+          POSTGRES_USER: codip
+          POSTGRES_PASSWORD: codip
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U codip -d codip"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: "postgresql://codip:codip@localhost:5432/codip?schema=public"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate schema parity
+        run: npm run db:compare-schemas
+
+      - name: Validate PostgreSQL Prisma schema
+        run: npm run db:pg:validate
+
+      - name: Generate PostgreSQL Prisma Client
+        run: npm run db:pg:generate
+
+      - name: Apply PostgreSQL/PostGIS migrations
+        run: npx prisma migrate deploy --schema prisma/postgresql/schema.prisma
+
+      - name: Seed PostgreSQL twice (idempotency)
+        run: |
+          npm run db:pg:seed
+          npm run db:pg:seed
+
+      - name: Verify PostgreSQL seed counts and PostGIS
+        run: |
+          node - <<'NODE'
+          const { PrismaClient } = require("./node_modules/.prisma/client-postgresql");
+          const prisma = new PrismaClient();
+          (async () => {
+            const [sources, providers, tags, standardRecords, postgis] = await Promise.all([
+              prisma.dataSource.count(),
+              prisma.provider.count(),
+              prisma.tag.count(),
+              prisma.standardRecord.count(),
+              prisma.$queryRaw`SELECT postgis_version() AS version`,
+            ]);
+            console.log({ sources, providers, tags, standardRecords, postgis });
+            if (sources < 20 || providers < 5 || tags < 5 || standardRecords < 1) {
+              throw new Error("Seed counts are lower than expected");
+            }
+          })().finally(async () => prisma.$disconnect());
+          NODE
+
+      - name: Verify standard record release policy
+        run: npm run db:check-standard-record-policy
+
+      - name: Verify PostGIS standard_records DDL
+        run: npm run db:pg:check-postgis-ddl
+
+      - name: Verify PostgreSQL migration drift
+        run: npm run db:pg:check-drift
+
+      - name: Build app with PostgreSQL runtime client
+        run: npm run build
+
+      - name: PostgreSQL runtime smoke
+        env:
+          CODIP_ADMIN_TOKEN: "ci-postgresql-admin-token-1234567890"
+          CODIP_ALLOW_INSECURE_ADMIN: "false"
+        run: |
+          trap 'if [ -f /tmp/codip-pg-start.pid ]; then kill "$(cat /tmp/codip-pg-start.pid)" 2>/dev/null || true; fi' EXIT
+          npm run start -- --hostname 127.0.0.1 --port 3101 > /tmp/codip-pg-start.log 2>&1 &
+          echo $! > /tmp/codip-pg-start.pid
+          for _ in {1..60}; do
+            if curl --connect-timeout 3 --max-time 10 -fsS http://127.0.0.1:3101/api/ready >/tmp/codip-pg-ready.json; then
+              break
+            fi
+            sleep 1
+          done
+          cat /tmp/codip-pg-ready.json
+          curl --connect-timeout 3 --max-time 10 -fsS http://127.0.0.1:3101/api/sources | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const body=JSON.parse(s); if (!Array.isArray(body.items) || body.items.length < 20) throw new Error("PostgreSQL runtime sources check failed"); console.log("sources=" + body.items.length);})'
+          npm run release:smoke -- --base-url http://127.0.0.1:3101 --expect-standard-records --expect-seed-standard-record
+
+  docker-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CODIP_ADMIN_TOKEN: "ci-docker-preview-admin-token-123456"
+      CODIP_SEED_ON_START: "true"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Validate Docker Compose preview config
+        run: docker compose -f docker-compose.preview.yml config --quiet
+
+      - name: Validate Docker Compose PostgreSQL preview config
+        run: docker compose -f docker-compose.postgresql-preview.yml config --quiet
+
+      - name: Build Docker image
+        run: |
+          docker build --target runner -t codip-production-ci .
+          docker build --target preview-runner -t codip-preview-ci .
+
+      - name: Production runner PostgreSQL smoke
+        run: |
+          trap 'docker rm -f codip-production-runner-ci 2>/dev/null || true; docker compose -f docker-compose.postgresql-preview.yml down -v 2>/dev/null || true' EXIT
+
+          docker compose -f docker-compose.postgresql-preview.yml up -d postgres
+          for _ in {1..60}; do
+            if docker compose -f docker-compose.postgresql-preview.yml exec -T postgres pg_isready -U codip -d codip >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          docker compose -f docker-compose.postgresql-preview.yml exec -T postgres pg_isready -U codip -d codip
+          docker compose -f docker-compose.postgresql-preview.yml run --rm --no-deps codip sh -c \
+            "node scripts/tools/validate-env.js --mode preview && npx prisma migrate deploy --schema prisma/postgresql/schema.prisma && npm run db:pg:seed"
+
+          NETWORK="$(docker inspect "$(docker compose -f docker-compose.postgresql-preview.yml ps -q postgres)" --format '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' | head -n1)"
+          docker run -d --name codip-production-runner-ci \
+            --network "$NETWORK" \
+            -p 3103:3100 \
+            -e NODE_ENV=production \
+            -e CODIP_ENV_MODE=production \
+            -e PORT=3100 \
+            -e DATABASE_URL="postgresql://codip:codip@postgres:5432/codip?schema=public" \
+            -e CODIP_ADMIN_TOKEN="ci-production-runner-admin-token-1234" \
+            codip-production-ci
+
+          for _ in {1..90}; do
+            if curl --connect-timeout 3 --max-time 10 -fsS http://127.0.0.1:3103/api/ready >/tmp/codip-production-runner-ready.json; then
+              cat /tmp/codip-production-runner-ready.json
+              node scripts/tools/release-smoke.js --base-url http://127.0.0.1:3103 --expect-standard-records --expect-seed-standard-record
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs codip-production-runner-ci || true
+          exit 1
+
+      - name: Start Docker SQLite preview
+        run: docker compose -f docker-compose.preview.yml up -d --build
+
+      - name: Wait for Docker SQLite preview readiness
+        run: |
+          for _ in {1..90}; do
+            if curl --connect-timeout 3 --max-time 10 -fsS http://127.0.0.1:3100/api/ready >/tmp/codip-docker-ready.json; then
+              cat /tmp/codip-docker-ready.json
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -f docker-compose.preview.yml logs
+          exit 1
+
+      - name: Docker SQLite preview release smoke
+        run: node scripts/tools/release-smoke.js --base-url http://127.0.0.1:3100
+
+      - name: Stop Docker SQLite preview
+        if: always()
+        run: docker compose -f docker-compose.preview.yml down -v
+
+      - name: Start Docker PostgreSQL preview
+        run: docker compose -f docker-compose.postgresql-preview.yml up -d --build
+
+      - name: Wait for Docker PostgreSQL preview readiness
+        run: |
+          for _ in {1..120}; do
+            if curl --connect-timeout 3 --max-time 10 -fsS http://127.0.0.1:3102/api/ready >/tmp/codip-docker-pg-ready.json; then
+              cat /tmp/codip-docker-pg-ready.json
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -f docker-compose.postgresql-preview.yml logs
+          exit 1
+
+      - name: Docker PostgreSQL preview release smoke
+        run: node scripts/tools/release-smoke.js --base-url http://127.0.0.1:3102 --expect-standard-records --expect-seed-standard-record
+
+      - name: Stop Docker PostgreSQL preview
+        if: always()
+        run: docker compose -f docker-compose.postgresql-preview.yml down -v
+
+  docker-image-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Build production runner image for scan
+        run: docker build --target runner -t codip-production-scan .
+
+      - name: Trivy CVE scan
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        with:
+          image-ref: codip-production-scan
+          format: table
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+          scanners: vuln
+
+  docker-supply-chain:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [verify, e2e, postgresql-compat, docker-preview, docker-image-security]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Resolve image name
+        id: image
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "name=$image" >> "$GITHUB_OUTPUT"
+
+      - name: Login to GHCR
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=main
+
+      - name: Build and push production image with SBOM/provenance
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: .
+          target: runner
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          sbom: true
+          provenance: mode=max

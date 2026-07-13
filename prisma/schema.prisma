@@ -55,6 +55,7 @@ model DataSource {
   qualityChecks   QualityCheck[]
   relatedUseCases RelatedUseCase[]
 
+  @@unique([officialUrl])
   @@map("data_sources")
 }
 
@@ -97,6 +98,8 @@ model FetchLog {
 
   sampleResponses SampleResponse[]
 
+  @@index([dataSourceId, executedAt])
+  @@index([executedAt])
   @@map("fetch_logs")
 }
 
@@ -111,6 +114,8 @@ model SampleResponse {
   detectedFormat String?
   createdAt      DateTime   @default(now())
 
+  @@index([dataSourceId, createdAt])
+  @@index([createdAt])
   @@map("sample_responses")
 }
 

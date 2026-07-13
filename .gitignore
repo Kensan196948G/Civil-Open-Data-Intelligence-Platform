@@ -28,6 +28,9 @@ coverage/
 test-results/
 playwright-report/
 
+# backups
+backups/
+
 # local tooling
 .claude/
 .mcp.json

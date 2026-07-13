@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgis/postgis@sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5
+    environment:
+      POSTGRES_DB: codip
+      POSTGRES_USER: codip
+      POSTGRES_PASSWORD: codip
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U codip -d codip"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  codip:
+    build:
+      context: .
+      target: preview-runner
+    ports:
+      - "3102:3100"
+    environment:
+      NODE_ENV: production
+      CODIP_ENV_MODE: preview
+      PORT: "3100"
+      DATABASE_URL: "postgresql://codip:codip@postgres:5432/codip?schema=public"
+      CODIP_ADMIN_TOKEN: "${CODIP_ADMIN_TOKEN:?Set CODIP_ADMIN_TOKEN length >= 32}"
+      CODIP_ALLOW_INSECURE_ADMIN: "false"
+      CODIP_RUN_MIGRATIONS_ON_START: "true"
+      CODIP_SEED_ON_START: "${CODIP_SEED_ON_START:-true}"
+      ESTAT_APP_ID: "${ESTAT_APP_ID:-}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3100/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

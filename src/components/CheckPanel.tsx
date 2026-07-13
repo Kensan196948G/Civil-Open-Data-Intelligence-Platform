@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { adminHeaders } from "@/lib/admin-client";
 
 type CheckResult = {
   success: boolean;
@@ -28,15 +29,13 @@ export function CheckPanel({ sourceId }: { sourceId: string }) {
         kind === "quality"
           ? `/api/quality/${sourceId}/recalculate`
           : `/api/sources/${sourceId}/${kind}`;
-      const res = await fetch(url, { method: "POST" });
+      const res = await fetch(url, { method: "POST", headers: adminHeaders() });
       const data = await res.json();
       if (!res.ok) {
         setError(data.message ?? "実行に失敗しました");
         return;
       }
-      if (kind !== "quality") {
-        setResult({ kind, data });
-      }
+      setResult({ kind, data });
       router.refresh();
     } catch {
       setError("実行に失敗しました");
@@ -71,7 +70,11 @@ export function CheckPanel({ sourceId }: { sourceId: string }) {
           {busy === "quality" ? "⏳ 計算中..." : "⭐ 品質スコア再計算"}
         </button>
       </div>
-      {error && <p className="mt-3 text-sm text-red-600">⚠️ {error}</p>}
+      {error && (
+        <p className="mt-3 text-sm text-red-600" role="alert">
+          ⚠️ {error}
+        </p>
+      )}
       {result && (
         <div
           className={`mt-3 rounded border px-3 py-2 text-sm ${
@@ -79,6 +82,7 @@ export function CheckPanel({ sourceId }: { sourceId: string }) {
               ? "border-green-300 bg-green-50 text-green-800"
               : "border-red-300 bg-red-50 text-red-800"
           }`}
+          role="status"
         >
           <p>
             {result.data.success ? "✅ 成功" : "❌ 失敗"}
@@ -90,7 +94,7 @@ export function CheckPanel({ sourceId }: { sourceId: string }) {
           {result.data.message && <p className="mt-1 text-xs">{result.data.message}</p>}
         </div>
       )}
-      <p className="mt-3 text-xs text-slate-400">
+      <p className="mt-3 text-xs text-slate-600">
         ⏱ タイムアウト30秒 / リダイレクト最大3回 / 取得対象は登録済みURLのみ
       </p>
     </div>

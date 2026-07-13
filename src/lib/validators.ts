@@ -1,17 +1,70 @@
 import { z } from "zod";
 import { ACCESS_TYPES, CATEGORIES, DATA_FORMATS } from "@/lib/constants";
+import { hasSecretQueryParams, hasUrlCredentials } from "@/lib/url-safety";
+import { validateUrl } from "@/lib/url-guard";
 
 const categoryValues = CATEGORIES.map((c) => c.value) as [string, ...string[]];
 const formatValues = [...DATA_FORMATS] as [string, ...string[]];
 const accessValues = [...ACCESS_TYPES] as [string, ...string[]];
 
-const urlField = z.string().trim().url({ message: "URL形式が正しくありません" });
+const urlField = z
+  .string()
+  .trim()
+  .url({ message: "URL形式が正しくありません" })
+  .refine((value) => validateUrl(value).ok, {
+    message: "http/https の公開URLのみ登録できます",
+  })
+  .refine((value) => !hasUrlCredentials(value), {
+    message: "URLにユーザー名・パスワードを含めないでください",
+  })
+  .refine((value) => !hasSecretQueryParams(value), {
+    message: "URLにAPIキー・トークン等の秘密情報を含むクエリを登録しないでください",
+  });
 const optionalUrlField = z
   .union([urlField, z.literal("")])
   .optional()
   .transform((v) => (v ? v : null));
 
-export const dataSourceCreateSchema = z.object({
+function isHttpsUrl(value: string | null | undefined): boolean {
+  if (!value) return false;
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function enforceApiKeyHttps(
+  data: { requiresApiKey?: boolean; officialUrl?: string; endpointUrl?: string | null },
+  ctx: z.RefinementCtx,
+) {
+  if (!data.requiresApiKey) return;
+  const targetUrl = data.endpointUrl || data.officialUrl;
+  if (!isHttpsUrl(targetUrl)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [data.endpointUrl ? "endpointUrl" : "officialUrl"],
+      message: "APIキーを利用するデータソースはHTTPS URLのみ登録できます",
+    });
+  }
+}
+
+function booleanField(defaultValue: boolean) {
+  return z
+    .preprocess((value) => {
+      if (value === undefined) return undefined;
+      if (typeof value === "boolean") return value;
+      if (typeof value === "string") {
+        const normalized = value.trim().toLowerCase();
+        if (normalized === "true") return true;
+        if (normalized === "false") return false;
+      }
+      return value;
+    }, z.boolean({ invalid_type_error: "true または false を指定してください" }))
+    .default(defaultValue);
+}
+
+const dataSourceBaseSchema = z.object({
   name: z.string().trim().min(1, "データソース名は必須です").max(200),
   nameEn: z.string().trim().max(200).optional().transform((v) => v || null),
   providerId: z.string().trim().min(1).optional(),
@@ -26,7 +79,7 @@ export const dataSourceCreateSchema = z.object({
   category: z.enum(categoryValues),
   dataFormat: z.enum(formatValues),
   accessType: z.enum(accessValues),
-  requiresApiKey: z.coerce.boolean().default(false),
+  requiresApiKey: booleanField(false),
   apiKeyEnvName: z
     .string()
     .trim()
@@ -36,7 +89,7 @@ export const dataSourceCreateSchema = z.object({
     .transform((v) => v || null),
   licenseName: z.string().trim().max(300).optional().transform((v) => v || null),
   commercialUse: z.enum(["allowed", "restricted", "unknown"]).default("unknown"),
-  attributionRequired: z.coerce.boolean().default(true),
+  attributionRequired: booleanField(true),
   updateFrequency: z.string().trim().max(100).optional().transform((v) => v || null),
   status: z.enum(["active", "unstable", "deprecated", "unknown"]).default("unknown"),
   trustLevel: z.coerce.number().int().min(1, "信頼度は1〜5").max(5, "信頼度は1〜5").default(3),
@@ -51,7 +104,11 @@ export const dataSourceCreateSchema = z.object({
   tagIds: z.array(z.string()).optional(),
 });
 
-export const dataSourceUpdateSchema = dataSourceCreateSchema.partial();
+export const dataSourceCreateSchema = dataSourceBaseSchema.superRefine(enforceApiKeyHttps);
+
+export const dataSourceUpdateSchema = dataSourceBaseSchema
+  .partial()
+  .superRefine(enforceApiKeyHttps);
 
 export const tagCreateSchema = z.object({
   name: z.string().trim().min(1, "タグ名は必須です").max(100),

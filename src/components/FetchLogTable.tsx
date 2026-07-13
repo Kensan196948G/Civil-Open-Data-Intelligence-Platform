@@ -22,24 +22,25 @@ export function FetchLogTable({ logs, showSource = true }: { logs: FetchLogRow[]
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
+        <caption className="sr-only">取得ログ一覧</caption>
         <thead>
           <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-            <th className="px-2 py-2">実行日時</th>
-            {showSource && <th className="px-2 py-2">データソース</th>}
-            <th className="px-2 py-2">種別</th>
-            <th className="px-2 py-2">結果</th>
-            <th className="px-2 py-2">HTTP</th>
-            <th className="px-2 py-2">応答(ms)</th>
-            <th className="px-2 py-2">サイズ</th>
-            <th className="px-2 py-2">エラー</th>
+            <th scope="col" className="px-2 py-2">実行日時</th>
+            {showSource && <th scope="col" className="px-2 py-2">データソース</th>}
+            <th scope="col" className="px-2 py-2">種別</th>
+            <th scope="col" className="px-2 py-2">結果</th>
+            <th scope="col" className="px-2 py-2">HTTP</th>
+            <th scope="col" className="px-2 py-2">応答(ms)</th>
+            <th scope="col" className="px-2 py-2">サイズ</th>
+            <th scope="col" className="px-2 py-2">エラー</th>
           </tr>
         </thead>
         <tbody>
           {logs.map((log) => (
             <tr key={log.id} className="border-b border-slate-100 hover:bg-slate-50">
-              <td className="px-2 py-2 whitespace-nowrap">
+              <th scope="row" className="px-2 py-2 text-left whitespace-nowrap">
                 {new Date(log.executedAt).toLocaleString("ja-JP")}
-              </td>
+              </th>
               {showSource && (
                 <td className="px-2 py-2">
                   {log.dataSource ? (

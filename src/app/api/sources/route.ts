@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { requireAdminRequest } from "@/lib/admin-auth";
 import { dataSourceCreateSchema } from "@/lib/validators";
+import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
+import { safeSourceDto } from "@/lib/source-dto";
 
 function intParam(
   sp: URLSearchParams,
@@ -18,6 +21,9 @@ function intParam(
 }
 
 export async function GET(request: NextRequest) {
+  const rate = checkRateLimit("api:sources", clientIdentifier(request), 120, 60_000);
+  if (!rate.allowed) return rateLimitResponse(rate);
+
   const sp = request.nextUrl.searchParams;
   const q = sp.get("q")?.trim();
   const category = sp.get("category")?.trim();
@@ -27,11 +33,17 @@ export async function GET(request: NextRequest) {
   const status = sp.get("status")?.trim();
   const tagId = sp.get("tag")?.trim();
   const trustLevel = intParam(sp, "trustLevel", 0, 1, 5);
-  const take = intParam(sp, "take", 100, 1, 1000);
-  const skip = intParam(sp, "skip", 0, 0, 1_000_000);
+  const take = intParam(sp, "take", 100, 1, 200);
+  const skip = intParam(sp, "skip", 0, 0, 5000);
   if (trustLevel === null || take === null || skip === null) {
     return NextResponse.json(
-      { error: "validation_error", message: "trustLevel/take/skip の値が不正です" },
+      { error: "validation_error", message: "trustLevel/take/skip の値が不正です。takeは最大200、skipは最大5000です" },
+      { status: 400 },
+    );
+  }
+  if (q && q.length < 2) {
+    return NextResponse.json(
+      { error: "validation_error", message: "キーワード検索は2文字以上で指定してください" },
       { status: 400 },
     );
   }
@@ -42,7 +54,6 @@ export async function GET(request: NextRequest) {
       { name: { contains: q } },
       { nameEn: { contains: q } },
       { description: { contains: q } },
-      { note: { contains: q } },
     ];
   }
   if (category) where.category = category;
@@ -65,10 +76,13 @@ export async function GET(request: NextRequest) {
     prisma.dataSource.count({ where }),
   ]);
 
-  return NextResponse.json({ items, total });
+  return NextResponse.json({ items: items.map((item) => safeSourceDto(item)), total });
 }
 
 export async function POST(request: NextRequest) {
+  const authError = requireAdminRequest(request);
+  if (authError) return authError;
+
   const body = await request.json().catch(() => null);
   const parsed = dataSourceCreateSchema.safeParse(body);
   if (!parsed.success) {
@@ -106,6 +120,16 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  if (tagIds?.length) {
+    const count = await prisma.tag.count({ where: { id: { in: tagIds } } });
+    if (count !== new Set(tagIds).size) {
+      return NextResponse.json(
+        { error: "validation_error", message: "指定されたタグに存在しないIDが含まれています" },
+        { status: 400 },
+      );
+    }
+  }
+
   // 同一URLの重複登録防止
   const duplicate = await prisma.dataSource.findFirst({
     where: { officialUrl: data.officialUrl },
@@ -117,16 +141,27 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const created = await prisma.dataSource.create({
-    data: {
-      ...data,
-      providerId: resolvedProviderId,
-      tags: tagIds?.length
-        ? { create: tagIds.map((tagId) => ({ tagId })) }
-        : undefined,
-    },
-    include: { provider: true, tags: { include: { tag: true } } },
-  });
+  let created;
+  try {
+    created = await prisma.dataSource.create({
+      data: {
+        ...data,
+        providerId: resolvedProviderId,
+        tags: tagIds?.length
+          ? { create: [...new Set(tagIds)].map((tagId) => ({ tagId })) }
+          : undefined,
+      },
+      include: { provider: true, tags: { include: { tag: true } } },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return NextResponse.json(
+        { error: "duplicate", message: "同じ公式URLのデータソースが既に登録されています" },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
 
-  return NextResponse.json(created, { status: 201 });
+  return NextResponse.json(safeSourceDto(created, { includeSensitive: true }), { status: 201 });
 }

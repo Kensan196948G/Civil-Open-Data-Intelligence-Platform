@@ -1,32 +1,49 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { isAdminHeaders } from "@/lib/admin-auth";
 import { categoryLabel } from "@/lib/constants";
+import { safeFetchLogDto, safeSampleResponseDto } from "@/lib/operational-dto";
 import { StatusBadge } from "@/components/StatusBadge";
 import { QualityScoreBadge, TrustLevelBadge } from "@/components/QualityScoreBadge";
 import { FetchLogTable } from "@/components/FetchLogTable";
 import { CheckPanel } from "@/components/CheckPanel";
 import { DeleteSourceButton } from "@/components/DeleteSourceButton";
+import { sanitizeUrl } from "@/lib/url-safety";
 
 export const dynamic = "force-dynamic";
 
 export default async function SourceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const canManage = isAdminHeaders(await headers());
   const source = await prisma.dataSource.findUnique({
     where: { id },
     include: {
       provider: true,
       tags: { include: { tag: true } },
-      fetchLogs: { orderBy: { executedAt: "desc" }, take: 20 },
-      sampleResponses: { orderBy: { createdAt: "desc" }, take: 3 },
       qualityChecks: { orderBy: { checkedAt: "desc" }, take: 3 },
       relatedUseCases: true,
+      ...(canManage
+        ? {
+            fetchLogs: { orderBy: { executedAt: "desc" }, take: 20 },
+            sampleResponses: { orderBy: { createdAt: "desc" }, take: 3 },
+          }
+        : {}),
     },
   });
   if (!source) notFound();
 
   const dtCls = "text-xs text-slate-500";
   const ddCls = "text-sm text-slate-800 break-all";
+  const fetchLogs = canManage && "fetchLogs" in source ? source.fetchLogs.map((log) => safeFetchLogDto(log)) : [];
+  const sampleResponses =
+    canManage && "sampleResponses" in source
+      ? source.sampleResponses.map((sample) => safeSampleResponseDto(sample))
+      : [];
+  const officialUrl = sanitizeUrl(source.officialUrl);
+  const endpointUrl = source.endpointUrl ? sanitizeUrl(source.endpointUrl) : null;
+  const documentationUrl = source.documentationUrl ? sanitizeUrl(source.documentationUrl) : null;
 
   return (
     <div className="space-y-6">
@@ -41,17 +58,31 @@ export default async function SourceDetailPage({ params }: { params: Promise<{ i
           <StatusBadge status={source.status} />
           <QualityScoreBadge score={source.qualityScore} />
           <TrustLevelBadge level={source.trustLevel} />
-          <Link
-            href={`/sources/${source.id}/edit`}
-            className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
-          >
-            ✏️ 編集
-          </Link>
-          <DeleteSourceButton sourceId={source.id} name={source.name} />
+          {canManage && (
+            <>
+              <Link
+                href={`/sources/${source.id}/edit`}
+                className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
+              >
+                ✏️ 編集
+              </Link>
+              <DeleteSourceButton sourceId={source.id} name={source.name} />
+            </>
+          )}
         </div>
       </div>
 
-      <CheckPanel sourceId={source.id} />
+      {canManage ? (
+        <CheckPanel sourceId={source.id} />
+      ) : (
+        <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          接続確認、サンプル取得、品質再計算、編集、削除には管理セッションが必要です。
+          <Link href="/settings" className="ml-1 font-medium underline">
+            設定画面
+          </Link>
+          で管理操作トークンを確認してください。
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -66,23 +97,23 @@ export default async function SourceDetailPage({ params }: { params: Promise<{ i
             <div>
               <dt className={dtCls}>🔗 公式URL</dt>
               <dd className={ddCls}>
-                <a href={source.officialUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                  {source.officialUrl}
+                <a href={officialUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                  {officialUrl}
                 </a>
               </dd>
             </div>
-            {source.endpointUrl && (
+            {endpointUrl && (
               <div>
                 <dt className={dtCls}>🔌 APIエンドポイント</dt>
-                <dd className={ddCls}>{source.endpointUrl}</dd>
+                <dd className={ddCls}>{endpointUrl}</dd>
               </div>
             )}
-            {source.documentationUrl && (
+            {documentationUrl && (
               <div>
                 <dt className={dtCls}>📄 API仕様書</dt>
                 <dd className={ddCls}>
-                  <a href={source.documentationUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                    {source.documentationUrl}
+                  <a href={documentationUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                    {documentationUrl}
                   </a>
                 </dd>
               </div>
@@ -121,7 +152,7 @@ export default async function SourceDetailPage({ params }: { params: Promise<{ i
                   : "-"}
               </dd>
             </div>
-            {source.note && (
+            {canManage && source.note && (
               <div>
                 <dt className={dtCls}>備考</dt>
                 <dd className={ddCls}>{source.note}</dd>
@@ -155,7 +186,9 @@ export default async function SourceDetailPage({ params }: { params: Promise<{ i
               <dt className={dtCls}>🔑 APIキー</dt>
               <dd className={ddCls}>
                 {source.requiresApiKey
-                  ? `必要（環境変数: ${source.apiKeyEnvName ?? "未設定"}）`
+                  ? canManage
+                    ? `必要（環境変数: ${source.apiKeyEnvName ?? "未設定"}）`
+                    : "必要（環境変数名は管理者のみ表示）"
                   : "不要"}
               </dd>
             </div>
@@ -186,22 +219,23 @@ export default async function SourceDetailPage({ params }: { params: Promise<{ i
           <h2 className="mb-3 text-sm font-semibold text-slate-700">⭐ 品質評価履歴</h2>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
+              <caption className="sr-only">品質評価履歴</caption>
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-                  <th className="px-2 py-2">評価日時</th>
-                  <th className="px-2 py-2">公式性</th>
-                  <th className="px-2 py-2">鮮度</th>
-                  <th className="px-2 py-2">接続安定性</th>
-                  <th className="px-2 py-2">利用条件</th>
-                  <th className="px-2 py-2">形式</th>
-                  <th className="px-2 py-2">関連度</th>
-                  <th className="px-2 py-2">合計</th>
+                  <th scope="col" className="px-2 py-2">評価日時</th>
+                  <th scope="col" className="px-2 py-2">公式性</th>
+                  <th scope="col" className="px-2 py-2">鮮度</th>
+                  <th scope="col" className="px-2 py-2">接続安定性</th>
+                  <th scope="col" className="px-2 py-2">利用条件</th>
+                  <th scope="col" className="px-2 py-2">形式</th>
+                  <th scope="col" className="px-2 py-2">関連度</th>
+                  <th scope="col" className="px-2 py-2">合計</th>
                 </tr>
               </thead>
               <tbody>
                 {source.qualityChecks.map((qc) => (
                   <tr key={qc.id} className="border-b border-slate-100">
-                    <td className="px-2 py-2">{new Date(qc.checkedAt).toLocaleString("ja-JP")}</td>
+                    <th scope="row" className="px-2 py-2 text-left">{new Date(qc.checkedAt).toLocaleString("ja-JP")}</th>
                     <td className="px-2 py-2">{qc.officialSourceScore}/20</td>
                     <td className="px-2 py-2">{qc.freshnessScore}/15</td>
                     <td className="px-2 py-2">{qc.accessibilityScore}/15</td>
@@ -217,10 +251,10 @@ export default async function SourceDetailPage({ params }: { params: Promise<{ i
         </section>
       )}
 
-      {source.sampleResponses.length > 0 && (
+      {sampleResponses.length > 0 && (
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="mb-3 text-sm font-semibold text-slate-700">📦 サンプルレスポンス</h2>
-          {source.sampleResponses.map((sample) => (
+          {sampleResponses.map((sample) => (
             <div key={sample.id} className="mb-3">
               <p className="mb-1 text-xs text-slate-500">
                 {new Date(sample.createdAt).toLocaleString("ja-JP")}
@@ -236,7 +270,13 @@ export default async function SourceDetailPage({ params }: { params: Promise<{ i
 
       <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="mb-3 text-sm font-semibold text-slate-700">🧾 取得ログ（直近20件）</h2>
-        <FetchLogTable logs={source.fetchLogs} showSource={false} />
+        {canManage && "fetchLogs" in source ? (
+          <FetchLogTable logs={fetchLogs} showSource={false} />
+        ) : (
+          <p className="rounded bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            取得ログとサンプルレスポンスは運用情報を含むため、管理者確認時のみ表示します。
+          </p>
+        )}
       </section>
     </div>
   );

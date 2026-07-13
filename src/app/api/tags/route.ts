@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireAdminRequest } from "@/lib/admin-auth";
+import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 import { tagCreateSchema } from "@/lib/validators";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const rate = checkRateLimit("api:tags", clientIdentifier(request), 120, 60_000);
+  if (!rate.allowed) return rateLimitResponse(rate);
+
   const tags = await prisma.tag.findMany({
     include: { _count: { select: { sources: true } } },
     orderBy: { name: "asc" },
@@ -11,6 +16,11 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const authError = requireAdminRequest(request);
+  if (authError) return authError;
+  const rate = checkRateLimit("api:tags:write", clientIdentifier(request), 30, 60_000);
+  if (!rate.allowed) return rateLimitResponse(rate);
+
   const body = await request.json().catch(() => null);
   const parsed = tagCreateSchema.safeParse(body);
   if (!parsed.success) {

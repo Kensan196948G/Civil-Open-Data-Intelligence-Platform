@@ -1,9 +1,12 @@
 import { FETCH_TIMEOUT_MS, MAX_REDIRECTS, PREVIEW_MAX_BYTES, STALE_CHECK_DAYS } from "@/lib/constants";
+import { AdminTokenPanel } from "@/components/AdminTokenPanel";
 
 export default function SettingsPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold">⚙️ 設定</h1>
+
+      <AdminTokenPanel />
 
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="mb-3 text-sm font-semibold text-slate-700">🔧 接続確認の動作設定</h2>

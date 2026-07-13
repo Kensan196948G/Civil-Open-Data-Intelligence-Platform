@@ -1,15 +1,45 @@
 "use client";
 
-import { useActionState } from "react";
-import { createTagAction, type TagActionState } from "@/app/tags/actions";
-
-const initialState: TagActionState = {};
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { adminHeaders } from "@/lib/admin-client";
 
 export function TagForm() {
-  const [state, formAction, pending] = useActionState(createTagAction, initialState);
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    setError(null);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    try {
+      const res = await fetch("/api/tags", {
+        method: "POST",
+        headers: adminHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          name: formData.get("name"),
+          color: formData.get("color"),
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setError(data?.message ?? data?.details?.fieldErrors?.name?.[0] ?? "タグを追加できませんでした");
+        return;
+      }
+      form.reset();
+      router.refresh();
+    } catch {
+      setError("タグを追加できませんでした");
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
-    <form action={formAction} className="flex flex-wrap items-end gap-2">
+    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2">
       <div>
         <label htmlFor="tag-name" className="mb-1 block text-xs font-medium text-slate-600">
           🏷️ タグ名
@@ -38,9 +68,13 @@ export function TagForm() {
         disabled={pending}
         className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
       >
-        {pending ? "⏳" : "➕ 追加"}
+        {pending ? "⏳ 追加中" : "➕ 追加"}
       </button>
-      {state.error && <p className="text-sm text-red-600">⚠️ {state.error}</p>}
+      {error && (
+        <p className="text-sm text-red-600" role="alert">
+          ⚠️ {error}
+        </p>
+      )}
     </form>
   );
 }
