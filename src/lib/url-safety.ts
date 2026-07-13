@@ -26,6 +26,10 @@ export function hasUrlCredentials(value: string): boolean {
   }
 }
 
+/**
+ * 秘密情報らしきクエリパラメータ名を列挙する。解析できないURLは`[]`を返す(fail-open)。
+ * 安全性判定(ブロックするか否か)には使わず、`hasSecretQueryParams`(fail-closed)を使うこと。
+ */
 export function secretQueryParamNames(value: string): string[] {
   try {
     const url = new URL(value);
