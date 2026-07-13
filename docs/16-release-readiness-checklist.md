@@ -37,7 +37,7 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 
 ## 1.1 リリース証跡
 
-### 2026-07-13 Draft PR #17 証跡
+### 2026-07-13 Draft PR #17 記録済みgreen baseline
 
 | 項目 | 記録 |
 | --- | --- |
@@ -56,6 +56,8 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | CodeRabbit | Draft PRのためreview skipped。Ready化後または `@coderabbitai review` で実レビュー |
 | ローカルread-only smoke | `http://127.0.0.1:3104` に対して63 checks成功 |
 | ローカルDocker | Docker daemon未接続のためローカル実行不可。CI `docker-preview` を証跡に採用 |
+
+最新のPR headに対するCI状態はGitHub PR checksを正とする。実ターゲットstaging/production release時は、下の記録欄へ対象環境のSecrets/Variables、GHCR digest、SBOM/provenance、read-only smoke結果を追記する。
 
 ### 実ターゲットリリース時の記録欄
 

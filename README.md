@@ -133,9 +133,9 @@ flowchart TD
 
 ---
 
-## 🚦 最新リリースゲート証跡
+## 🚦 記録済みリリースゲート証跡
 
-2026-07-13時点のDraft PR #17では、通常PRで実行される主要ゲートは成功しています。
+2026-07-13時点のDraft PR #17で取得したgreen baselineです。最新のPR headに対する状態はGitHub PR checksを正とし、run IDはリリース時に [docs/16-release-readiness-checklist.md](docs/16-release-readiness-checklist.md) へ追記します。
 
 | 区分 | 状態 | 証跡 |
 | --- | --- | --- |

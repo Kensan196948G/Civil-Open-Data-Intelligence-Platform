@@ -72,9 +72,9 @@ MVPではローカル、CI、Docker previewで品質を確認する。Cloudflare
 
 CIではpreview検証に加え、SSL付きPostgreSQL URLの合成値で `npm run release:validate-env:production` を実行し、production環境変数検査ロジックの形状を確認する。これは実Neon/本番Secretsの検証ではないため、stagingまたはproduction deploy前には、対象環境のSecrets/Variablesを読み込んだジョブで `npm run release:validate-env:production-target` を実行し、その結果をリリース証跡へ記録する。この実ターゲット検証は `CODIP_DEPLOY_TARGET`、実HTTPS `CODIP_BASE_URL`、Cloudflare Hyperdrive binding、Neon branch、migration direct URL、外部PostgreSQL SSLを必須にし、example/ci/placeholder/local値を拒否する。Docker imageの起動時も `node scripts/tools/validate-env.js --mode ${CODIP_ENV_MODE:-production}` を先に実行する。本番コンテナは `runner` stage を使い、`npm ci --omit=dev` により開発依存を含めない。migrationとseedはone-off release jobで実行し、共有previewの単一インスタンス検証時だけ `preview-runner` stage と `CODIP_RUN_MIGRATIONS_ON_START=true` を明示する。CIの `docker-preview` job では、preview-runnerでPostgreSQL/PostGISへmigration/seedを適用した後、production `runner` imageを `CODIP_ENV_MODE=production` で起動し、`/api/ready` と `release:smoke` を実行する。`docker-image-security` job はproduction runner imageをpush前にTrivyで固定可能なHigh/Critical CVE検査にかける。main push時の `docker-supply-chain` job は主要ゲート成功後にGHCRへproduction runner imageをpushし、BuildxのSBOM attestationと `mode=max` provenanceを付与する。GitHub ActionsはタグではなくコミットSHAへ固定し、`release:check-github-actions-contract` で再混入を検出する。
 
-## 2.3 現在のリリース証跡
+## 2.3 記録済みリリース証跡
 
-2026-07-13時点のDraft PR #17では、PRで実行される通常ゲートは成功している。
+2026-07-13時点のDraft PR #17で取得したgreen baselineを記録する。最新のPR head状態はGitHub PR checksを正とし、実ターゲットへのrelease時は `docs/16-release-readiness-checklist.md` の実ターゲット記録欄へ追記する。
 
 | 項目 | 状態 |
 | --- | --- |
