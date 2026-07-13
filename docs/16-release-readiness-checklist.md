@@ -64,7 +64,7 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | 項目 | 記録 |
 | --- | --- |
 | PR | #17 `agent/release-readiness-postgis-ci` |
-| commit SHA | (このセクションを含むコミット。`git log -1` で確認) |
+| commit SHA | `06fa915b7dd1992760b76f1f045406ae0f4bc704` |
 | 変更内容 | `CODIP_ADMIN_EMAIL_DOMAINS` allowlist（ドメイン一致・`@`prefix正規化・非該当ドメイン拒否）のunitテスト3件を `tests/unit/admin-auth.test.ts` に追加。自己導入回帰として `worker-configuration.d.ts`（`wrangler types` 生成物）が `tsconfig.json`/`eslint.config.mjs` の走査対象に含まれ、`NodeJS.ProcessEnv` をグローバル汚染していた問題を発見し、両ファイルのexclude/ignoresへ追加して解消 |
 | `npm run release:gate` | pass。audit → 契約チェック8種 → db:prune dry-run → schema parity → postgresql validate/generate → env契約（local/preview/production-synthetic）→ lint → typecheck → unit test 206件（19ファイル）→ production build（27 routes）まで一括成功 |
 | `npx tsc --noEmit` | エラー0件（`worker-configuration.d.ts` 除外により、無関係ファイルへ波及していた `TS18046 unknown` 系カスケードエラーが解消したことを個別確認） |
