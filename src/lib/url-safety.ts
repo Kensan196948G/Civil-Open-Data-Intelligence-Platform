@@ -21,7 +21,8 @@ export function hasUrlCredentials(value: string): boolean {
     const url = new URL(value);
     return Boolean(url.username || url.password);
   } catch {
-    return false;
+    // 解析できないURLは安全側に倒し、資格情報を含む可能性があるものとして扱う
+    return true;
   }
 }
 
@@ -37,6 +38,12 @@ export function secretQueryParamNames(value: string): string[] {
 }
 
 export function hasSecretQueryParams(value: string): boolean {
+  try {
+    new URL(value);
+  } catch {
+    // 解析できないURLは安全側に倒し、秘密パラメータを含む可能性があるものとして扱う
+    return true;
+  }
   return secretQueryParamNames(value).length > 0;
 }
 
@@ -53,6 +60,7 @@ export function sanitizeUrl(urlStr: string): string {
     }
     return url.toString();
   } catch {
-    return urlStr;
+    // 解析できない入力は元の文字列を漏らさず、固定の安全な表現を返す
+    return "[invalid-url]";
   }
 }

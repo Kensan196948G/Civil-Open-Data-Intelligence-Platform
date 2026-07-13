@@ -126,7 +126,7 @@ describe("sanitizeUrl", () => {
     );
   });
 
-  it("URLでない文字列はそのまま返す", () => {
-    expect(sanitizeUrl("not a url")).toBe("not a url");
+  it("URLでない文字列は元の値を漏らさず固定の安全な表現を返す", () => {
+    expect(sanitizeUrl("not a url")).toBe("[invalid-url]");
   });
 });

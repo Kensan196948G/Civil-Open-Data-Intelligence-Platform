@@ -26,7 +26,10 @@ export default defineConfig({
   webServer: {
     command: `DATABASE_URL='file:./dev.db' CODIP_ENV_MODE=preview CODIP_ACCEPT_SQLITE_PREVIEW=true CODIP_ADMIN_TOKEN='${e2eAdminToken}' CODIP_ALLOW_INSECURE_ADMIN=false CODIP_ALLOWED_ORIGINS='http://localhost:3000' npm run dev`,
     url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
+    // Playwrightはポート疎通しか見ず、DATABASE_URL/admin token/allowed-originが
+    // このE2E用の値かは検証できない。既存サーバーを再利用すると別設定(本番相当DB等)へ
+    // 誤って向く恐れがあるため、常に上記commandでサーバーを起動し直す
+    reuseExistingServer: false,
     timeout: 180_000,
   },
 });

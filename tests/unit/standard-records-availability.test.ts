@@ -1,0 +1,63 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const queryRawMock = vi.hoisted(() => vi.fn());
+const isPostgreSqlDatabaseMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/db", () => ({
+  prisma: {
+    $queryRaw: queryRawMock,
+  },
+}));
+
+vi.mock("@/lib/database-url", () => ({
+  isPostgreSqlDatabase: isPostgreSqlDatabaseMock,
+}));
+
+import { resetStandardRecordsAvailabilityForTests, standardRecordsAvailable } from "@/lib/standard-records";
+
+beforeEach(() => {
+  isPostgreSqlDatabaseMock.mockReturnValue(true);
+  resetStandardRecordsAvailabilityForTests();
+});
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
+describe("standardRecordsAvailable", () => {
+  it("PostgreSQLでなければクエリせずfalseを返す", async () => {
+    isPostgreSqlDatabaseMock.mockReturnValue(false);
+
+    await expect(standardRecordsAvailable()).resolves.toBe(false);
+    expect(queryRawMock).not.toHaveBeenCalled();
+  });
+
+  it("空結果(false)はキャッシュせず、再呼び出しのたびに再評価する", async () => {
+    queryRawMock.mockResolvedValue([{ count: 0 }]);
+
+    await expect(standardRecordsAvailable()).resolves.toBe(false);
+    await expect(standardRecordsAvailable()).resolves.toBe(false);
+
+    expect(queryRawMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("true になった結果はキャッシュし、以降クエリしない", async () => {
+    queryRawMock.mockResolvedValueOnce([{ count: 1 }]);
+
+    await expect(standardRecordsAvailable()).resolves.toBe(true);
+    await expect(standardRecordsAvailable()).resolves.toBe(true);
+    await expect(standardRecordsAvailable()).resolves.toBe(true);
+
+    expect(queryRawMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("false→true に遷移した場合、直後の呼び出しから true を返す", async () => {
+    queryRawMock.mockResolvedValueOnce([{ count: 0 }]);
+    await expect(standardRecordsAvailable()).resolves.toBe(false);
+
+    queryRawMock.mockResolvedValueOnce([{ count: 3 }]);
+    await expect(standardRecordsAvailable()).resolves.toBe(true);
+
+    expect(queryRawMock).toHaveBeenCalledTimes(2);
+  });
+});

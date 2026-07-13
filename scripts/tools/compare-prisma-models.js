@@ -16,7 +16,11 @@ const requiredModels = [
   "RelatedUseCase",
 ];
 
-const allowedPostgresOnlyFields = new Set(["DataSource.standardRecords"]);
+// フィールド名だけでなく正規化済みシグネチャ(型・リレーション定義)も一致させ、
+// 意図しない型変更や無関係なフィールドへのすり替えを検知できるようにする
+const allowedPostgresOnlyFields = new Map([
+  ["DataSource.standardRecords", "standardRecords StandardRecord[]"],
+]);
 
 function modelBlocks(schemaText) {
   const blocks = new Map();
@@ -70,10 +74,16 @@ function main() {
         missing.push(`Schema mismatch for ${model}.${name}: SQLite="${signature}" PostgreSQL="${pgSignature}"`);
       }
     }
-    for (const name of pgFields.keys()) {
+    for (const [name, pgSignature] of pgFields.entries()) {
+      if (rootFields.has(name)) continue;
       const fieldKey = `${model}.${name}`;
-      if (!rootFields.has(name) && !allowedPostgresOnlyFields.has(fieldKey)) {
+      const expectedSignature = allowedPostgresOnlyFields.get(fieldKey);
+      if (expectedSignature === undefined) {
         missing.push(`PostgreSQL schema has unexpected field ${fieldKey}`);
+      } else if (pgSignature !== expectedSignature) {
+        missing.push(
+          `PostgreSQL-only field ${fieldKey} signature changed: expected="${expectedSignature}" actual="${pgSignature}"`,
+        );
       }
     }
   }

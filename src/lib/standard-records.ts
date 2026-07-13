@@ -166,7 +166,9 @@ export function resetStandardRecordsAvailabilityForTests() {
 
 export async function standardRecordsAvailable() {
   if (!isPostgreSqlDatabase()) return false;
-  if (standardRecordsAvailableCache != null) return standardRecordsAvailableCache;
+  // true は恒久的な状態としてキャッシュしてよいが、false(未投入)は後続の取り込みで
+  // true に変わりうるため毎回再評価する(空結果を永続キャッシュしない)
+  if (standardRecordsAvailableCache) return true;
   const rows = await prisma.$queryRaw<{ count: number | bigint }[]>`
     SELECT COUNT(*)::int AS "count" FROM "standard_records"
   `;
@@ -491,6 +493,7 @@ export async function findStandardFeaturesForLayer(input: {
       id: record.recordId,
       geometry: record.geometry,
       properties: {
+        ...safeProperties(row.properties),
         recordId: record.recordId,
         sourceId: record.sourceId,
         sourceRecordId: record.sourceRecordId,
@@ -504,7 +507,6 @@ export async function findStandardFeaturesForLayer(input: {
         sourceUrl: record.sourceUrl,
         licenseId: record.licenseId,
         qualityStatus: record.qualityStatus,
-        ...safeProperties(row.properties),
       },
     };
   });
