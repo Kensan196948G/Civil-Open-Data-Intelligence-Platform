@@ -29,7 +29,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A["Cloudflare Pages<br>検索・地図UI"] --> B["Cloudflare Access"]
+    A["Cloudflare Workers<br>検索・地図UI (Next.js, @opennextjs/cloudflare)"] --> B["Cloudflare Access"]
     B --> C["Cloudflare Workers API"]
     C --> D["Neon PostgreSQL<br>PostGIS"]
     C --> E["Object Storage<br>取得原本・大容量ファイル"]

@@ -110,7 +110,7 @@ flowchart TD
 
 | 領域 | 現在 | 本番目標 |
 | --- | --- | --- |
-| UI | Next.js | Cloudflare Pages目標 |
+| UI | Next.js | Cloudflare Workers目標 (`@opennextjs/cloudflare`) |
 | API | Next.js Route Handlers | Cloudflare Workers分離候補 |
 | DB | SQLite preview / PostgreSQL schema | Neon PostgreSQL + PostGIS |
 | 認証 | 管理トークン / HttpOnly Cookie | Cloudflare Access + proxy secret |
@@ -307,7 +307,7 @@ production `runner` は `npm ci --omit=dev` を使い、起動時migrationを行
 | 制約 | 対応方針 |
 | --- | --- |
 | ローカルSQLite previewは `standard_records` 未投入 | PostGIS seed/CIでは検証用標準レコードを投入し、`--expect-standard-records` smokeで `/api/v1` の実地物返却を確認 |
-| Cloudflare Pages/Workersは目標構成 | staging runbook準備済み。実環境証跡は初回deploy時に記録 |
+| Cloudflare Workersは目標構成 | staging runbook準備済み。実環境証跡は初回deploy時に記録 |
 | 3D都市モデル表示は未実装 | PLATEAU連携フェーズで扱う |
 | AI判断機能は未実装 | 検索支援・要約補助に限定して将来導入 |
 | E2Eはブラウザ環境依存 | CIまたはブラウザ実行可能環境で再検証 |
