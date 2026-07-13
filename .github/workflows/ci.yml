@@ -366,7 +366,7 @@ jobs:
             -e CODIP_ENV_MODE=production \
             -e PORT=3100 \
             -e DATABASE_URL="postgresql://codip:codip@postgres:5432/codip?schema=public" \
-            -e CODIP_ADMIN_TOKEN="ci-production-runner-admin-token-1234" \
+            -e CODIP_ADMIN_TOKEN="$CODIP_ADMIN_TOKEN" \
             codip-production-ci
 
           for _ in {1..90}; do

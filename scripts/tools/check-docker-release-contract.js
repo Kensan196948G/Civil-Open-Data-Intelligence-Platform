@@ -45,6 +45,7 @@ requireText("CI workflow", ci, "postgis/postgis@sha256:44126d872ac91993766c341e3
 requireText("CI workflow", ci, "image-ref: codip-production-scan");
 requireText("CI workflow", ci, "postgres_ready=false");
 requireText("CI workflow", ci, "pg_isready -h 127.0.0.1 -U codip -d codip");
+requireText("CI workflow", ci, '-e CODIP_ADMIN_TOKEN="$CODIP_ADMIN_TOKEN"');
 requireText("CI workflow", ci, 'grep -q "accepting connections"');
 requireText("CI workflow", ci, "severity: CRITICAL,HIGH");
 requireText("CI workflow", ci, "ignore-unfixed: true");
