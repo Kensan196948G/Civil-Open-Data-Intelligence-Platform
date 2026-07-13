@@ -320,6 +320,63 @@ describe("requireAdminRequest", () => {
     expect(response).toBeNull();
   });
 
+  it("accepts trusted proxy identity when the email matches an allowed domain", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("CODIP_ADMIN_TOKEN", "");
+    vi.stubEnv("CODIP_TRUST_PROXY_AUTH", "true");
+    vi.stubEnv("CODIP_TRUST_PROXY_SECRET", "proxy-secret-12345678901234567890");
+    vi.stubEnv("CODIP_ADMIN_EMAILS", "");
+    vi.stubEnv("CODIP_ADMIN_EMAIL_DOMAINS", "example.com");
+
+    const response = requireAdminRequest(
+      request({
+        "cf-access-authenticated-user-email": "someone@example.com",
+        "x-codip-proxy-secret": "proxy-secret-12345678901234567890",
+      }),
+    );
+
+    expect(response).toBeNull();
+  });
+
+  it("normalizes a leading '@' in the allowed domain list", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("CODIP_ADMIN_TOKEN", "");
+    vi.stubEnv("CODIP_TRUST_PROXY_AUTH", "true");
+    vi.stubEnv("CODIP_TRUST_PROXY_SECRET", "proxy-secret-12345678901234567890");
+    vi.stubEnv("CODIP_ADMIN_EMAILS", "");
+    vi.stubEnv("CODIP_ADMIN_EMAIL_DOMAINS", "@example.com");
+
+    const response = requireAdminRequest(
+      request({
+        "cf-access-authenticated-user-email": "someone@example.com",
+        "x-codip-proxy-secret": "proxy-secret-12345678901234567890",
+      }),
+    );
+
+    expect(response).toBeNull();
+  });
+
+  it("rejects trusted proxy identities outside the allowed email domain list", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("CODIP_ADMIN_TOKEN", "");
+    vi.stubEnv("CODIP_TRUST_PROXY_AUTH", "true");
+    vi.stubEnv("CODIP_TRUST_PROXY_SECRET", "proxy-secret-12345678901234567890");
+    vi.stubEnv("CODIP_ADMIN_EMAILS", "");
+    vi.stubEnv("CODIP_ADMIN_EMAIL_DOMAINS", "example.com");
+
+    const response = requireAdminRequest(
+      request({
+        "cf-access-authenticated-user-email": "someone@evil.example",
+        "x-codip-proxy-secret": "proxy-secret-12345678901234567890",
+      }),
+    );
+
+    expect(response?.status).toBe(401);
+    await expect(response?.json()).resolves.toMatchObject({
+      error: "unauthorized",
+    });
+  });
+
   it("rejects cross-origin unsafe requests that rely on trusted proxy identity", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("CODIP_ADMIN_TOKEN", "");
