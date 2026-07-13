@@ -142,6 +142,29 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | 未対応 | なし。Critical/Major/Minorすべて対応完了 |
 | 残課題 | Codexレビュー(通常・対抗)は `disable-model-invocation` によりCTOから自律起動不可のため未実施。人間への実行依頼が必要(§91行目と同一課題) |
 
+### 2026-07-13 Codex代替の独立レビュー(silent-failure-hunter / code-reviewer)結果と対応
+
+本PRはPostgreSQL/PostGISのDBスキーマ変更を含むため、プロジェクト方針上はCodex対抗レビューが必須対象だが、`disable-model-invocation`によりCTOから自律起動できない(上記残課題と同一)。人間への実行依頼は継続しつつ、応答を待つ間の品質保証を補強する目的で、性質の異なる2種類の独立レビューエージェントをCodeRabbit対応コミット(`fbf81b9`)に対して並列実行した。
+
+| 観点 | 実行エージェント | 結論 |
+| --- | --- | --- |
+| エラー処理・沈黙failure(fail-open/fail-closedの一貫性、並行性、握り潰し) | `silent-failure-hunter` | Critical/High該当なし。LOW 1件(`secretQueryParamNames()`のfail-open運用が関数名から読み取れない) |
+| 一般コード品質(意図した問題の解決度・新規テストの妥当性・既存規約との整合性・型検証の抜け道) | `feature-dev:code-reviewer` | Critical/High該当なし(confidence≥80の問題0件)。merge blockingな指摘なし |
+
+**対応内容(LOW 1件)**:
+
+| ファイル | 対応 |
+| --- | --- |
+| `src/lib/url-safety.ts` | `secretQueryParamNames()`にJSDocを追加し、この関数がfail-open(パース失敗時`[]`)であることと、安全性判定には`hasSecretQueryParams`(fail-closed)を使うべきことを明記。動作変更なし、ドキュメントのみ |
+
+| 項目 | 記録 |
+| --- | --- |
+| レビュー対象 | commit `fbf81b9`(6ファイル)。ドキュメントのみの`e616fe9`は対象外 |
+| 修正commit SHA | `094316f` |
+| ローカル検証 | `tsc --noEmit` clean・lint clean・`tests/unit/url-safety.test.ts`+`tests/unit/http-client.test.ts` 23/23 pass |
+| 未対応 | なし |
+| 残課題 | Codexレビュー(通常・対抗)自体は未実施のまま(上記と同一課題)。今回の独立レビューはCodexの代替であって同一ではなく、人間によるCodex実行判断は引き続き必要 |
+
 ### 実ターゲットリリース時の記録欄
 
 | 項目 | 記録 |
