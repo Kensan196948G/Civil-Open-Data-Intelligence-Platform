@@ -22,6 +22,7 @@ requireText("Dockerfile", dockerfile, "FROM node:22-bookworm-slim@sha256:53ada14
 requireText("Dockerfile", dockerfile, "FROM node:22-bookworm-slim@sha256:53ada149d435c38b14476cb57e4a7da73c15595aba79bd6971b547ceb6d018bf AS runtime-base");
 requireText("Dockerfile", dockerfile, "RUN npm ci --omit=dev");
 requireText("Dockerfile", dockerfile, "FROM runtime-base AS runner");
+requireText("Dockerfile", dockerfile, "COPY --from=builder --chown=node:node /app/node_modules ./node_modules");
 requireText("Dockerfile", dockerfile, "RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx");
 requireText("Dockerfile", dockerfile, "USER node");
 requireText("Dockerfile", dockerfile, "node scripts/tools/validate-env.js --mode ${CODIP_ENV_MODE:-production}");
