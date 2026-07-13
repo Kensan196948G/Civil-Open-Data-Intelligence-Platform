@@ -34,6 +34,8 @@ jobs:
       CODIP_ACCEPT_SQLITE_PREVIEW: "true"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
 
       - name: Lint GitHub Actions workflows
         shell: bash
@@ -340,12 +342,18 @@ jobs:
           trap 'docker rm -f codip-production-runner-ci 2>/dev/null || true; docker compose -f docker-compose.postgresql-preview.yml down -v 2>/dev/null || true' EXIT
 
           docker compose -f docker-compose.postgresql-preview.yml up -d postgres
+          postgres_ready=false
           for _ in {1..60}; do
             if docker compose -f docker-compose.postgresql-preview.yml exec -T postgres pg_isready -U codip -d codip 2>/dev/null | grep -q "accepting connections"; then
+              postgres_ready=true
               break
             fi
             sleep 2
           done
+          if [ "$postgres_ready" != "true" ]; then
+            docker compose -f docker-compose.postgresql-preview.yml logs postgres
+            exit 1
+          fi
           docker compose -f docker-compose.postgresql-preview.yml exec -T postgres pg_isready -U codip -d codip
           docker compose -f docker-compose.postgresql-preview.yml run --rm --no-deps codip sh -c \
             "node scripts/tools/validate-env.js --mode preview && npx prisma migrate deploy --schema prisma/postgresql/schema.prisma && npm run db:pg:seed"

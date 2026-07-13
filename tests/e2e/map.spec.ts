@@ -55,6 +55,6 @@ test.describe("地図表示", () => {
     await page.getByLabel("経度").fill("139.767125");
     await page.getByRole("button", { name: /標高取得/ }).click();
 
-    await expect(page.getByRole("alert")).toContainText(/緯度は -90/);
+    await expect(page.locator('p[role="alert"]')).toContainText(/緯度は -90/);
   });
 });

@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma as PostgreSQLPrisma } from "../../node_modules/.prisma/client-postgresql";
 import { prisma } from "@/lib/db";
 import { isPostgreSqlDatabase } from "@/lib/database-url";
 import { sanitizeUrl } from "@/lib/url-safety";
@@ -252,7 +252,7 @@ function standardLayerDto(row: RawLayer) {
 }
 
 function standardRecordSelectSql() {
-  return Prisma.sql`
+  return PostgreSQLPrisma.sql`
     sr.id AS "recordId",
     sr."dataSourceId" AS "sourceId",
     COALESCE(sr."sourceRecordId", sr.id) AS "sourceRecordId",
@@ -291,14 +291,19 @@ export async function findStandardRecordsForSearch(input: {
 }): Promise<StandardRecordQueryResult | null> {
   if (!(await standardRecordsAvailable())) return null;
 
-  const where = [];
+  const where: PostgreSQLPrisma.Sql[] = [];
   if (input.q) {
     const q = `%${input.q}%`;
-    where.push(Prisma.sql`(sr.title ILIKE ${q} OR sr.description ILIKE ${q} OR sr.address ILIKE ${q} OR sr."sourceRecordId" ILIKE ${q})`);
+    where.push(
+      PostgreSQLPrisma.sql`(sr.title ILIKE ${q} OR sr.description ILIKE ${q} OR sr.address ILIKE ${q} OR sr."sourceRecordId" ILIKE ${q})`,
+    );
   }
-  if (input.category) where.push(Prisma.sql`sr.category = ${input.category}`);
-  if (input.updatedSince) where.push(Prisma.sql`sr."updatedAt" >= ${input.updatedSince}`);
-  const whereSql = where.length > 0 ? Prisma.sql`WHERE ${Prisma.join(where, " AND ")}` : Prisma.empty;
+  if (input.category) where.push(PostgreSQLPrisma.sql`sr.category = ${input.category}`);
+  if (input.updatedSince) where.push(PostgreSQLPrisma.sql`sr."updatedAt" >= ${input.updatedSince}`);
+  const whereSql =
+    where.length > 0
+      ? PostgreSQLPrisma.sql`WHERE ${PostgreSQLPrisma.join(where, " AND ")}`
+      : PostgreSQLPrisma.empty;
 
   const countRows = await prisma.$queryRaw<{ count: number | bigint }[]>`
     SELECT COUNT(*)::int AS "count"
@@ -336,8 +341,8 @@ export async function findStandardRecordsForPoint(input: {
 
   const categorySql =
     input.categories.length > 0
-      ? Prisma.sql`AND sr.category IN (${Prisma.join(input.categories)})`
-      : Prisma.empty;
+      ? PostgreSQLPrisma.sql`AND sr.category IN (${PostgreSQLPrisma.join(input.categories)})`
+      : PostgreSQLPrisma.empty;
 
   const rows = await prisma.$queryRaw<RawStandardRecord[]>`
     SELECT ${standardRecordSelectSql()}
@@ -374,13 +379,16 @@ export async function findStandardLayers(input: {
 }): Promise<StandardLayerQueryResult | null> {
   if (!(await standardRecordsAvailable())) return null;
 
-  const where = [];
+  const where: PostgreSQLPrisma.Sql[] = [];
   if (input.q) {
     const q = `%${input.q}%`;
-    where.push(Prisma.sql`(ds.name ILIKE ${q} OR ds."nameEn" ILIKE ${q} OR ds.description ILIKE ${q})`);
+    where.push(PostgreSQLPrisma.sql`(ds.name ILIKE ${q} OR ds."nameEn" ILIKE ${q} OR ds.description ILIKE ${q})`);
   }
-  if (input.category) where.push(Prisma.sql`ds.category = ${input.category}`);
-  const whereSql = where.length > 0 ? Prisma.sql`WHERE ${Prisma.join(where, " AND ")}` : Prisma.empty;
+  if (input.category) where.push(PostgreSQLPrisma.sql`ds.category = ${input.category}`);
+  const whereSql =
+    where.length > 0
+      ? PostgreSQLPrisma.sql`WHERE ${PostgreSQLPrisma.join(where, " AND ")}`
+      : PostgreSQLPrisma.empty;
 
   const countRows = await prisma.$queryRaw<{ count: number | bigint }[]>`
     SELECT COUNT(*)::int AS "count"
@@ -458,9 +466,9 @@ export async function findStandardFeaturesForLayer(input: {
   if (Number(sourceCount[0]?.count ?? 0) === 0) return null;
 
   const bboxSql = input.bbox
-    ? Prisma.sql`AND sr.geometry && ST_MakeEnvelope(${input.bbox[0]}, ${input.bbox[1]}, ${input.bbox[2]}, ${input.bbox[3]}, 4326)
+    ? PostgreSQLPrisma.sql`AND sr.geometry && ST_MakeEnvelope(${input.bbox[0]}, ${input.bbox[1]}, ${input.bbox[2]}, ${input.bbox[3]}, 4326)
         AND ST_Intersects(sr.geometry, ST_MakeEnvelope(${input.bbox[0]}, ${input.bbox[1]}, ${input.bbox[2]}, ${input.bbox[3]}, 4326))`
-    : Prisma.empty;
+    : PostgreSQLPrisma.empty;
 
   const rows = await prisma.$queryRaw<RawStandardRecord[]>`
     SELECT ${standardRecordSelectSql()}

@@ -29,7 +29,7 @@ test.describe("アクセシビリティ基本回帰", () => {
     await page.getByLabel("緯度").fill("91");
     await page.getByLabel("経度").fill("139");
     await page.getByRole("button", { name: /標高取得/ }).click();
-    await expect(page.getByRole("alert")).toContainText(/緯度は -90/);
+    await expect(page.locator('p[role="alert"]')).toContainText(/緯度は -90/);
   });
 
   test("未認証時は管理操作UIを表示しない", async ({ page }) => {
@@ -38,6 +38,6 @@ test.describe("アクセシビリティ基本回帰", () => {
 
     await page.goto("/tags");
     await expect(page.getByLabel(/タグ名/)).not.toBeVisible();
-    await expect(page.getByText(/管理操作を行うには/)).toBeVisible();
+    await expect(page.getByRole("heading", { name: /登録済みタグ/ })).toBeVisible();
   });
 });

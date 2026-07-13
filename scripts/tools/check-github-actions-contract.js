@@ -33,6 +33,7 @@ requireText("CI workflow", ci, "./actionlint -color");
 requireText("CI workflow", ci, "docker-image-security:");
 requireText("CI workflow", ci, "aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8");
 requireText("CI workflow", ci, "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5");
+requireText("CI workflow", ci, "fetch-depth: 0");
 requireText("CI workflow", ci, "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020");
 requireText("CI workflow", ci, "gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc");
 requireText("CI workflow", ci, "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");

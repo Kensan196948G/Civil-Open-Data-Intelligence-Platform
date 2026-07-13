@@ -42,6 +42,7 @@ requireText("CI workflow", ci, "id-token: write");
 requireText("CI workflow", ci, "aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8");
 requireText("CI workflow", ci, "postgis/postgis@sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5");
 requireText("CI workflow", ci, "image-ref: codip-production-scan");
+requireText("CI workflow", ci, "postgres_ready=false");
 requireText("CI workflow", ci, 'grep -q "accepting connections"');
 requireText("CI workflow", ci, "severity: CRITICAL,HIGH");
 requireText("CI workflow", ci, "ignore-unfixed: true");
