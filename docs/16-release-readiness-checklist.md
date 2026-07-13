@@ -73,6 +73,21 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | E2E (`npx playwright test`) | ローカルサンドボックスで6件失敗。全て `browserType.launch` 起動直後の `SIGTRAP` によるプロセス強制終了で、テスト対象ロジック（admin-session、CSRF、タグ、データソース登録）とは無関係。§5「現時点の既知制約」に記録済みのローカルChromium起動制約の再現であり、CIでのE2E成功実績（直前baseline参照）と矛盾しない。追加対応不要と判断 |
 | 人間確認事項 | main へのmerge可否は人間の明示承認待ち（自動merge対象外: release-readiness PRのため） |
 
+### 2026-07-13 CI `npm ci` EUSAGE障害の原因分析と修正
+
+直前commit (`06fa915`→`e2f5041`) push後のCI再実行で `verify` / `e2e` / `postgresql-compat` / `docker-preview` / `docker-image-security` の5ジョブが `npm ci` EUSAGE (`Missing: @emnapi/runtime@1.11.2 from lock file` / `Missing: @emnapi/core@1.11.2 from lock file`) で失敗した。ローカルの `npm ci` は成功しており矛盾していたため、原因分析を実施。
+
+| 項目 | 記録 |
+| --- | --- |
+| PR | #17 `agent/release-readiness-postgis-ci` |
+| 修正commit SHA | `0d31a4a` |
+| 根本原因 | `package-lock.json` をローカルのnpm 11.6.2 (Node v25.2.1) で生成しており、CI実行環境のnpm 10.9.8 (`.github/workflows/ci.yml` の `actions/setup-node` で `node-version: 22` 指定) とでpeer/optionalDependency解決結果が異なっていた。`@ast-grep/napi` のWASMフォールバック用optionalDependency (`@emnapi/core`・`@emnapi/runtime`) がnpm 11.xでは暗黙に充足済みと判定されlockfileへの明示エントリが省略される一方、npm 10.xの `npm ci` は厳格に不在と判定してEUSAGEを出していた |
+| 再現方法 | `nvm use 22` でCIと同一のnpm 10.9.8に切り替え、`rm -rf node_modules && npm ci` でCIと同一のEUSAGE失敗をローカル再現 |
+| 修正方法 | 同じnpm 10.9.8環境で `npm install` を実行し `package-lock.json` を再生成（26 insertions, 25 deletions。`@emnapi/core`・`@emnapi/runtime` エントリ追加と一部 `peer` フラグ調整のみ。意図しないパッケージバージョン変動なし） |
+| 検証 | 修正後の lockfile で npm 10.9.8・npm 11.6.2 の両方において `npm ci` 成功を確認。`npm run release:gate` も再実行し pass を確認 |
+| CI再実行結果 | run `29237264877` (CI) / `29237265144` (CodeQL) 双方success。`verify`・`e2e`・`postgresql-compat`・`docker-preview`・`docker-image-security` すべて `pass` に復帰 |
+| 学習 | lockfile生成・検証は、コミット前にCI実行環境と同一のNode/npmバージョン (`nvm use <ci-node-version>`) で行うことで、ローカル/CI間のnpmバージョン差に起因する `npm ci` 失敗を未然に防げる |
+
 ### 実ターゲットリリース時の記録欄
 
 | 項目 | 記録 |
