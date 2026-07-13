@@ -59,6 +59,20 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 
 最新のPR headに対するCI状態はGitHub PR checksを正とする。実ターゲットstaging/production release時は、下の記録欄へ対象環境のSecrets/Variables、GHCR digest、SBOM/provenance、read-only smoke結果を追記する。
 
+### 2026-07-13 Issue #15 テストカバレッジ補完 + ローカルrelease:gate green
+
+| 項目 | 記録 |
+| --- | --- |
+| PR | #17 `agent/release-readiness-postgis-ci` |
+| commit SHA | (このセクションを含むコミット。`git log -1` で確認) |
+| 変更内容 | `CODIP_ADMIN_EMAIL_DOMAINS` allowlist（ドメイン一致・`@`prefix正規化・非該当ドメイン拒否）のunitテスト3件を `tests/unit/admin-auth.test.ts` に追加。自己導入回帰として `worker-configuration.d.ts`（`wrangler types` 生成物）が `tsconfig.json`/`eslint.config.mjs` の走査対象に含まれ、`NodeJS.ProcessEnv` をグローバル汚染していた問題を発見し、両ファイルのexclude/ignoresへ追加して解消 |
+| `npm run release:gate` | pass。audit → 契約チェック8種 → db:prune dry-run → schema parity → postgresql validate/generate → env契約（local/preview/production-synthetic）→ lint → typecheck → unit test 206件（19ファイル）→ production build（27 routes）まで一括成功 |
+| `npx tsc --noEmit` | エラー0件（`worker-configuration.d.ts` 除外により、無関係ファイルへ波及していた `TS18046 unknown` 系カスケードエラーが解消したことを個別確認） |
+| `npm run lint` | 警告0件（除外前は生成物由来の unused eslint-disable directive 警告2件） |
+| `npx vitest run` | 206 passed（admin-auth.test.ts は24→27件に増加） |
+| E2E (`npx playwright test`) | ローカルサンドボックスで6件失敗。全て `browserType.launch` 起動直後の `SIGTRAP` によるプロセス強制終了で、テスト対象ロジック（admin-session、CSRF、タグ、データソース登録）とは無関係。§5「現時点の既知制約」に記録済みのローカルChromium起動制約の再現であり、CIでのE2E成功実績（直前baseline参照）と矛盾しない。追加対応不要と判断 |
+| 人間確認事項 | main へのmerge可否は人間の明示承認待ち（自動merge対象外: release-readiness PRのため） |
+
 ### 実ターゲットリリース時の記録欄
 
 | 項目 | 記録 |
