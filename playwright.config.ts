@@ -22,6 +22,13 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"], launchOptions },
     },
+    {
+      // モバイル viewport の回帰検証。既存 spec はデスクトップ前提のセレクタを
+      // 含むため、モバイル互換を検証する responsive.spec のみを対象にする
+      name: "mobile-chromium",
+      use: { ...devices["Pixel 5"], launchOptions },
+      testMatch: /responsive\.spec\.ts$/,
+    },
   ],
   webServer: {
     command: `DATABASE_URL='file:./dev.db' CODIP_ENV_MODE=preview CODIP_ACCEPT_SQLITE_PREVIEW=true CODIP_ADMIN_TOKEN='${e2eAdminToken}' CODIP_ALLOW_INSECURE_ADMIN=false CODIP_ALLOWED_ORIGINS='http://localhost:3000' npm run dev`,
