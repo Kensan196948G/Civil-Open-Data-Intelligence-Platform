@@ -1,5 +1,20 @@
-import { describe, expect, it } from "vitest";
-import { isPrivateIp, validateUrl } from "@/lib/url-guard";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const resolve4Mock = vi.hoisted(() => vi.fn());
+const resolve6Mock = vi.hoisted(() => vi.fn());
+
+vi.mock("node:dns/promises", () => ({
+  default: {
+    resolve4: resolve4Mock,
+    resolve6: resolve6Mock,
+  },
+}));
+
+import { assertSafeUrl, isPrivateIp, validateUrl } from "@/lib/url-guard";
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
 
 describe("isPrivateIp", () => {
   it.each([
@@ -80,5 +95,48 @@ describe("validateUrl", () => {
     "http://intra.internal/",
   ])("SSRF対象 %s を拒否する", (url) => {
     expect(validateUrl(url).ok).toBe(false);
+  });
+});
+
+describe("assertSafeUrl (Issue #18: resolve4/resolve6 による DNS 事前チェック)", () => {
+  it("公開IPへ解決されるホストを許可する", async () => {
+    resolve4Mock.mockResolvedValueOnce(["93.184.216.34"]);
+    resolve6Mock.mockRejectedValueOnce(new Error("ENODATA"));
+
+    const result = await assertSafeUrl("https://example.com/data.json");
+    expect(result.ok).toBe(true);
+  });
+
+  it("A レコードが内部IPなら拒否する (fail-closed)", async () => {
+    resolve4Mock.mockResolvedValueOnce(["10.0.0.5"]);
+    resolve6Mock.mockRejectedValueOnce(new Error("ENODATA"));
+
+    const result = await assertSafeUrl("https://internal-behind-dns.example.com/");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toContain("内部ネットワーク");
+  });
+
+  it("AAAA レコードのみが内部IPでも拒否する", async () => {
+    resolve4Mock.mockResolvedValueOnce(["93.184.216.34"]);
+    resolve6Mock.mockResolvedValueOnce(["::1"]);
+
+    const result = await assertSafeUrl("https://dual-stack.example.com/");
+    expect(result.ok).toBe(false);
+  });
+
+  it("A/AAAA 両方失敗 (NXDOMAIN 等) は解決不能として拒否する (fail-closed)", async () => {
+    resolve4Mock.mockRejectedValueOnce(new Error("ENOTFOUND"));
+    resolve6Mock.mockRejectedValueOnce(new Error("ENOTFOUND"));
+
+    const result = await assertSafeUrl("https://no-such-host.example.com/");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toContain("解決できません");
+  });
+
+  it("IP 直指定 URL は DNS 照会せず静的検証結果を返す", async () => {
+    const result = await assertSafeUrl("https://93.184.216.34/");
+    expect(result.ok).toBe(true);
+    expect(resolve4Mock).not.toHaveBeenCalled();
+    expect(resolve6Mock).not.toHaveBeenCalled();
   });
 });

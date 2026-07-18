@@ -147,6 +147,12 @@ export function validateUrl(urlStr: string): UrlGuardResult {
  * SSRF対策: DNS解決結果も含めて非公開IPでないことを検証する。
  * 注意: DNS rebinding 対策の本命は http-client の接続時ピン留め。
  * この関数は事前チェック用であり、単独では TOCTOU を防げない。
+ *
+ * Issue #18: Cloudflare Workers の nodejs_compat では dns.lookup / lookupService /
+ * resolve が "Not implemented" を throw する (公式 changelog 2025-01-28)。
+ * サポートされている resolve4 / resolve6 を併用する。resolve系は OS リゾルバ
+ * (/etc/hosts) を経由しない直接 DNS 照会だが、事前チェックの目的 (公開 DNS 上で
+ * 内部 IP へ解決されるホストの早期拒否) には十分で、最終防御は接続時ピン留めが担う。
  */
 export async function assertSafeUrl(urlStr: string): Promise<UrlGuardResult> {
   const staticResult = validateUrl(urlStr);
@@ -154,15 +160,20 @@ export async function assertSafeUrl(urlStr: string): Promise<UrlGuardResult> {
   const { url } = staticResult;
   const hostname = url.hostname.replace(/^\[|\]$/g, "");
   if (net.isIP(hostname)) return staticResult;
-  try {
-    const records = await dns.lookup(hostname, { all: true, verbatim: true });
-    for (const record of records) {
-      if (isPrivateIp(record.address)) {
-        return { ok: false, reason: "内部ネットワークへ解決されるホストは禁止されています" };
-      }
-    }
-  } catch {
+
+  const [v4, v6] = await Promise.allSettled([dns.resolve4(hostname), dns.resolve6(hostname)]);
+  const addresses = [
+    ...(v4.status === "fulfilled" ? v4.value : []),
+    ...(v6.status === "fulfilled" ? v6.value : []),
+  ];
+  // 両方失敗 (NXDOMAIN・DNS障害・未実装環境での想定外エラー) は fail-closed
+  if (addresses.length === 0) {
     return { ok: false, reason: "ホスト名を解決できませんでした" };
+  }
+  for (const address of addresses) {
+    if (isPrivateIp(address)) {
+      return { ok: false, reason: "内部ネットワークへ解決されるホストは禁止されています" };
+    }
   }
   return staticResult;
 }
