@@ -40,6 +40,9 @@ test.describe("アクセシビリティ基本回帰", () => {
     await page.goto("/tags");
     await expect(page.getByRole("heading", { name: /タグ追加/ })).toBeVisible();
     await expect(page.getByLabel(/タグ名/)).toBeDisabled();
+    for (const swatch of await page.getByRole("button", { name: /^色 #/ }).all()) {
+      await expect(swatch).toBeDisabled();
+    }
     await expect(page.getByRole("button", { name: /追加/ })).toBeDisabled();
     await expect(page.getByText(/タグの追加には管理セッションが必要です/)).toBeVisible();
     await expect(page.getByRole("heading", { name: /登録済みタグ/ })).toBeVisible();

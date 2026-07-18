@@ -114,10 +114,14 @@ async function main() {
   const tagsPage = await fetchWithTimeout(`${baseUrl}/tags`);
   const tagsHtml = await tagsPage.text();
   requireStatus(checks, "page:/tags", tagsPage.status, 200);
+  // デザイン正本どおりタグ追加フォームは常時表示する。未認証時の不変条件は
+  // 「入力が disabled + 管理セッション案内あり」(追加APIの401は admin guard 検査が担保)
   requireCondition(
     checks,
-    "public ui:tags add form absent",
-    !tagsHtml.includes("タグ追加") && !tagsHtml.includes('name="name"'),
+    "public ui:tags add form disabled",
+    tagsHtml.includes("タグ追加") &&
+      /<input[^>]*id="tag-name"[^>]*\bdisabled=""/.test(tagsHtml) &&
+      tagsHtml.includes("タグの追加には管理セッションが必要です"),
     tagsHtml.slice(0, 200),
   );
 
