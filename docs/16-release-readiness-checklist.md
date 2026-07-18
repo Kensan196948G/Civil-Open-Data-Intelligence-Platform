@@ -235,6 +235,61 @@ PR #17 branch (`agent/release-readiness-postgis-ci`) を自律 CTO が再検証�
 | 6 | `npm run db:pg:validate` 等は `localhost:5432` 前提だが、`docker-compose.postgresql-preview.yml` は postgres のポートを公開していないため、チェックリスト記載のコマンドがローカルでそのまま通らない | Low | 下記「PostgreSQL チェックの実行方法」に回避手順を記載 |
 | 7 | Neon の history window は同組織の既存プロジェクトで **24 時間**。障害検知が翌日にずれると PITR で戻せない | Medium | `docs/13` §5 と rollback.md §4.3 に警告を記載。本番 Neon project 作成時に要判断 |
 
+#### 独立監査エージェント 3 種の結果 (2026-07-18)
+
+性質の異なる 3 つの read-only 監査エージェントを並列実行した。Codex レビューの代替ではなく、待機中の品質保証を補強する目的。
+
+| 観点 | 結論 | blocking |
+| --- | --- | --- |
+| 🔒 セキュリティ (secret / PII / 認可 / injection / SSRF / XSS / 依存 / ヘッダ) | Critical 0・High 0。Medium 2・Low 3 | **0 件** |
+| 📋 文書と実装の整合性 | High 1・Medium 3・Low 3 | **1 件 (本セッションで修正済み)** |
+| 🎨 UI / アクセシビリティ | Medium 3・Low 1。ただし実ブラウザ検証は BLOCKED | **0 件** (ただし下記の NOT RUN に注意) |
+
+**セキュリティ監査で確認された主な事項** (いずれも独立に再現可能):
+
+- git 全履歴 (45 commits) のファイル名走査で `.env` / `*.pem` / `*.key` の混入 0 件。高エントロピーパターン (`AKIA` / `sk-` / `ghp_` / `xox*-` / PEM / JWT) 0 件
+- 全 19 route を個別確認。状態変更系 (POST/PUT/DELETE) は全件が関数先頭で `requireAdminRequest()` を呼ぶ。Server Actions は 0 件
+- 生 SQL 20 箇所すべてパラメータ化 (`$queryRawUnsafe` / `Prisma.raw` の使用 0 件)
+- SSRF は多層防御 (静的検証 → 事前 DNS 検証 → 接続時 DNS ピン留め → リダイレクト各ホップ再検証 → 読込上限)。パース不能な IPv6 は非公開扱いで拒否 (fail-closed)
+- `dangerouslySetInnerHTML` / `innerHTML` / `eval` / `new Function` の使用 0 件
+- `npm audit`: 全依存 862 packages / prod のみ 63 packages ともに全重大度 0 件
+
+**文書監査で検出された High (修正済み)**: SQLite 復元手順のバックアップファイル名が実スクリプト出力と不一致で、記載どおりでは必ず失敗する状態だった。実際に `scripts/db/sqlite-backup.sh` を実行して不一致を確認したうえで修正した (commit `30fd76e`)。
+
+| 指摘 | 対応 |
+| --- | --- |
+| High-1 復元手順のファイル名不一致 | ✅ 修正。`ls -1t` で実ファイルを列挙する方式へ変更、旧 WAL/SHM 削除も追加 |
+| Medium-2 `docs/13` に rollback 導線なし | ✅ 修正。§4.1 を新設し runbook へ接続 |
+| Medium-3 `CODIP_ENV_MODE` 未文書化 | ✅ 修正。`.env.example` と §2.1 表へ追記 |
+| Medium-4 README の 3104 URL と私有 IP | ✅ 修正。compose 実ポート 3100/3102 へ置換 |
+| Low-6 README に database-deployment.md / rollback.md の掲載なし | ✅ 修正 |
+| Medium (Sec) レート制限が `CODIP_TRUST_PROXY_HEADERS` 未設定時にグローバル化。docs/09 の記述と乖離 | 📋 Issue #23 |
+| Medium (UI) title 重複 / 404 英語 / フォーカス指標 | 📋 Issue #22 |
+| Low-5 検証専用フラグ 4 種が未記載 | 📋 未対応 (実害なし) |
+
+#### ⚠️ UI 検証の重大な制約 (NOT RUN)
+
+本ホスト (Linux 6.17) では Chromium が全ビルド共通で `SIGTRAP` / RC=133 により起動せず、
+Firefox はインストール破損、WebKit 未インストールのため、**実ブラウザによる UI 検証ができなかった**。
+
+| 項目 | 状態 |
+| --- | --- |
+| desktop (1440x900) レイアウト崩れ・横スクロール | **NOT RUN** |
+| mobile (375x667) レスポンシブ挙動 | **NOT RUN** |
+| console エラーの有無 | **NOT RUN** |
+| キーボード操作の実挙動・フォーカス視認性 | **NOT RUN** |
+| client 描画 4 画面 (`/map` `/logs` `/tags` `/sources/new`) の実描画結果 | **NOT RUN** |
+
+curl による SSR HTML 解析で確認できた範囲は PASS: 全 8 ルートで `lang="ja"`・viewport meta 存在・
+h1 ちょうど 1 個で階層飛びなし・名前なしコントロール 0 件・`/sources` のフィルタ 7 項目すべて `<label for>` 対応・
+empty state 表示・404 は HTTP status 正常。
+
+CI の `e2e` job (chromium) は pass しており `tests/e2e/accessibility.spec.ts` が
+スキップリンク + フォーカス遷移・`aria-current`・フォーム label・`role="alert"`・未認証時の管理UI非表示を回帰検証している。
+ただし **`playwright.config.ts` の project は `Desktop Chrome` のみで、モバイル viewport の自動検証は存在しない**。
+レスポンシブは実装されている (`md:` / `lg:` の 17 箇所、テーブル 4 件中 3 件に `overflow-x-auto`) が、
+**自動検証されていない**ことをリリース判断時に考慮すること。
+
 #### PostgreSQL チェックの実行方法 (発見 6 の回避手順)
 
 `docker-compose.postgresql-preview.yml` は postgres のホストポートを公開しないため、
