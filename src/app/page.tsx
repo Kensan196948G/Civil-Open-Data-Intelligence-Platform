@@ -2,7 +2,8 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
 import { isAdminHeaders } from "@/lib/admin-auth";
-import { STALE_CHECK_DAYS, categoryLabel } from "@/lib/constants";
+import { categoryLabel } from "@/lib/constants";
+import { getOperationSettings } from "@/lib/settings";
 import { safeFetchLogDto } from "@/lib/operational-dto";
 import { SummaryCard } from "@/components/SummaryCard";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -35,7 +36,8 @@ function fmtBytes(n: number | null): string {
 
 export default async function DashboardPage() {
   const canManage = isAdminHeaders(await headers());
-  const staleBefore = new Date(Date.now() - STALE_CHECK_DAYS * 24 * 60 * 60 * 1000);
+  const { staleDays } = await getOperationSettings();
+  const staleBefore = new Date(Date.now() - staleDays * 24 * 60 * 60 * 1000);
 
   const [total, active, failed, needsReview, byCategory, recentSources] =
     await Promise.all([

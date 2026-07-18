@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { notifyAuditEvent } from "@/lib/audit-events-client";
 
 // デザイン正本 (settings view: 3964-4131 行 / script: 4698-4719 行) の
 // 「🔑 APIキーの設定」パネル。値はブラウザ内メモリにのみ保持し、
@@ -47,6 +48,8 @@ export function ApiKeyPanel({ sources }: { sources: ApiKeySourceOption[] }) {
           ? "✅ 有効な形式です(実際の疎通確認は保存後にデータソース詳細から実行してください)"
           : "❌ 形式が正しくない可能性があります(6文字以上を推奨)",
       });
+      // キーの値は送らず、対象IDと結果種別のみ監査イベントとして通知する
+      notifyAuditEvent(ok ? "apikey_test_ok" : "apikey_test_ng", sourceId);
     }, 600);
   }
 
@@ -58,6 +61,7 @@ export function ApiKeyPanel({ sources }: { sources: ApiKeySourceOption[] }) {
       [sourceId]: { maskedValue: maskKey(val), savedAt: new Date().toISOString() },
     }));
     setResult({ ok: true, msg: "✅ 保存しました(値はブラウザ内のみに保持され、送信されません)" });
+    notifyAuditEvent("apikey_save", sourceId);
   }
 
   function clearInput() {
