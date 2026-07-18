@@ -6,6 +6,7 @@ import {
   PREVIEW_MAX_BYTES,
   READ_LIMIT_BYTES,
 } from "@/lib/constants";
+import { sanitizeUrl } from "@/lib/url-safety";
 import { isPrivateIp, validateUrl } from "@/lib/url-guard";
 
 export type FetchResult = {
@@ -278,18 +279,4 @@ function concatBytes(chunks: Uint8Array[], limit: number): Uint8Array {
   return out;
 }
 
-/** クエリ内の秘密情報らしきパラメータをマスクしてログ安全にする */
-export function sanitizeUrl(urlStr: string): string {
-  try {
-    const url = new URL(urlStr);
-    const secretParams = ["appid", "api_key", "apikey", "key", "token", "access_token", "secret"];
-    for (const [name] of url.searchParams) {
-      if (secretParams.includes(name.toLowerCase())) {
-        url.searchParams.set(name, "***");
-      }
-    }
-    return url.toString();
-  } catch {
-    return urlStr;
-  }
-}
+export { sanitizeUrl };

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { adminHeaders } from "@/lib/admin-client";
 import {
   ACCESS_TYPES,
   CATEGORIES,
@@ -95,7 +96,7 @@ export function SourceForm({
       };
       const res = await fetch(sourceId ? `/api/sources/${sourceId}` : "/api/sources", {
         method: sourceId ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(payload),
       });
       const data = await res.json();
@@ -119,7 +120,7 @@ export function SourceForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
           ⚠️ {error}
         </div>
       )}
@@ -130,8 +131,8 @@ export function SourceForm({
           <input id="ds-name" required className={inputCls} value={values.name} onChange={(e) => set("name", e.target.value)} />
         </div>
         <div>
-          <label className={labelCls}>英語名</label>
-          <input className={inputCls} value={values.nameEn} onChange={(e) => set("nameEn", e.target.value)} />
+          <label htmlFor="ds-nameEn" className={labelCls}>英語名</label>
+          <input id="ds-nameEn" className={inputCls} value={values.nameEn} onChange={(e) => set("nameEn", e.target.value)} />
         </div>
         <div>
           <label htmlFor="ds-providerId" className={labelCls}>🏛️ 提供元（既存から選択）*</label>
@@ -145,8 +146,9 @@ export function SourceForm({
           </select>
         </div>
         <div>
-          <label className={labelCls}>新規提供元名（既存未選択時）</label>
+          <label htmlFor="ds-providerName" className={labelCls}>新規提供元名（既存未選択時）</label>
           <input
+            id="ds-providerName"
             className={inputCls}
             value={values.providerName}
             onChange={(e) => set("providerName", e.target.value)}
@@ -154,20 +156,20 @@ export function SourceForm({
           />
         </div>
         <div className="md:col-span-2">
-          <label className={labelCls}>📝 概要</label>
-          <textarea rows={3} className={inputCls} value={values.description} onChange={(e) => set("description", e.target.value)} />
+          <label htmlFor="ds-description" className={labelCls}>📝 概要</label>
+          <textarea id="ds-description" rows={3} className={inputCls} value={values.description} onChange={(e) => set("description", e.target.value)} />
         </div>
         <div>
           <label htmlFor="ds-officialUrl" className={labelCls}>🔗 公式URL *</label>
           <input id="ds-officialUrl" required type="url" className={inputCls} value={values.officialUrl} onChange={(e) => set("officialUrl", e.target.value)} />
         </div>
         <div>
-          <label className={labelCls}>🔌 APIエンドポイントURL</label>
-          <input type="url" className={inputCls} value={values.endpointUrl} onChange={(e) => set("endpointUrl", e.target.value)} />
+          <label htmlFor="ds-endpointUrl" className={labelCls}>🔌 APIエンドポイントURL</label>
+          <input id="ds-endpointUrl" type="url" className={inputCls} value={values.endpointUrl} onChange={(e) => set("endpointUrl", e.target.value)} />
         </div>
         <div>
-          <label className={labelCls}>📄 API仕様書URL</label>
-          <input type="url" className={inputCls} value={values.documentationUrl} onChange={(e) => set("documentationUrl", e.target.value)} />
+          <label htmlFor="ds-documentationUrl" className={labelCls}>📄 API仕様書URL</label>
+          <input id="ds-documentationUrl" type="url" className={inputCls} value={values.documentationUrl} onChange={(e) => set("documentationUrl", e.target.value)} />
         </div>
         <div>
           <label htmlFor="ds-category" className={labelCls}>カテゴリ *</label>
@@ -200,8 +202,8 @@ export function SourceForm({
           </select>
         </div>
         <div>
-          <label className={labelCls}>ステータス</label>
-          <select className={inputCls} value={values.status} onChange={(e) => set("status", e.target.value)}>
+          <label htmlFor="ds-status" className={labelCls}>ステータス</label>
+          <select id="ds-status" className={inputCls} value={values.status} onChange={(e) => set("status", e.target.value)}>
             {SOURCE_STATUSES.map((s) => (
               <option key={s.value} value={s.value}>
                 {s.label}
@@ -210,7 +212,7 @@ export function SourceForm({
           </select>
         </div>
         <div>
-          <label className={labelCls}>🔑 APIキー要否</label>
+          <span className={labelCls}>🔑 APIキー要否</span>
           <div className="flex items-center gap-4 py-1.5 text-sm">
             <label className="flex items-center gap-1">
               <input type="checkbox" checked={values.requiresApiKey} onChange={(e) => set("requiresApiKey", e.target.checked)} />
@@ -219,8 +221,9 @@ export function SourceForm({
           </div>
         </div>
         <div>
-          <label className={labelCls}>APIキー環境変数名（値は保存しない）</label>
+          <label htmlFor="ds-apiKeyEnvName" className={labelCls}>APIキー環境変数名（値は保存しない）</label>
           <input
+            id="ds-apiKeyEnvName"
             className={inputCls}
             placeholder="ESTAT_APP_ID"
             value={values.apiKeyEnvName}
@@ -229,12 +232,12 @@ export function SourceForm({
           />
         </div>
         <div>
-          <label className={labelCls}>📜 ライセンス名</label>
-          <input className={inputCls} value={values.licenseName} onChange={(e) => set("licenseName", e.target.value)} />
+          <label htmlFor="ds-licenseName" className={labelCls}>📜 ライセンス名</label>
+          <input id="ds-licenseName" className={inputCls} value={values.licenseName} onChange={(e) => set("licenseName", e.target.value)} />
         </div>
         <div>
-          <label className={labelCls}>商用利用</label>
-          <select className={inputCls} value={values.commercialUse} onChange={(e) => set("commercialUse", e.target.value)}>
+          <label htmlFor="ds-commercialUse" className={labelCls}>商用利用</label>
+          <select id="ds-commercialUse" className={inputCls} value={values.commercialUse} onChange={(e) => set("commercialUse", e.target.value)}>
             {COMMERCIAL_USE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -243,7 +246,7 @@ export function SourceForm({
           </select>
         </div>
         <div>
-          <label className={labelCls}>出典表記</label>
+          <span className={labelCls}>出典表記</span>
           <div className="flex items-center gap-4 py-1.5 text-sm">
             <label className="flex items-center gap-1">
               <input
@@ -256,12 +259,13 @@ export function SourceForm({
           </div>
         </div>
         <div>
-          <label className={labelCls}>更新頻度</label>
-          <input className={inputCls} placeholder="daily / monthly / irregular" value={values.updateFrequency} onChange={(e) => set("updateFrequency", e.target.value)} />
+          <label htmlFor="ds-updateFrequency" className={labelCls}>更新頻度</label>
+          <input id="ds-updateFrequency" className={inputCls} placeholder="daily / monthly / irregular" value={values.updateFrequency} onChange={(e) => set("updateFrequency", e.target.value)} />
         </div>
         <div>
-          <label className={labelCls}>⭐ 信頼度 (1〜5)</label>
+          <label htmlFor="ds-trustLevel" className={labelCls}>⭐ 信頼度 (1〜5)</label>
           <input
+            id="ds-trustLevel"
             type="number"
             min={1}
             max={5}
@@ -271,8 +275,9 @@ export function SourceForm({
           />
         </div>
         <div>
-          <label className={labelCls}>📊 品質スコア (0〜100)</label>
+          <label htmlFor="ds-qualityScore" className={labelCls}>📊 品質スコア (0〜100)</label>
           <input
+            id="ds-qualityScore"
             type="number"
             min={0}
             max={100}
@@ -282,20 +287,20 @@ export function SourceForm({
           />
         </div>
         <div className="md:col-span-2">
-          <label className={labelCls}>🏷️ タグ</label>
+          <span className={labelCls}>🏷️ タグ</span>
           <div className="flex flex-wrap gap-2">
             {tags.map((tag) => {
               const checked = values.tagIds.includes(tag.id);
               return (
                 <label
                   key={tag.id}
-                  className={`cursor-pointer rounded-full border px-2 py-0.5 text-xs ${
+                  className={`cursor-pointer rounded-full border px-2 py-0.5 text-xs focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-1 ${
                     checked ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-300 text-slate-600"
                   }`}
                 >
                   <input
                     type="checkbox"
-                    className="hidden"
+                    className="sr-only"
                     checked={checked}
                     onChange={(e) =>
                       set(
@@ -313,8 +318,8 @@ export function SourceForm({
           </div>
         </div>
         <div className="md:col-span-2">
-          <label className={labelCls}>備考</label>
-          <textarea rows={2} className={inputCls} value={values.note} onChange={(e) => set("note", e.target.value)} />
+          <label htmlFor="ds-note" className={labelCls}>備考</label>
+          <textarea id="ds-note" rows={2} className={inputCls} value={values.note} onChange={(e) => set("note", e.target.value)} />
         </div>
       </div>
 

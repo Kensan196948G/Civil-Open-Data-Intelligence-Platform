@@ -46,4 +46,15 @@ test.describe("地図表示", () => {
     await page.getByRole("button", { name: /地図に表示/ }).click();
     await expect(page.getByText(/JSON の構文が正しくありません/)).toBeVisible();
   });
+
+  test("緯度経度入力でクリック操作なしに標高確認を開始できる", async ({ page }) => {
+    await page.goto("/map");
+    await expect(page.locator(".leaflet-container")).toBeVisible({ timeout: 20_000 });
+
+    await page.getByLabel("緯度").fill("91");
+    await page.getByLabel("経度").fill("139.767125");
+    await page.getByRole("button", { name: /標高取得/ }).click();
+
+    await expect(page.locator('p[role="alert"]')).toContainText(/緯度は -90/);
+  });
 });

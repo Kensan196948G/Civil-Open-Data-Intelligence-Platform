@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildElevationUrl, isValidLatLon, parseElevationResponse } from "@/lib/gsi";
+import { buildElevationUrl, isGsiElevationEndpoint, isValidLatLon, parseElevationResponse } from "@/lib/gsi";
 
 const BASE =
   "https://cyberjapandata2.gsi.go.jp/general/dem/scripts/getelevation.php?lon=140.08531&lat=36.103543&outtype=JSON";
@@ -11,6 +11,16 @@ describe("buildElevationUrl", () => {
     expect(url.searchParams.get("lon")).toBe("139.767");
     expect(url.searchParams.get("outtype")).toBe("JSON");
     expect(url.hostname).toBe("cyberjapandata2.gsi.go.jp");
+  });
+});
+
+describe("isGsiElevationEndpoint", () => {
+  it("国土地理院標高APIの正規HTTPSエンドポイントのみ許可する", () => {
+    expect(isGsiElevationEndpoint(BASE)).toBe(true);
+    expect(isGsiElevationEndpoint("http://cyberjapandata2.gsi.go.jp/general/dem/scripts/getelevation.php")).toBe(false);
+    expect(isGsiElevationEndpoint("https://evil.example/general/dem/scripts/getelevation.php?next=cyberjapandata2.gsi.go.jp")).toBe(false);
+    expect(isGsiElevationEndpoint("https://cyberjapandata2.gsi.go.jp/general/dem/other.php")).toBe(false);
+    expect(isGsiElevationEndpoint(null)).toBe(false);
   });
 });
 

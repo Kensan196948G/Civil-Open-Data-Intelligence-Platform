@@ -1,8 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { isAdminHeaders } from "@/lib/admin-auth";
 import { STALE_CHECK_DAYS } from "@/lib/constants";
+import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
+import { safeFetchLogDto } from "@/lib/operational-dto";
+import { safeSourceDto } from "@/lib/source-dto";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const rate = checkRateLimit("api:dashboard", clientIdentifier(request), 120, 60_000);
+  if (!rate.allowed) return rateLimitResponse(rate);
+
+  const includeLogs = isAdminHeaders(request.headers);
   const staleBefore = new Date(Date.now() - STALE_CHECK_DAYS * 24 * 60 * 60 * 1000);
 
   const [
@@ -12,7 +20,6 @@ export async function GET() {
     needsReview,
     byCategory,
     byProvider,
-    recentLogs,
     recentSources,
   ] = await Promise.all([
     prisma.dataSource.count(),
@@ -30,11 +37,6 @@ export async function GET() {
     }),
     prisma.dataSource.groupBy({ by: ["category"], _count: { _all: true } }),
     prisma.dataSource.groupBy({ by: ["providerId"], _count: { _all: true } }),
-    prisma.fetchLog.findMany({
-      include: { dataSource: { select: { id: true, name: true } } },
-      orderBy: { executedAt: "desc" },
-      take: 10,
-    }),
     prisma.dataSource.findMany({
       include: { provider: true },
       orderBy: { createdAt: "desc" },
@@ -47,6 +49,13 @@ export async function GET() {
     select: { id: true, name: true },
   });
   const providerNameMap = new Map(providers.map((p) => [p.id, p.name]));
+  const recentLogs = includeLogs
+    ? await prisma.fetchLog.findMany({
+        include: { dataSource: { select: { id: true, name: true } } },
+        orderBy: { executedAt: "desc" },
+        take: 10,
+      })
+    : [];
 
   return NextResponse.json({
     counts: { total, active, failed, needsReview },
@@ -56,7 +65,8 @@ export async function GET() {
       providerName: providerNameMap.get(p.providerId) ?? "不明",
       count: p._count._all,
     })),
-    recentLogs,
-    recentSources,
+    recentLogs: recentLogs.map((log) => safeFetchLogDto(log)),
+    sensitiveOperationalData: includeLogs ? "included" : "requires_admin",
+    recentSources: recentSources.map((source) => safeSourceDto(source)),
   });
 }

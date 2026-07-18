@@ -1,29 +1,57 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { dataSourceUpdateSchema } from "@/lib/validators";
+import { isAdminHeaders, requireAdminRequest } from "@/lib/admin-auth";
+import { apiKeyHttpsInvariantViolation, dataSourceUpdateSchema } from "@/lib/validators";
+import { safeFetchLogDto, safeSampleResponseDto } from "@/lib/operational-dto";
+import { safeSourceDto } from "@/lib/source-dto";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export async function GET(_request: NextRequest, context: RouteContext) {
+/** トランザクション内の commit 後再検査で不変条件違反を検出したことを表す */
+class ApiKeyHttpsConflictError extends Error {
+  constructor(readonly violation: { path: "endpointUrl" | "officialUrl"; message: string }) {
+    super("api key https invariant violated by concurrent update");
+  }
+}
+
+export async function GET(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
+  const includeSensitive = isAdminHeaders(request.headers);
   const source = await prisma.dataSource.findUnique({
     where: { id },
     include: {
       provider: true,
       tags: { include: { tag: true } },
-      fetchLogs: { orderBy: { executedAt: "desc" }, take: 50 },
-      sampleResponses: { orderBy: { createdAt: "desc" }, take: 5 },
       qualityChecks: { orderBy: { checkedAt: "desc" }, take: 5 },
       relatedUseCases: true,
+      ...(includeSensitive
+        ? {
+            fetchLogs: { orderBy: { executedAt: "desc" }, take: 50 },
+            sampleResponses: { orderBy: { createdAt: "desc" }, take: 5 },
+          }
+        : {}),
     },
   });
   if (!source) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
-  return NextResponse.json(source);
+  const safeSource = safeSourceDto(source, { includeSensitive });
+  return NextResponse.json({
+    ...safeSource,
+    fetchLogs: includeSensitive && "fetchLogs" in source ? source.fetchLogs.map((log) => safeFetchLogDto(log)) : [],
+    sampleResponses:
+      includeSensitive && "sampleResponses" in source
+        ? source.sampleResponses.map((sample) => safeSampleResponseDto(sample))
+        : [],
+    sensitiveOperationalData: includeSensitive ? "included" : "requires_admin",
+  });
 }
 
 export async function PUT(request: NextRequest, context: RouteContext) {
+  const authError = requireAdminRequest(request);
+  if (authError) return authError;
+
   const { id } = await context.params;
   const existing = await prisma.dataSource.findUnique({ where: { id } });
   if (!existing) {
@@ -42,27 +70,105 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   void providerName;
   void providerOrganizationType;
 
-  const updated = await prisma.dataSource.update({
-    where: { id },
-    data: {
-      ...data,
-      ...(providerId ? { providerId } : {}),
-      ...(tagIds
-        ? {
-            tags: {
-              deleteMany: {},
-              create: tagIds.map((tagId) => ({ tagId })),
-            },
-          }
-        : {}),
-    },
-    include: { provider: true, tags: { include: { tag: true } } },
+  // requiresApiKey→HTTPS 不変条件は複数フィールドにまたがるため、部分更新の
+  // payload 単体では検査できない。既存レコードとマージした「保存後の実効状態」で
+  // 検査する (Codex review / adversarial review 指摘対応)。
+  const invariantViolation = apiKeyHttpsInvariantViolation({
+    requiresApiKey: data.requiresApiKey ?? existing.requiresApiKey,
+    endpointUrl: data.endpointUrl !== undefined ? data.endpointUrl : existing.endpointUrl,
+    officialUrl: data.officialUrl !== undefined ? data.officialUrl : existing.officialUrl,
   });
+  if (invariantViolation) {
+    return NextResponse.json(
+      {
+        error: "validation_error",
+        details: { formErrors: [], fieldErrors: { [invariantViolation.path]: [invariantViolation.message] } },
+      },
+      { status: 400 },
+    );
+  }
 
-  return NextResponse.json(updated);
+  if (providerId) {
+    const provider = await prisma.provider.findUnique({ where: { id: providerId } });
+    if (!provider) {
+      return NextResponse.json(
+        { error: "validation_error", message: "指定された提供元が存在しません" },
+        { status: 400 },
+      );
+    }
+  }
+
+  const distinctTagIds = tagIds ? [...new Set(tagIds)] : undefined;
+  if (distinctTagIds?.length) {
+    const count = await prisma.tag.count({ where: { id: { in: distinctTagIds } } });
+    if (count !== distinctTagIds.length) {
+      return NextResponse.json(
+        { error: "validation_error", message: "指定されたタグに存在しないIDが含まれています" },
+        { status: 400 },
+      );
+    }
+  }
+
+  let updated;
+  try {
+    // 上のマージ後検査は「読み取った existing」に基づくため、並行更新同士が
+    // それぞれ検査を通過して合成結果が不変条件を破る TOCTOU が残る
+    // (CodeRabbit 指摘)。トランザクション内で UPDATE 後の実際の行 (並行更新の
+    // commit 済み値を含む) を再検査し、違反していれば rollback する。
+    updated = await prisma.$transaction(async (tx) => {
+      const row = await tx.dataSource.update({
+        where: { id },
+        data: {
+          ...data,
+          ...(providerId ? { providerId } : {}),
+          ...(distinctTagIds !== undefined
+            ? {
+                tags: {
+                  deleteMany: {},
+                  create: distinctTagIds.map((tagId) => ({ tagId })),
+                },
+              }
+            : {}),
+        },
+        include: { provider: true, tags: { include: { tag: true } } },
+      });
+      const committedViolation = apiKeyHttpsInvariantViolation({
+        requiresApiKey: row.requiresApiKey,
+        endpointUrl: row.endpointUrl,
+        officialUrl: row.officialUrl,
+      });
+      if (committedViolation) {
+        throw new ApiKeyHttpsConflictError(committedViolation);
+      }
+      return row;
+    });
+  } catch (error) {
+    if (error instanceof ApiKeyHttpsConflictError) {
+      return NextResponse.json(
+        {
+          error: "conflict",
+          message: "並行する更新と競合し、APIキー利用データソースのHTTPS要件を満たせませんでした。最新の状態を取得してやり直してください",
+          details: { formErrors: [], fieldErrors: { [error.violation.path]: [error.violation.message] } },
+        },
+        { status: 409 },
+      );
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return NextResponse.json(
+        { error: "duplicate", message: "同じ公式URLのデータソースが既に登録されています" },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
+
+  return NextResponse.json(safeSourceDto(updated, { includeSensitive: true }));
 }
 
-export async function DELETE(_request: NextRequest, context: RouteContext) {
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  const authError = requireAdminRequest(request);
+  if (authError) return authError;
+
   const { id } = await context.params;
   const existing = await prisma.dataSource.findUnique({ where: { id } });
   if (!existing) {

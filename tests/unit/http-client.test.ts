@@ -110,6 +110,14 @@ describe("sanitizeUrl", () => {
     );
     expect(sanitizeUrl("https://api.example.com/?api_key=abc&token=xyz")).toContain("api_key=***");
     expect(sanitizeUrl("https://api.example.com/?api_key=abc&token=xyz")).toContain("token=***");
+    expect(
+      sanitizeUrl(
+        "https://api.example.com/?client_secret=abc&signature=sig&subscription-key=sub",
+      ),
+    ).toBe("https://api.example.com/?client_secret=***&signature=***&subscription-key=***");
+    expect(sanitizeUrl("https://user:pass@example.com/data?key=abc")).toBe(
+      "https://example.com/data?key=***",
+    );
   });
 
   it("通常のパラメータは変更しない", () => {
@@ -118,7 +126,7 @@ describe("sanitizeUrl", () => {
     );
   });
 
-  it("URLでない文字列はそのまま返す", () => {
-    expect(sanitizeUrl("not a url")).toBe("not a url");
+  it("URLでない文字列は元の値を漏らさず固定の安全な表現を返す", () => {
+    expect(sanitizeUrl("not a url")).toBe("[invalid-url]");
   });
 });

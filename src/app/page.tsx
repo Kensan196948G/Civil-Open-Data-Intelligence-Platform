@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
+import { isAdminHeaders } from "@/lib/admin-auth";
 import { STALE_CHECK_DAYS, categoryLabel } from "@/lib/constants";
+import { safeFetchLogDto } from "@/lib/operational-dto";
 import { SummaryCard } from "@/components/SummaryCard";
 import { FetchLogTable } from "@/components/FetchLogTable";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -8,9 +11,10 @@ import { StatusBadge } from "@/components/StatusBadge";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  const canManage = isAdminHeaders(await headers());
   const staleBefore = new Date(Date.now() - STALE_CHECK_DAYS * 24 * 60 * 60 * 1000);
 
-  const [total, active, failed, needsReview, byCategory, recentLogs, recentSources] =
+  const [total, active, failed, needsReview, byCategory, recentSources] =
     await Promise.all([
       prisma.dataSource.count(),
       prisma.dataSource.count({ where: { status: "active" } }),
@@ -26,11 +30,6 @@ export default async function DashboardPage() {
         },
       }),
       prisma.dataSource.groupBy({ by: ["category"], _count: { _all: true } }),
-      prisma.fetchLog.findMany({
-        include: { dataSource: { select: { id: true, name: true } } },
-        orderBy: { executedAt: "desc" },
-        take: 10,
-      }),
       prisma.dataSource.findMany({
         include: { provider: true },
         orderBy: { createdAt: "desc" },
@@ -42,12 +41,14 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">🏠 ダッシュボード</h1>
-        <Link
-          href="/sources/new"
-          className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
-        >
-          ➕ データソース登録
-        </Link>
+        {canManage && (
+          <Link
+            href="/sources/new"
+            className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
+          >
+            ➕ データソース登録
+          </Link>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -97,7 +98,21 @@ export default async function DashboardPage() {
             すべて見る →
           </Link>
         </div>
-        <FetchLogTable logs={recentLogs} />
+        {canManage ? (
+          <FetchLogTable
+            logs={(
+              await prisma.fetchLog.findMany({
+                include: { dataSource: { select: { id: true, name: true } } },
+                orderBy: { executedAt: "desc" },
+                take: 10,
+              })
+            ).map((log) => safeFetchLogDto(log))}
+          />
+        ) : (
+          <p className="rounded bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            取得ログは運用情報を含むため管理者のみ表示します。
+          </p>
+        )}
       </section>
     </div>
   );

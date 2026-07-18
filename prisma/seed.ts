@@ -38,7 +38,7 @@ async function main() {
       throw new Error(`Unknown provider in seed data: ${providerName}`);
     }
 
-    const existing = await prisma.dataSource.findFirst({ where: { name: data.name } });
+    const existing = await prisma.dataSource.findUnique({ where: { officialUrl: data.officialUrl } });
     const source = existing
       ? await prisma.dataSource.update({
           where: { id: existing.id },

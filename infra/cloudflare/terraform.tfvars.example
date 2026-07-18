@@ -1,0 +1,10 @@
+# このファイルを terraform.tfvars にコピーして実際の値を設定する。
+# terraform.tfvars は .gitignore 対象 (絶対にコミットしない)。
+# 認証用の CLOUDFLARE_API_TOKEN はこのファイルに書かず、環境変数で渡すこと。
+
+cloudflare_account_id = "REPLACE_WITH_ACCOUNT_ID"
+environment            = "preview"
+application_domain     = "REPLACE_WITH_WORKERS_DEV_OR_CUSTOM_DOMAIN"
+session_duration        = "24h"
+allowed_emails          = []
+allowed_email_domains   = ["example.com"]

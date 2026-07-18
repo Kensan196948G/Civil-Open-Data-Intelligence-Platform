@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireAdminRequest } from "@/lib/admin-auth";
+import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 import { computeTotalScore, deriveQualityScores } from "@/lib/quality";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 /** 品質スコア再計算: 現況から品質サブスコアを算出し quality_checks に記録する */
-export async function POST(_request: NextRequest, context: RouteContext) {
+export async function POST(request: NextRequest, context: RouteContext) {
+  const authError = requireAdminRequest(request);
+  if (authError) return authError;
+  const rate = checkRateLimit("api:quality:recalculate", clientIdentifier(request), 20, 60_000);
+  if (!rate.allowed) return rateLimitResponse(rate);
+
   const { id } = await context.params;
   const source = await prisma.dataSource.findUnique({
     where: { id },
@@ -32,14 +39,15 @@ export async function POST(_request: NextRequest, context: RouteContext) {
   });
   const totalScore = computeTotalScore(scores);
 
-  const check = await prisma.qualityCheck.create({
-    data: { dataSourceId: id, ...scores, totalScore },
-  });
-
-  await prisma.dataSource.update({
-    where: { id },
-    data: { qualityScore: totalScore },
-  });
+  const [check] = await prisma.$transaction([
+    prisma.qualityCheck.create({
+      data: { dataSourceId: id, ...scores, totalScore },
+    }),
+    prisma.dataSource.update({
+      where: { id },
+      data: { qualityScore: totalScore },
+    }),
+  ]);
 
   return NextResponse.json({ ...check, totalScore });
 }

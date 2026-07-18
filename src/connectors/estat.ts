@@ -3,6 +3,17 @@ import { detectFormat } from "@/lib/format-detector";
 import type { ConnectorResult, ConnectorSource, DataConnector } from "@/connectors/types";
 import { targetUrlOf } from "@/connectors/types";
 
+const ESTAT_HOSTNAME = "api.e-stat.go.jp";
+
+export function isAllowedEstatUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === ESTAT_HOSTNAME;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * e-Stat API 用の取得URLを組み立てる。
  * APIキーは .env の値を実行時にクエリへ付与するのみで、DB・ログには保存しない
@@ -13,7 +24,7 @@ export function buildEstatUrl(
   env: Record<string, string | undefined> = process.env,
 ): string {
   const base = targetUrlOf(source);
-  if (!source.requiresApiKey || !source.apiKeyEnvName) return base;
+  if (!isAllowedEstatUrl(base) || !source.requiresApiKey || !source.apiKeyEnvName) return base;
   const key = env[source.apiKeyEnvName];
   if (!key) return base;
   const url = new URL(base);
@@ -25,7 +36,7 @@ export function buildEstatUrl(
 export const estatConnector: DataConnector = {
   name: "estat",
   canHandle(source: ConnectorSource): boolean {
-    return !!source.endpointUrl?.includes("api.e-stat.go.jp");
+    return isAllowedEstatUrl(targetUrlOf(source));
   },
   async check(source: ConnectorSource): Promise<ConnectorResult> {
     return fetchWithGuard(buildEstatUrl(source), { method: "GET", readBody: true });

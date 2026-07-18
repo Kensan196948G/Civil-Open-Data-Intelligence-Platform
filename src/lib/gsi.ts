@@ -7,6 +7,21 @@ export function buildElevationUrl(baseEndpoint: string, lat: number, lon: number
   return url.toString();
 }
 
+/** 台帳に登録されたURLが国土地理院の標高APIエンドポイントかを厳格に確認する */
+export function isGsiElevationEndpoint(value: string | null | undefined): value is string {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      url.hostname === "cyberjapandata2.gsi.go.jp" &&
+      url.pathname === "/general/dem/scripts/getelevation.php"
+    );
+  } catch {
+    return false;
+  }
+}
+
 export type ElevationResult = {
   /** 標高値(m)。海域・範囲外は null */
   elevation: number | null;

@@ -1,0 +1,63 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // CODIP: Cloudflare Workers 実行構成 (Next.js on Workers via @opennextjs/cloudflare)
+  // 実デプロイの前提: docs/13-deployment-and-operations.md §2, docs/runbooks/cloudflare-neon-staging.md を参照。
+  // 既知の未解決制約 (実デプロイ前に必須): Issue を参照 (SSRF guard の dns.lookup 非互換 / Prisma Hyperdrive driver adapter 未導入)
+  "name": "codip",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-07-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  // 非機密の運用フラグのみ。秘密情報は `wrangler secret put <name>` (production) /
+  // `.dev.vars` (local, gitignore対象) で管理し、ここには絶対に書かない。
+  "vars": {
+    "CODIP_ENV_MODE": "preview",
+    "CODIP_TRUST_PROXY_AUTH": "true",
+    "CODIP_TRUST_PROXY_HEADERS": "true"
+  },
+  // Hyperdrive: id はプレースホルダー。`wrangler hyperdrive create <name> --connection-string="$CODIP_MIGRATION_DATABASE_URL"`
+  // を実ターゲットのNeon direct endpointに対して実行し、払い出されたIDへ置き換える (人間が実施)。
+  // Prisma Client 側は driverAdapters preview feature + @prisma/adapter-pg 導入が別途必要 (未実装、Issueで追跡)。
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "REPLACE_WITH_WRANGLER_HYPERDRIVE_CREATE_OUTPUT"
+    }
+  ],
+  "env": {
+    "preview": {
+      "vars": {
+        "CODIP_ENV_MODE": "preview",
+        "CODIP_DEPLOY_TARGET": "staging",
+        "CODIP_TRUST_PROXY_AUTH": "true",
+        "CODIP_TRUST_PROXY_HEADERS": "true"
+      },
+      "hyperdrive": [
+        {
+          "binding": "HYPERDRIVE",
+          "id": "REPLACE_WITH_STAGING_HYPERDRIVE_ID"
+        }
+      ]
+    },
+    "production": {
+      "vars": {
+        "CODIP_ENV_MODE": "production",
+        "CODIP_DEPLOY_TARGET": "production",
+        "CODIP_TRUST_PROXY_AUTH": "true",
+        "CODIP_TRUST_PROXY_HEADERS": "true"
+      },
+      "hyperdrive": [
+        {
+          "binding": "HYPERDRIVE",
+          "id": "REPLACE_WITH_PRODUCTION_HYPERDRIVE_ID"
+        }
+      ]
+    }
+  }
+}

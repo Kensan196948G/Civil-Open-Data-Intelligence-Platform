@@ -11,6 +11,20 @@ next-env.d.ts
 .env
 .env.local
 .env*.local
+.dev.vars
+.dev.vars*
+
+# Cloudflare Workers / OpenNext ビルド成果物
+.wrangler/
+.open-next/
+worker-configuration.d.ts
+
+# Terraform (state / 実値変数は絶対にコミットしない)
+infra/**/.terraform/
+infra/**/*.tfstate
+infra/**/*.tfstate.*
+infra/**/terraform.tfvars
+infra/**/*.auto.tfvars
 
 # database
 *.db
@@ -27,6 +41,9 @@ data/exports/*
 coverage/
 test-results/
 playwright-report/
+
+# backups
+backups/
 
 # local tooling
 .claude/

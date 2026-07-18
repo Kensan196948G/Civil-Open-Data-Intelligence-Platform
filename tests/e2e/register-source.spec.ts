@@ -1,10 +1,12 @@
 import { expect, test } from "@playwright/test";
+import { adminRequestHeaders, startAdminSession } from "./admin-session";
 
 test.describe("データソース登録", () => {
   test("新規登録 → 詳細表示 → 削除(クリーンアップ)", async ({ page, request }) => {
     const unique = Date.now();
     const name = `E2Eテストソース-${unique}`;
 
+    await startAdminSession(page);
     await page.goto("/sources/new");
     await page.getByLabel(/データソース名/).fill(name);
     await page.getByLabel(/提供元（既存から選択）/).selectOption({ label: "国土交通省" });
@@ -20,11 +22,14 @@ test.describe("データソース登録", () => {
 
     // クリーンアップ (API 経由で削除)
     const sourceId = page.url().split("/").pop()!;
-    const res = await request.delete(`/api/sources/${sourceId}`);
+    const res = await request.delete(`/api/sources/${sourceId}`, {
+      headers: adminRequestHeaders(),
+    });
     expect(res.ok()).toBe(true);
   });
 
   test("必須項目不足はバリデーションで止まる", async ({ page }) => {
+    await startAdminSession(page);
     await page.goto("/sources/new");
     // 名称未入力のまま送信 → HTML required でページ遷移しない
     await page.getByRole("button", { name: /登録する/ }).click();

@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { isAdminHeaders } from "@/lib/admin-auth";
 import { CATEGORIES, DATA_FORMATS, SOURCE_STATUSES, categoryLabel } from "@/lib/constants";
 import { StatusBadge } from "@/components/StatusBadge";
 import { QualityScoreBadge, TrustLevelBadge } from "@/components/QualityScoreBadge";
@@ -19,12 +21,14 @@ type SearchParams = Promise<{
 
 export default async function SourcesPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
+  const canManage = isAdminHeaders(await headers());
   const where: Prisma.DataSourceWhereInput = {};
-  if (sp.q) {
+  const q = sp.q?.trim();
+  if (q && q.length >= 2) {
     where.OR = [
-      { name: { contains: sp.q } },
-      { nameEn: { contains: sp.q } },
-      { description: { contains: sp.q } },
+      { name: { contains: q } },
+      { nameEn: { contains: q } },
+      { description: { contains: q } },
     ];
   }
   if (sp.category) where.category = sp.category;
@@ -35,13 +39,14 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
   if (sp.status) where.status = sp.status;
   if (sp.tag) where.tags = { some: { tagId: sp.tag } };
 
-  const [sources, providers, tags] = await Promise.all([
+  const [sources, total, providers, tags] = await Promise.all([
     prisma.dataSource.findMany({
       where,
       include: { provider: true, tags: { include: { tag: true } } },
       orderBy: { updatedAt: "desc" },
       take: 200,
     }),
+    prisma.dataSource.count({ where }),
     prisma.provider.findMany({ orderBy: { name: "asc" } }),
     prisma.tag.findMany({ orderBy: { name: "asc" } }),
   ]);
@@ -52,22 +57,24 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">📚 データソース一覧</h1>
-        <Link
-          href="/sources/new"
-          className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
-        >
-          ➕ 新規登録
-        </Link>
+        {canManage && (
+          <Link
+            href="/sources/new"
+            className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
+          >
+            ➕ 新規登録
+          </Link>
+        )}
       </div>
 
       <form method="GET" className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
         <div>
-          <label className="mb-1 block text-xs text-slate-500">🔍 キーワード</label>
-          <input name="q" defaultValue={sp.q ?? ""} className={selectCls} placeholder="河川、道路、標高..." />
+          <label htmlFor="source-filter-q" className="mb-1 block text-xs text-slate-500">🔍 キーワード</label>
+          <input id="source-filter-q" name="q" defaultValue={sp.q ?? ""} className={selectCls} placeholder="河川、道路、標高..." />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-slate-500">カテゴリ</label>
-          <select name="category" defaultValue={sp.category ?? ""} className={selectCls}>
+          <label htmlFor="source-filter-category" className="mb-1 block text-xs text-slate-500">カテゴリ</label>
+          <select id="source-filter-category" name="category" defaultValue={sp.category ?? ""} className={selectCls}>
             <option value="">すべて</option>
             {CATEGORIES.map((c) => (
               <option key={c.value} value={c.value}>
@@ -77,8 +84,8 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-slate-500">提供元</label>
-          <select name="providerId" defaultValue={sp.providerId ?? ""} className={selectCls}>
+          <label htmlFor="source-filter-provider" className="mb-1 block text-xs text-slate-500">提供元</label>
+          <select id="source-filter-provider" name="providerId" defaultValue={sp.providerId ?? ""} className={selectCls}>
             <option value="">すべて</option>
             {providers.map((p) => (
               <option key={p.id} value={p.id}>
@@ -88,8 +95,8 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-slate-500">形式</label>
-          <select name="dataFormat" defaultValue={sp.dataFormat ?? ""} className={selectCls}>
+          <label htmlFor="source-filter-format" className="mb-1 block text-xs text-slate-500">形式</label>
+          <select id="source-filter-format" name="dataFormat" defaultValue={sp.dataFormat ?? ""} className={selectCls}>
             <option value="">すべて</option>
             {DATA_FORMATS.map((f) => (
               <option key={f} value={f}>
@@ -99,16 +106,16 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-slate-500">🔑 APIキー</label>
-          <select name="requiresApiKey" defaultValue={sp.requiresApiKey ?? ""} className={selectCls}>
+          <label htmlFor="source-filter-api-key" className="mb-1 block text-xs text-slate-500">🔑 APIキー</label>
+          <select id="source-filter-api-key" name="requiresApiKey" defaultValue={sp.requiresApiKey ?? ""} className={selectCls}>
             <option value="">すべて</option>
             <option value="true">必要</option>
             <option value="false">不要</option>
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-slate-500">接続状態</label>
-          <select name="status" defaultValue={sp.status ?? ""} className={selectCls}>
+          <label htmlFor="source-filter-status" className="mb-1 block text-xs text-slate-500">接続状態</label>
+          <select id="source-filter-status" name="status" defaultValue={sp.status ?? ""} className={selectCls}>
             <option value="">すべて</option>
             {SOURCE_STATUSES.map((s) => (
               <option key={s.value} value={s.value}>
@@ -118,8 +125,8 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-slate-500">🏷️ タグ</label>
-          <select name="tag" defaultValue={sp.tag ?? ""} className={selectCls}>
+          <label htmlFor="source-filter-tag" className="mb-1 block text-xs text-slate-500">🏷️ タグ</label>
+          <select id="source-filter-tag" name="tag" defaultValue={sp.tag ?? ""} className={selectCls}>
             <option value="">すべて</option>
             {tags.map((t) => (
               <option key={t.id} value={t.id}>
@@ -136,27 +143,31 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
         </Link>
       </form>
 
-      <p className="text-sm text-slate-500">📊 {sources.length} 件</p>
+      <p className="text-sm text-slate-500">
+        📊 条件一致 {total} 件中 {sources.length} 件を表示
+        {total > sources.length && "（上位200件まで）"}
+      </p>
 
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
         <table className="min-w-full text-sm">
+          <caption className="sr-only">データソース検索結果一覧</caption>
           <thead>
             <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-              <th className="px-3 py-2">データソース名</th>
-              <th className="px-3 py-2">提供元</th>
-              <th className="px-3 py-2">カテゴリ</th>
-              <th className="px-3 py-2">形式</th>
-              <th className="px-3 py-2">🔑</th>
-              <th className="px-3 py-2">接続状態</th>
-              <th className="px-3 py-2">品質</th>
-              <th className="px-3 py-2">信頼度</th>
-              <th className="px-3 py-2">最終確認</th>
+              <th scope="col" className="px-3 py-2">データソース名</th>
+              <th scope="col" className="px-3 py-2">提供元</th>
+              <th scope="col" className="px-3 py-2">カテゴリ</th>
+              <th scope="col" className="px-3 py-2">形式</th>
+              <th scope="col" className="px-3 py-2">APIキー</th>
+              <th scope="col" className="px-3 py-2">接続状態</th>
+              <th scope="col" className="px-3 py-2">品質</th>
+              <th scope="col" className="px-3 py-2">信頼度</th>
+              <th scope="col" className="px-3 py-2">最終確認</th>
             </tr>
           </thead>
           <tbody>
             {sources.map((s) => (
               <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50">
-                <td className="px-3 py-2">
+                <th scope="row" className="px-3 py-2 text-left">
                   <Link href={`/sources/${s.id}`} className="font-medium text-blue-600 hover:underline">
                     {s.name}
                   </Link>
@@ -171,11 +182,11 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
                       </Link>
                     ))}
                   </div>
-                </td>
+                </th>
                 <td className="px-3 py-2">{s.provider.name}</td>
                 <td className="px-3 py-2">{categoryLabel(s.category)}</td>
                 <td className="px-3 py-2">{s.dataFormat}</td>
-                <td className="px-3 py-2">{s.requiresApiKey ? "🔑" : "-"}</td>
+                <td className="px-3 py-2">{s.requiresApiKey ? "必要" : "不要"}</td>
                 <td className="px-3 py-2">
                   <StatusBadge status={s.status} />
                 </td>
@@ -192,7 +203,7 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
             ))}
             {sources.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-slate-400">
+                <td colSpan={9} className="px-3 py-8 text-center text-slate-600">
                   条件に一致するデータソースがありません
                 </td>
               </tr>

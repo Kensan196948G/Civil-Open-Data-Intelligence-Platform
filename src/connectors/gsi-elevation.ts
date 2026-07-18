@@ -1,5 +1,6 @@
 import type { ConnectorResult, ConnectorSource, DataConnector } from "@/connectors/types";
 import { genericConnector } from "@/connectors/generic";
+import { isGsiElevationEndpoint } from "@/lib/gsi";
 
 /**
  * 国土地理院 標高API コネクタ。
@@ -8,7 +9,7 @@ import { genericConnector } from "@/connectors/generic";
 export const gsiElevationConnector: DataConnector = {
   name: "gsi-elevation",
   canHandle(source: ConnectorSource): boolean {
-    return !!source.endpointUrl?.includes("cyberjapandata2.gsi.go.jp/general/dem");
+    return isGsiElevationEndpoint(source.endpointUrl);
   },
   async check(source: ConnectorSource): Promise<ConnectorResult> {
     const result = await genericConnector.fetchSample(source);

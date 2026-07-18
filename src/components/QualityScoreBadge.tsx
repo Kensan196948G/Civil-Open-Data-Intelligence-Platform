@@ -8,7 +8,10 @@ export function QualityScoreBadge({ score }: { score: number }) {
           ? "bg-amber-100 text-amber-800"
           : "bg-red-100 text-red-800";
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${style}`}>
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${style}`}
+      aria-label={`品質スコア ${score}/100`}
+    >
       ⭐ {score}
     </span>
   );
@@ -16,7 +19,10 @@ export function QualityScoreBadge({ score }: { score: number }) {
 
 export function TrustLevelBadge({ level }: { level: number }) {
   return (
-    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
+    <span
+      className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700"
+      aria-label={`信頼度 ${level}/5`}
+    >
       {"★".repeat(level)}
       {"☆".repeat(Math.max(0, 5 - level))}
     </span>

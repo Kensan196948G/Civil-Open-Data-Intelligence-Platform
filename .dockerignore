@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.env*
+!.env.example
+coverage
+test-results
+playwright-report
+reports
+*.db
+*.db-journal
+prisma/dev.db*
+data/samples/*
+data/exports/*

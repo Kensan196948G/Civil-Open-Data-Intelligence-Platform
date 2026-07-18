@@ -43,6 +43,16 @@ describe("findConnector", () => {
       "generic",
     );
   });
+
+  it("e-Stat はHTTPSかつ完全一致ホストだけ専用コネクタを選ぶ", () => {
+    expect(
+      findConnector(source({ endpointUrl: "https://evil.example/api?next=api.e-stat.go.jp" })).name,
+    ).toBe("generic");
+    expect(
+      findConnector(source({ endpointUrl: "http://api.e-stat.go.jp/rest/3.0/app/json/getStatsList" }))
+        .name,
+    ).toBe("generic");
+  });
 });
 
 describe("buildEstatUrl", () => {
@@ -68,5 +78,28 @@ describe("buildEstatUrl", () => {
       { ESTAT_APP_ID: "test-key-123" },
     );
     expect(url).not.toContain("appId");
+  });
+
+  it("e-Stat以外や平文HTTPには appId を付与しない", () => {
+    expect(
+      buildEstatUrl(
+        source({
+          endpointUrl: "https://evil.example/api?next=api.e-stat.go.jp",
+          requiresApiKey: true,
+          apiKeyEnvName: "ESTAT_APP_ID",
+        }),
+        { ESTAT_APP_ID: "test-key-123" },
+      ),
+    ).not.toContain("appId");
+    expect(
+      buildEstatUrl(
+        source({
+          endpointUrl: "http://api.e-stat.go.jp/rest/3.0/app/json/getStatsList",
+          requiresApiKey: true,
+          apiKeyEnvName: "ESTAT_APP_ID",
+        }),
+        { ESTAT_APP_ID: "test-key-123" },
+      ),
+    ).not.toContain("appId");
   });
 });

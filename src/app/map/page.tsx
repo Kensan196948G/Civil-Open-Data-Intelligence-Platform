@@ -15,7 +15,7 @@ export default function MapPage() {
         </p>
       </div>
       <MapPanel />
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-slate-600">
         🏷️ 出典: 地図タイル・標高データは
         <a
           href="https://maps.gsi.go.jp/development/ichiran.html"

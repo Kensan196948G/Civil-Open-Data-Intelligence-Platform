@@ -1,10 +1,13 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
+import { isAdminHeaders } from "@/lib/admin-auth";
 import { TagForm } from "@/components/TagForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function TagsPage() {
+  const canManage = isAdminHeaders(await headers());
   const tags = await prisma.tag.findMany({
     include: { _count: { select: { sources: true } } },
     orderBy: { name: "asc" },
@@ -14,10 +17,12 @@ export default async function TagsPage() {
     <div className="space-y-4">
       <h1 className="text-xl font-bold">🏷️ タグ管理</h1>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">➕ タグ追加</h2>
-        <TagForm />
-      </div>
+      {canManage ? (
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="mb-3 text-sm font-semibold text-slate-700">➕ タグ追加</h2>
+          <TagForm />
+        </div>
+      ) : null}
 
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="mb-3 text-sm font-semibold text-slate-700">📚 登録済みタグ</h2>
@@ -33,7 +38,7 @@ export default async function TagsPage() {
                 style={{ backgroundColor: tag.color ?? "#94a3b8" }}
               />
               {tag.name}
-              <span className="text-xs text-slate-400">({tag._count.sources})</span>
+              <span className="text-xs text-slate-600">({tag._count.sources})</span>
             </Link>
           ))}
         </div>
