@@ -208,7 +208,7 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
                   <TrustLevelBadge level={s.trustLevel} />
                 </td>
                 <td className="dc-td text-[11.5px] text-[var(--muted)]">
-                  {s.lastCheckedAt ? new Date(s.lastCheckedAt).toLocaleDateString("ja-JP") : "未確認"}
+                  {s.lastCheckedAt ? new Date(s.lastCheckedAt).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo" }) : "未確認"}
                 </td>
               </tr>
             ))}

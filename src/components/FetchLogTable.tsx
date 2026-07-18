@@ -39,7 +39,7 @@ export function FetchLogTable({ logs, showSource = true }: { logs: FetchLogRow[]
           {logs.map((log) => (
             <tr key={log.id} className="hover:bg-[var(--hover)]">
               <th scope="row" className="dc-td whitespace-nowrap text-left font-normal tabular-nums">
-                {new Date(log.executedAt).toLocaleString("ja-JP")}
+                {new Date(log.executedAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}
               </th>
               {showSource && (
                 <td className="dc-td">

@@ -139,7 +139,7 @@ export default async function SourceDetailPage({ params }: { params: Promise<{ i
                 <dt className={dtCls}>最終確認日</dt>
                 <dd className="mt-0.5 text-[12.5px] text-[var(--ink)]">
                   {source.lastCheckedAt
-                    ? new Date(source.lastCheckedAt).toLocaleString("ja-JP")
+                    ? new Date(source.lastCheckedAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })
                     : "未確認"}
                 </dd>
               </div>
@@ -240,7 +240,7 @@ export default async function SourceDetailPage({ params }: { params: Promise<{ i
             <tbody>
               {source.qualityChecks.map((qc) => (
                 <tr key={qc.id}>
-                  <th scope="row" className="dc-td text-left">{new Date(qc.checkedAt).toLocaleString("ja-JP")}</th>
+                  <th scope="row" className="dc-td text-left">{new Date(qc.checkedAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}</th>
                   <td className="dc-td">{qc.officialSourceScore}/20</td>
                   <td className="dc-td">{qc.freshnessScore}/15</td>
                   <td className="dc-td">{qc.accessibilityScore}/15</td>
@@ -261,7 +261,7 @@ export default async function SourceDetailPage({ params }: { params: Promise<{ i
           {sampleResponses.map((sample) => (
             <div key={sample.id} className="mb-3">
               <p className="mb-1 text-[11.5px] text-[var(--muted)]">
-                {new Date(sample.createdAt).toLocaleString("ja-JP")}
+                {new Date(sample.createdAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}
                 {sample.detectedFormat && ` / 判定形式: ${sample.detectedFormat}`}
               </p>
               <pre className="max-h-48 overflow-auto rounded-lg bg-[var(--ink)] p-3 text-xs text-white">

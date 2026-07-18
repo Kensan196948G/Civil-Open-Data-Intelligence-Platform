@@ -38,16 +38,18 @@ export function AppHeader() {
 
   return (
     <header className="flex h-[62px] flex-shrink-0 items-center gap-4 border-b border-[var(--line)] bg-white px-[22px]">
-      <div>
-        <div className="text-base font-semibold leading-[1.2] text-[var(--ink)]">{meta.title}</div>
-        <div className="text-[11.5px] text-[var(--muted)]">{meta.sub}</div>
+      <div className="min-w-0">
+        <div className="truncate text-base font-semibold leading-[1.2] text-[var(--ink)]">{meta.title}</div>
+        <div className="truncate text-[11.5px] text-[var(--muted)]">{meta.sub}</div>
       </div>
-      <div className="flex-1"></div>
-      <div className="flex items-center gap-[7px] rounded-lg border border-[var(--line)] bg-[var(--subtle)] px-[11px] py-[7px] text-[var(--muted)]">
+      <div className="min-w-2 flex-1"></div>
+      {/* focus-within で入力フォーカスをコンテナ側に可視化する (CodeRabbit a11y 指摘対応)。
+          リング色は白背景に対し 3:1 以上のコントラストを持つ --accent-d を使う */}
+      <div className="flex min-w-0 max-w-[240px] flex-shrink items-center gap-[7px] rounded-lg border border-[var(--line)] bg-[var(--subtle)] px-[11px] py-[7px] text-[var(--muted)] focus-within:border-[var(--accent-d)] focus-within:shadow-[0_0_0_2px_var(--accent-d)]">
         <span aria-hidden="true">🔍</span>
         <input
           aria-label="データソースを検索"
-          className="w-[190px] border-none bg-transparent text-[12.5px] text-[var(--ink)] outline-none placeholder:text-[var(--muted)]"
+          className="w-full min-w-0 border-none bg-transparent text-[12.5px] text-[var(--ink)] outline-none placeholder:text-[var(--muted)] lg:w-[190px]"
           placeholder="データソースを検索..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}

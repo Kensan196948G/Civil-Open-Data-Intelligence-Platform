@@ -87,9 +87,11 @@ a {
   box-shadow: 0 8px 24px rgb(15 23 42 / 0.18);
 }
 
+/* フォーカス指標は白背景に対し 3:1 以上のコントラストが必要 (WCAG 1.4.11)。
+ * --accent (#E08A2B, 約2.4:1) では不足するため --accent-d (#C9781F, 約3.3:1) を使う */
 .skip-link:focus {
   transform: translateY(0);
-  outline: 3px solid var(--accent);
+  outline: 3px solid var(--accent-d);
   outline-offset: 2px;
 }
 
@@ -112,9 +114,9 @@ a {
     color: var(--ink);
   }
   .dc-input:focus {
-    border-color: var(--accent);
+    border-color: var(--accent-d);
     outline: none;
-    box-shadow: 0 0 0 2px rgba(224, 138, 43, 0.35);
+    box-shadow: 0 0 0 2px var(--accent-d);
   }
   .dc-label {
     display: block;

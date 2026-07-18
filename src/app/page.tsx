@@ -171,7 +171,7 @@ export default async function DashboardPage() {
                 {recentLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-[var(--hover)]">
                     <td className="border-b border-[var(--line-2)] px-4 py-[9px] tabular-nums text-[var(--ink-2)]">
-                      {new Date(log.executedAt).toLocaleString("ja-JP")}
+                      {new Date(log.executedAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}
                     </td>
                     <td className="border-b border-[var(--line-2)] px-4 py-[9px]">
                       {log.dataSource ? (

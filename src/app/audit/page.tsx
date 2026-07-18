@@ -67,7 +67,7 @@ function toAuditEvent(log: SourceLog): AuditEvent {
 }
 
 function fmtDateTime(d: Date): string {
-  return new Date(d).toLocaleString("ja-JP");
+  return new Date(d).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
 }
 
 export default async function AuditPage() {
