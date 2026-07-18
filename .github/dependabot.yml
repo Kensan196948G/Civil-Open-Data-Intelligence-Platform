@@ -9,6 +9,11 @@ updates:
       app-dependencies:
         patterns:
           - "*"
+    # major は破壊的変更を含むため週次自動 PR の対象外とし、計画的に個別対応する
+    # (Next/Prisma/zod/Tailwind 等の major 混在 PR は CI が通らず放置される実績があるため)
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
