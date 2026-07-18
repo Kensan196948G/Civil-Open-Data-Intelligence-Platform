@@ -20,7 +20,11 @@ const securityHeaders = [
       "frame-ancestors 'none'",
       "form-action 'self'",
       scriptSrc,
-      "style-src 'self' 'unsafe-inline'",
+      // fonts.googleapis.com / fonts.gstatic.com はデザイン正本 (docs/design/) 指定の
+      // IBM Plex フォント配信のみに使用。next/font はこの環境の WASM メモリ制限
+      // (上記 webpack ワークアラウンドと同根) でビルド不能のため <link> 方式を採用
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https://cyberjapandata.gsi.go.jp",
       "connect-src 'self' https://cyberjapandata.gsi.go.jp",
     ].join("; "),

@@ -51,30 +51,38 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
     prisma.tag.findMany({ orderBy: { name: "asc" } }),
   ]);
 
-  const selectCls = "rounded border border-slate-300 px-2 py-1.5 text-sm";
+  // デザイン正本 (818-1364 行) のフィルタ入力: 13px / padding 8px 11px / border var(--line)
+  const fieldCls =
+    "rounded-lg border border-[var(--line)] bg-white px-[11px] py-2 text-[13px] text-[var(--ink)] outline-none focus:border-[var(--accent)]";
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-[14px]">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">📚 データソース一覧</h1>
+        <h1 className="text-[1.4rem] font-semibold">📚 データソース一覧</h1>
         {canManage && (
-          <Link
-            href="/sources/new"
-            className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
-          >
+          <Link href="/sources/new" className="dc-btn-accent">
             ➕ 新規登録
           </Link>
         )}
       </div>
 
-      <form method="GET" className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+      <form
+        method="GET"
+        className="dc-card flex flex-wrap items-end gap-[10px] px-4 py-[14px]"
+      >
         <div>
-          <label htmlFor="source-filter-q" className="mb-1 block text-xs text-slate-500">🔍 キーワード</label>
-          <input id="source-filter-q" name="q" defaultValue={sp.q ?? ""} className={selectCls} placeholder="河川、道路、標高..." />
+          <label htmlFor="source-filter-q" className="dc-label">🔍 キーワード</label>
+          <input
+            id="source-filter-q"
+            name="q"
+            defaultValue={sp.q ?? ""}
+            className={`${fieldCls} w-[180px]`}
+            placeholder="河川、道路、標高..."
+          />
         </div>
         <div>
-          <label htmlFor="source-filter-category" className="mb-1 block text-xs text-slate-500">カテゴリ</label>
-          <select id="source-filter-category" name="category" defaultValue={sp.category ?? ""} className={selectCls}>
+          <label htmlFor="source-filter-category" className="dc-label">カテゴリ</label>
+          <select id="source-filter-category" name="category" defaultValue={sp.category ?? ""} className={fieldCls}>
             <option value="">すべて</option>
             {CATEGORIES.map((c) => (
               <option key={c.value} value={c.value}>
@@ -84,8 +92,8 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
           </select>
         </div>
         <div>
-          <label htmlFor="source-filter-provider" className="mb-1 block text-xs text-slate-500">提供元</label>
-          <select id="source-filter-provider" name="providerId" defaultValue={sp.providerId ?? ""} className={selectCls}>
+          <label htmlFor="source-filter-provider" className="dc-label">提供元</label>
+          <select id="source-filter-provider" name="providerId" defaultValue={sp.providerId ?? ""} className={fieldCls}>
             <option value="">すべて</option>
             {providers.map((p) => (
               <option key={p.id} value={p.id}>
@@ -95,8 +103,8 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
           </select>
         </div>
         <div>
-          <label htmlFor="source-filter-format" className="mb-1 block text-xs text-slate-500">形式</label>
-          <select id="source-filter-format" name="dataFormat" defaultValue={sp.dataFormat ?? ""} className={selectCls}>
+          <label htmlFor="source-filter-format" className="dc-label">形式</label>
+          <select id="source-filter-format" name="dataFormat" defaultValue={sp.dataFormat ?? ""} className={fieldCls}>
             <option value="">すべて</option>
             {DATA_FORMATS.map((f) => (
               <option key={f} value={f}>
@@ -106,16 +114,16 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
           </select>
         </div>
         <div>
-          <label htmlFor="source-filter-api-key" className="mb-1 block text-xs text-slate-500">🔑 APIキー</label>
-          <select id="source-filter-api-key" name="requiresApiKey" defaultValue={sp.requiresApiKey ?? ""} className={selectCls}>
+          <label htmlFor="source-filter-api-key" className="dc-label">🔑 APIキー</label>
+          <select id="source-filter-api-key" name="requiresApiKey" defaultValue={sp.requiresApiKey ?? ""} className={fieldCls}>
             <option value="">すべて</option>
             <option value="true">必要</option>
             <option value="false">不要</option>
           </select>
         </div>
         <div>
-          <label htmlFor="source-filter-status" className="mb-1 block text-xs text-slate-500">接続状態</label>
-          <select id="source-filter-status" name="status" defaultValue={sp.status ?? ""} className={selectCls}>
+          <label htmlFor="source-filter-status" className="dc-label">接続状態</label>
+          <select id="source-filter-status" name="status" defaultValue={sp.status ?? ""} className={fieldCls}>
             <option value="">すべて</option>
             {SOURCE_STATUSES.map((s) => (
               <option key={s.value} value={s.value}>
@@ -125,8 +133,8 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
           </select>
         </div>
         <div>
-          <label htmlFor="source-filter-tag" className="mb-1 block text-xs text-slate-500">🏷️ タグ</label>
-          <select id="source-filter-tag" name="tag" defaultValue={sp.tag ?? ""} className={selectCls}>
+          <label htmlFor="source-filter-tag" className="dc-label">🏷️ タグ</label>
+          <select id="source-filter-tag" name="tag" defaultValue={sp.tag ?? ""} className={fieldCls}>
             <option value="">すべて</option>
             {tags.map((t) => (
               <option key={t.id} value={t.id}>
@@ -135,75 +143,78 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
             ))}
           </select>
         </div>
-        <button type="submit" className="rounded bg-slate-800 px-3 py-1.5 text-sm text-white hover:bg-slate-700">
+        <button type="submit" className="dc-btn-accent">
           🔍 検索
         </button>
-        <Link href="/sources" className="px-2 py-1.5 text-sm text-slate-500 hover:underline">
+        <Link href="/sources" className="px-1 py-2 text-[12.5px] text-[var(--muted)] hover:underline">
           クリア
         </Link>
       </form>
 
-      <p className="text-sm text-slate-500">
+      <p className="text-[12.5px] text-[var(--muted)]">
         📊 条件一致 {total} 件中 {sources.length} 件を表示
         {total > sources.length && "（上位200件まで）"}
       </p>
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full text-sm">
+      <div className="dc-card overflow-x-auto">
+        <table aria-label="データソース検索結果一覧" className="w-full border-collapse text-[12.5px]">
           <caption className="sr-only">データソース検索結果一覧</caption>
           <thead>
-            <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-              <th scope="col" className="px-3 py-2">データソース名</th>
-              <th scope="col" className="px-3 py-2">提供元</th>
-              <th scope="col" className="px-3 py-2">カテゴリ</th>
-              <th scope="col" className="px-3 py-2">形式</th>
-              <th scope="col" className="px-3 py-2">APIキー</th>
-              <th scope="col" className="px-3 py-2">接続状態</th>
-              <th scope="col" className="px-3 py-2">品質</th>
-              <th scope="col" className="px-3 py-2">信頼度</th>
-              <th scope="col" className="px-3 py-2">最終確認</th>
+            <tr>
+              <th scope="col" className="dc-th">データソース名</th>
+              <th scope="col" className="dc-th">提供元</th>
+              <th scope="col" className="dc-th">カテゴリ</th>
+              <th scope="col" className="dc-th">形式</th>
+              <th scope="col" className="dc-th">🔑</th>
+              <th scope="col" className="dc-th">接続状態</th>
+              <th scope="col" className="dc-th">品質</th>
+              <th scope="col" className="dc-th">信頼度</th>
+              <th scope="col" className="dc-th">最終確認</th>
             </tr>
           </thead>
           <tbody>
             {sources.map((s) => (
-              <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50">
-                <th scope="row" className="px-3 py-2 text-left">
-                  <Link href={`/sources/${s.id}`} className="font-medium text-blue-600 hover:underline">
+              <tr key={s.id} className="hover:bg-[var(--hover)]">
+                <th scope="row" className="dc-td text-left">
+                  <Link
+                    href={`/sources/${s.id}`}
+                    className="font-medium text-[var(--ink)] hover:text-[var(--blue)] hover:underline"
+                  >
                     {s.name}
                   </Link>
-                  <div className="mt-0.5 flex flex-wrap gap-1">
+                  <div className="mt-[3px] flex flex-wrap gap-[3px]">
                     {s.tags.map(({ tag }) => (
                       <Link
                         key={tag.id}
                         href={`/sources?tag=${tag.id}`}
-                        className="rounded-full bg-slate-100 px-1.5 text-[10px] text-slate-600 hover:bg-slate-200"
+                        className="rounded-[5px] bg-[var(--subtle)] px-1.5 py-px font-mono text-[10px] text-[var(--ink-2)] hover:bg-[var(--line)]"
                       >
                         {tag.name}
                       </Link>
                     ))}
                   </div>
                 </th>
-                <td className="px-3 py-2">{s.provider.name}</td>
-                <td className="px-3 py-2">{categoryLabel(s.category)}</td>
-                <td className="px-3 py-2">{s.dataFormat}</td>
-                <td className="px-3 py-2">{s.requiresApiKey ? "必要" : "不要"}</td>
-                <td className="px-3 py-2">
+                <td className="dc-td">{s.provider.name}</td>
+                <td className="dc-td">{categoryLabel(s.category)}</td>
+                <td className="dc-td">{s.dataFormat}</td>
+                <td className="dc-td">{s.requiresApiKey ? "必要" : "不要"}</td>
+                <td className="dc-td">
                   <StatusBadge status={s.status} />
                 </td>
-                <td className="px-3 py-2">
+                <td className="dc-td">
                   <QualityScoreBadge score={s.qualityScore} />
                 </td>
-                <td className="px-3 py-2">
+                <td className="dc-td">
                   <TrustLevelBadge level={s.trustLevel} />
                 </td>
-                <td className="px-3 py-2 text-xs text-slate-500">
+                <td className="dc-td text-[11.5px] text-[var(--muted)]">
                   {s.lastCheckedAt ? new Date(s.lastCheckedAt).toLocaleDateString("ja-JP") : "未確認"}
                 </td>
               </tr>
             ))}
             {sources.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-slate-600">
+                <td colSpan={9} className="dc-td text-center text-[var(--muted)]">
                   条件に一致するデータソースがありません
                 </td>
               </tr>
