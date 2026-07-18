@@ -16,6 +16,11 @@ import { geoJSON as leafletGeoJson, latLng } from "leaflet";
 import type { GeoJsonObject } from "geojson";
 import "leaflet/dist/leaflet.css";
 
+// デザイン正本の青系アクション用ボタン (地図に表示 / 標高取得)。
+// 作成・保存系の主 CTA は .dc-btn-accent、取得・実行系はこの青ボタンを使う。
+const BLUE_BTN =
+  "inline-flex items-center gap-1.5 rounded-lg border border-[var(--blue)] bg-[var(--blue)] px-3.5 py-2 text-[12.5px] font-semibold text-white hover:bg-[var(--blue-2)]";
+
 type ElevationState = {
   latlng: LatLng;
   loading: boolean;
@@ -196,12 +201,12 @@ export default function MapView() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="mb-2 text-sm font-semibold text-slate-700">📍 標高確認</h2>
+    <div className="flex flex-col gap-[14px]">
+      <div className="dc-card px-[18px] py-[17px]">
+        <h2 className="mb-2 text-[14px] font-semibold text-[var(--ink)]">📍 標高確認</h2>
         <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_auto] md:items-end">
           <div>
-            <label htmlFor="map-latitude" className="mb-1 block text-xs font-medium text-slate-600">
+            <label htmlFor="map-latitude" className="dc-label">
               緯度
             </label>
             <input
@@ -212,11 +217,11 @@ export default function MapView() {
               max="90"
               value={latInput}
               onChange={(event) => setLatInput(event.target.value)}
-              className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+              className="dc-input"
             />
           </div>
           <div>
-            <label htmlFor="map-longitude" className="mb-1 block text-xs font-medium text-slate-600">
+            <label htmlFor="map-longitude" className="dc-label">
               経度
             </label>
             <input
@@ -227,24 +232,23 @@ export default function MapView() {
               max="180"
               value={lonInput}
               onChange={(event) => setLonInput(event.target.value)}
-              className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+              className="dc-input"
             />
           </div>
-          <button
-            type="button"
-            onClick={fetchElevationForInputs}
-            className="rounded bg-slate-800 px-3 py-1.5 text-sm text-white hover:bg-slate-700"
-          >
+          <button type="button" onClick={fetchElevationForInputs} className={BLUE_BTN}>
             ⛰️ 標高取得
           </button>
         </div>
         {coordinateError && (
-          <p className="mt-2 rounded bg-red-50 px-2 py-1 text-sm text-red-700" role="alert">
+          <p
+            className="mt-2 rounded-lg bg-[var(--red-bg)] px-2.5 py-1.5 text-[12.5px] text-[var(--red)]"
+            role="alert"
+          >
             ⚠️ {coordinateError}
           </p>
         )}
         {elevation && (
-          <p className="mt-2 text-xs text-slate-600" role="status">
+          <p className="mt-2 text-[11.5px] text-[var(--ink-2)]" role="status">
             選択地点: {elevation.latlng.lat.toFixed(5)}, {elevation.latlng.lng.toFixed(5)}
             {elevation.loading
               ? " / 標高取得中"
@@ -255,12 +259,12 @@ export default function MapView() {
         )}
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 shadow-sm">
+      <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)]">
         <MapContainer
           center={[36.104, 140.085]}
           zoom={5}
           scrollWheelZoom
-          style={{ height: "60vh", width: "100%" }}
+          style={{ height: "460px", width: "100%" }}
         >
           <LayersControl position="topright">
             <LayersControl.BaseLayer checked name="🗺️ 標準地図">
@@ -304,12 +308,12 @@ export default function MapView() {
         </MapContainer>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="mb-2 text-sm font-semibold text-slate-700">📐 GeoJSON オーバーレイ</h2>
-        <p id="geojson-overlay-description" className="mb-2 text-xs text-slate-500">
+      <div className="dc-card px-[18px] py-[17px]">
+        <h2 className="mb-2 text-[14px] font-semibold text-[var(--ink)]">📐 GeoJSON オーバーレイ</h2>
+        <p id="geojson-overlay-description" className="mb-2 text-[11.5px] text-[var(--muted)]">
           GeoJSON (FeatureCollection 等) を貼り付けると地図上に表示します。データはブラウザ内でのみ処理され、サーバへ送信されません。
         </p>
-        <label htmlFor="geojson-overlay" className="mb-1 block text-xs font-medium text-slate-600">
+        <label htmlFor="geojson-overlay" className="dc-label">
           GeoJSONデータ
         </label>
         <textarea
@@ -319,14 +323,10 @@ export default function MapView() {
           rows={5}
           placeholder='{"type":"FeatureCollection","features":[...]}'
           aria-describedby="geojson-overlay-description"
-          className="w-full rounded border border-slate-300 px-2 py-1.5 font-mono text-xs focus:border-blue-500 focus:outline-none"
+          className="dc-input font-mono text-[12px]"
         />
-        <div className="mt-2 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={applyGeoJson}
-            className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
-          >
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button type="button" onClick={applyGeoJson} className={BLUE_BTN}>
             🗺️ 地図に表示
           </button>
           <button
@@ -336,11 +336,15 @@ export default function MapView() {
               setGeoJsonData(null);
               setGeoJsonError(null);
             }}
-            className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
+            className="dc-btn-ghost"
           >
             クリア
           </button>
-          {geoJsonError && <p className="text-sm text-red-600" role="alert">⚠️ {geoJsonError}</p>}
+          {geoJsonError && (
+            <p className="text-[12.5px] text-[var(--red)]" role="alert">
+              ⚠️ {geoJsonError}
+            </p>
+          )}
         </div>
       </div>
     </div>

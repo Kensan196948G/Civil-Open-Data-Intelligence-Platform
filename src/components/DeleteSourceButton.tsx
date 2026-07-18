@@ -33,15 +33,16 @@ export function DeleteSourceButton({ sourceId, name }: { sourceId: string; name:
 
   return (
     <div className="space-y-1">
+      {/* デザイン正本 (1441-1459 行): 赤アウトラインの削除ボタン */}
       <button
         onClick={handleDelete}
         disabled={busy}
-        className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--red-2)] bg-white px-[14px] py-2 text-[12.5px] font-semibold text-[var(--red)] hover:bg-[var(--red-bg)] disabled:opacity-50"
       >
         {busy ? "⏳ 削除中" : "🗑️ 削除"}
       </button>
       {error && (
-        <p className="text-xs text-red-600" role="alert">
+        <p className="text-[11px] text-[var(--red)]" role="alert">
           ⚠️ {error}
         </p>
       )}

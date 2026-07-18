@@ -69,17 +69,17 @@ export function AdminTokenPanel() {
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="mb-3 text-sm font-semibold text-slate-700">🛡️ 管理操作トークン</h2>
-      <div className="flex flex-col gap-2 md:flex-row">
+    <div className="dc-card px-[18px] py-[17px]">
+      <h2 className="mb-2.5 text-[14px] font-semibold text-[var(--ink)]">🛡️ 管理操作トークン</h2>
+      <div className="flex flex-col gap-2 md:flex-row md:items-end">
         <div className="flex-1">
-          <label htmlFor="admin-token" className="mb-1 block text-xs font-medium text-slate-600">
+          <label htmlFor="admin-token" className="dc-label">
             管理操作トークン
           </label>
           <input
             id="admin-token"
             type="password"
-            className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+            className="dc-input"
             placeholder="CODIP_ADMIN_TOKEN と同じ値"
             value={token}
             onChange={(event) => setToken(event.target.value)}
@@ -90,7 +90,7 @@ export function AdminTokenPanel() {
           type="button"
           onClick={startSession}
           disabled={busy || !token.trim()}
-          className="whitespace-nowrap rounded bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-700 md:self-end"
+          className="dc-btn-accent whitespace-nowrap disabled:opacity-50"
         >
           セッション開始
         </button>
@@ -98,24 +98,25 @@ export function AdminTokenPanel() {
           type="button"
           onClick={endSession}
           disabled={busy || !authenticated}
-          className="whitespace-nowrap rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50 md:self-end"
+          className="dc-btn-ghost whitespace-nowrap disabled:opacity-50"
         >
           終了
         </button>
       </div>
-      <p className="mt-2 text-xs text-slate-500">
-        本番環境で <code className="rounded bg-slate-100 px-1">CODIP_ADMIN_TOKEN</code>{" "}
+      <p className="mt-2 text-[11.5px] text-[var(--muted)]">
+        本番環境で{" "}
+        <code className="rounded bg-[var(--subtle)] px-1 font-mono">CODIP_ADMIN_TOKEN</code>{" "}
         を設定した場合、ここで管理セッションを開始します。トークン値はブラウザに保存せず、HttpOnly Cookieの署名済みセッションだけを保持します。
       </p>
-      <p className="mt-2 text-xs text-slate-600">
+      <p className="mt-2 text-[11.5px] text-[var(--ink-2)]">
         状態: {authenticated ? "管理セッション有効" : "未認証"}
       </p>
       {message && (
         <p
-          className={`mt-2 rounded px-2 py-1 text-xs ${
+          className={`mt-2 rounded-lg px-2.5 py-1.5 text-[11.5px] ${
             messageTone === "success"
-              ? "bg-emerald-50 text-emerald-700"
-              : "bg-red-50 text-red-700"
+              ? "bg-[var(--green-bg)] text-[var(--green)]"
+              : "bg-[var(--red-bg)] text-[var(--red)]"
           }`}
           role={messageTone === "error" ? "alert" : "status"}
         >

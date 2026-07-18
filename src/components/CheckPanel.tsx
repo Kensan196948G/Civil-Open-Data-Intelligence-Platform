@@ -44,43 +44,47 @@ export function CheckPanel({ sourceId }: { sourceId: string }) {
     }
   }
 
+  // デザイン正本 (1463-1525 行): 疎通=blue / サンプル=green-2 / 品質=purple の実塗りボタン
+  const btnBase =
+    "inline-flex items-center gap-1.5 rounded-lg px-[14px] py-2 text-[12.5px] font-semibold text-white hover:opacity-90 disabled:opacity-50";
+
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <h3 className="mb-3 text-sm font-semibold text-slate-700">🔌 接続確認・サンプル取得</h3>
+    <div className="dc-card px-[18px] py-[17px]">
+      <h3 className="mb-3 text-sm font-semibold text-[var(--ink)]">🔌 接続確認・サンプル取得</h3>
       <div className="flex flex-wrap gap-2">
         <button
           onClick={() => run("check")}
           disabled={busy !== null}
-          className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+          className={`${btnBase} border border-[var(--blue)] bg-[var(--blue)]`}
         >
           {busy === "check" ? "⏳ 確認中..." : "🔌 疎通確認"}
         </button>
         <button
           onClick={() => run("fetch-sample")}
           disabled={busy !== null}
-          className="rounded bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-700 disabled:opacity-50"
+          className={`${btnBase} border border-[var(--green-2)] bg-[var(--green-2)]`}
         >
           {busy === "fetch-sample" ? "⏳ 取得中..." : "📦 サンプル取得"}
         </button>
         <button
           onClick={() => run("quality")}
           disabled={busy !== null}
-          className="rounded bg-purple-600 px-3 py-1.5 text-sm text-white hover:bg-purple-700 disabled:opacity-50"
+          className={`${btnBase} border border-[var(--purple)] bg-[var(--purple)]`}
         >
           {busy === "quality" ? "⏳ 計算中..." : "⭐ 品質スコア再計算"}
         </button>
       </div>
       {error && (
-        <p className="mt-3 text-sm text-red-600" role="alert">
+        <p className="mt-3 text-[13px] text-[var(--red)]" role="alert">
           ⚠️ {error}
         </p>
       )}
       {result && (
         <div
-          className={`mt-3 rounded border px-3 py-2 text-sm ${
+          className={`mt-3 rounded-lg border px-[13px] py-2.5 text-[13px] ${
             result.data.success
-              ? "border-green-300 bg-green-50 text-green-800"
-              : "border-red-300 bg-red-50 text-red-800"
+              ? "border-[var(--green)] bg-[var(--green-bg)] text-[var(--green)]"
+              : "border-[var(--red-2)] bg-[var(--red-bg)] text-[var(--red)]"
           }`}
           role="status"
         >
@@ -94,7 +98,7 @@ export function CheckPanel({ sourceId }: { sourceId: string }) {
           {result.data.message && <p className="mt-1 text-xs">{result.data.message}</p>}
         </div>
       )}
-      <p className="mt-3 text-xs text-slate-600">
+      <p className="mt-3 text-[11.5px] text-[var(--faint)]">
         ⏱ タイムアウト30秒 / リダイレクト最大3回 / 取得対象は登録済みURLのみ
       </p>
     </div>

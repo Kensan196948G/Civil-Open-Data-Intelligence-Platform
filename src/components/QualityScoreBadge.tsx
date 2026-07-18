@@ -1,15 +1,17 @@
+// デザイン正本の qualityColor と同一の閾値・配色
+function qualityColor(score: number): { fg: string; bg: string } {
+  if (score >= 80) return { fg: "var(--green)", bg: "var(--green-bg)" };
+  if (score >= 60) return { fg: "var(--blue)", bg: "var(--blue-bg)" };
+  if (score >= 40) return { fg: "var(--amber)", bg: "var(--amber-bg)" };
+  return { fg: "var(--red)", bg: "var(--red-bg)" };
+}
+
 export function QualityScoreBadge({ score }: { score: number }) {
-  const style =
-    score >= 80
-      ? "bg-green-100 text-green-800"
-      : score >= 60
-        ? "bg-blue-100 text-blue-800"
-        : score >= 40
-          ? "bg-amber-100 text-amber-800"
-          : "bg-red-100 text-red-800";
+  const c = qualityColor(score);
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${style}`}
+      className="dc-badge"
+      style={{ color: c.fg, background: c.bg }}
       aria-label={`品質スコア ${score}/100`}
     >
       ⭐ {score}
@@ -20,7 +22,8 @@ export function QualityScoreBadge({ score }: { score: number }) {
 export function TrustLevelBadge({ level }: { level: number }) {
   return (
     <span
-      className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700"
+      className="dc-badge"
+      style={{ color: "var(--amber)", background: "transparent", letterSpacing: "1px" }}
       aria-label={`信頼度 ${level}/5`}
     >
       {"★".repeat(level)}

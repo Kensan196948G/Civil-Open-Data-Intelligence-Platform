@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { AppNavigation } from "@/components/AppNavigation";
+import { AppSidebar } from "@/components/AppSidebar";
+import { AppHeader } from "@/components/AppHeader";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -11,24 +11,36 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja">
-      <body className="min-h-screen">
+      <body className="flex h-screen w-full overflow-hidden">
+        {/* デザイン正本指定の IBM Plex フォント。next/font は本環境の WASM メモリ制限で
+            ビルド不能のため、正本と同じ <link> 方式 (CSP は fonts.googleapis.com /
+            fonts.gstatic.com のみ許可)。CDN 不達時は font stack の system-ui へフォールバック */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* eslint-disable-next-line @next/next/no-page-custom-font --
+            このルールは pages/_document.js 前提。App Router の root layout に置いた
+            <link> は全ページへ適用されるため該当しない (公式 docs の適用範囲どおり) */}
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+        />
         <a href="#main-content" className="skip-link">
           本文へ移動
         </a>
-        <header className="bg-slate-900 text-white">
-          <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:gap-6">
-            <Link href="/" className="text-base font-bold md:text-lg">
-              🏗️ Civil Open Data Intelligence
-            </Link>
-            <AppNavigation />
-          </div>
-        </header>
-        <main id="main-content" className="mx-auto max-w-7xl px-4 py-6" tabIndex={-1}>
-          {children}
-        </main>
-        <footer className="mx-auto max-w-7xl px-4 py-6 text-xs text-slate-500">
-          ⚠️ 本システムは公開データの検索・整理・取得確認を支援するものであり、施工可否・安全性・利用条件の最終判断は必ず人間が行います。
-        </footer>
+        <AppSidebar />
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <AppHeader />
+          <main
+            id="main-content"
+            tabIndex={-1}
+            className="flex flex-1 flex-col gap-4 overflow-auto p-[22px]"
+          >
+            {children}
+          </main>
+          <footer className="border-t border-[var(--line)] bg-white px-[22px] py-2 text-[11px] text-[var(--muted)]">
+            ⚠️ 本システムは公開データの検索・整理・取得確認を支援するものであり、施工可否・安全性・利用条件の最終判断は必ず人間が行います。
+          </footer>
+        </div>
       </body>
     </html>
   );

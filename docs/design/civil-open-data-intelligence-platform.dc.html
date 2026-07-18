@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+body{margin:0;}
+a{color:var(--blue,#2E5AAC);text-decoration:none;}
+a:hover{text-decoration:underline;}
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-thumb{background:#c8d0db;border-radius:6px;border:2px solid transparent;background-clip:padding-box;}
+</style>
+</helmet>
+<div style="--accent:#E08A2B;--accent-d:#C9781F;--side:#FFFFFF;--side-2:#FDEFE0;--side-line:#E3E8EF;--side-fg:#5A6678;--side-muted:#8A97A8;--side-label:#8A97A8;--bg:#EEF1F5;--surface:#ffffff;--hover:#FAFBFC;--subtle:#F2F4F8;--subtle-2:#F8FAFB;--line:#E3E8EF;--line-2:#EEF1F5;--ink:#1A2433;--ink-2:#5A6678;--muted:#8A97A8;--faint:#A2AEBC;--blue:#2E5AAC;--blue-2:#3E76D6;--blue-bg:#E9F0FB;--green:#1F8255;--green-2:#2E9E6B;--green-bg:#E4F3EC;--amber:#B5701A;--amber-bg:#FDEFE0;--red:#C5392F;--red-2:#D6443B;--red-bg:#FCE9E7;--purple:#6B45B0;--purple-bg:#EDE7F6;--radius:10px;--shadow:0 1px 2px rgba(16,24,40,.04);--mono:'IBM Plex Mono',ui-monospace,monospace;font-family:'IBM Plex Sans JP',system-ui,-apple-system,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;display:flex;height:100vh;width:100%;overflow:hidden;">
+
+<aside style="width:250px;flex-shrink:0;background:var(--side);display:flex;flex-direction:column;color:var(--side-fg);height:100%;border-right:1px solid var(--side-line);">
+  <div style="padding:18px 18px 16px;display:flex;align-items:center;gap:11px;border-bottom:1px solid var(--side-line);">
+    <span style="width:34px;height:34px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--side);">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"></path><path d="M5 21V7l8-4v18"></path><path d="M19 21V11l-6-4"></path></svg>
+    </span>
+    <div style="line-height:1.2;">
+      <div style="color:var(--ink);font-weight:600;font-size:14.5px;letter-spacing:.2px;">Civil Open Data</div>
+      <div style="font-size:11px;color:var(--side-muted);">Intelligence Platform</div>
+    </div>
+  </div>
+  <nav style="flex:1;overflow-y:auto;padding:10px 12px 14px;display:flex;flex-direction:column;gap:1px;">
+    <div style="padding:13px 8px 6px;font-size:10px;letter-spacing:1px;color:var(--side-label);font-weight:600;">運用</div>
+    <sc-for list="{{ navGroup1 }}" as="item" hint-placeholder-count="1">
+      <a style="{{ item.style }}" onClick="{{ item.onClick }}">
+        <span style="position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:2px;background:{{ item.barBg }};"></span>
+        <span style="width:18px;text-align:center;flex-shrink:0;">{{ item.icon }}</span>
+        <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.label }}</span>
+      </a>
+    </sc-for>
+    <div style="padding:13px 8px 6px;font-size:10px;letter-spacing:1px;color:var(--side-label);font-weight:600;">データ台帳</div>
+    <sc-for list="{{ navGroup2 }}" as="item" hint-placeholder-count="2">
+      <a style="{{ item.style }}" onClick="{{ item.onClick }}">
+        <span style="position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:2px;background:{{ item.barBg }};"></span>
+        <span style="width:18px;text-align:center;flex-shrink:0;">{{ item.icon }}</span>
+        <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.label }}</span>
+      </a>
+    </sc-for>
+    <div style="padding:13px 8px 6px;font-size:10px;letter-spacing:1px;color:var(--side-label);font-weight:600;">記録・管理</div>
+    <sc-for list="{{ navGroup3 }}" as="item" hint-placeholder-count="3">
+      <a style="{{ item.style }}" onClick="{{ item.onClick }}">
+        <span style="position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:2px;background:{{ item.barBg }};"></span>
+        <span style="width:18px;text-align:center;flex-shrink:0;">{{ item.icon }}</span>
+        <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.label }}</span>
+      </a>
+    </sc-for>
+  </nav>
+  <div style="padding:13px 14px;border-top:1px solid var(--side-line);display:flex;align-items:center;gap:11px;">
+    <span style="width:34px;height:34px;border-radius:50%;background:var(--subtle);color:var(--ink);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:15px;flex-shrink:0;">🛰️</span>
+    <div style="flex:1;line-height:1.25;">
+      <div style="color:var(--ink);font-size:13px;font-weight:500;">オープンデータ基盤</div>
+      <div style="font-size:11px;color:var(--side-muted);">ローカル環境</div>
+    </div>
+    <span style="font-size:10px;font-weight:600;color:var(--accent);border:1px solid rgba(224,138,43,.4);padding:1px 6px;border-radius:5px;">MVP</span>
+  </div>
+</aside>
+
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden;">
+  <header style="height:62px;flex-shrink:0;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 22px;gap:16px;">
+    <div>
+      <div style="font-size:16px;font-weight:600;color:var(--ink);line-height:1.2;">{{ topbarTitle }}</div>
+      <div style="font-size:11.5px;color:var(--muted);">{{ topbarSub }}</div>
+    </div>
+    <div style="flex:1;"></div>
+    <div style="display:flex;align-items:center;gap:7px;background:var(--subtle);border:1px solid var(--line);border-radius:8px;padding:7px 11px;color:var(--muted);">
+      🔍<input style="border:none;background:none;outline:none;font:inherit;font-size:12.5px;width:190px;color:var(--ink);" placeholder="データソースを検索..." value="{{ searchQuery }}" onChange="{{ onSearchQueryChange }}" onKeyDown="{{ onSearchKeyDown }}">
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;background:var(--green-bg);color:var(--green);padding:6px 10px;border-radius:7px;font-size:12px;font-weight:600;">
+      <span style="width:7px;height:7px;border-radius:50%;background:var(--green-2);box-shadow:0 0 0 3px rgba(46,158,107,.18);"></span>公開データのみ
+    </div>
+  </header>
+
+  <main style="flex:1;overflow:auto;padding:22px;display:flex;flex-direction:column;gap:16px;">
+
+    <sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <h1 style="font-size:1.4rem;margin:0;">🏠 ダッシュボード</h1>
+          <button style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:#fff;padding:8px 14px;border-radius:8px;font:inherit;font-size:12.5px;font-weight:600;" onClick="{{ openNew }}">➕ データソース登録</button>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;">
+          <sc-for list="{{ kpis }}" as="item" hint-placeholder-count="4">
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 17px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:7px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <span style="font-size:11.5px;color:var(--muted);font-weight:500;">{{ item.label }}</span>
+                <span style="width:8px;height:8px;border-radius:3px;background:{{ item.dot }};"></span>
+              </div>
+              <div style="font-size:28px;font-weight:600;color:var(--ink);line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.5px;">{{ item.value }}</div>
+              <div style="font-size:11px;font-weight:500;color:{{ item.subColor }};">{{ item.sub }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:16px;align-items:start;">
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:17px 18px;">
+            <h2 style="margin:0 0 12px;font-size:14px;font-weight:600;color:var(--ink);">🏷️ カテゴリ別件数</h2>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <sc-for list="{{ categoryBreakdown }}" as="item" hint-placeholder-count="6">
+                <div style="cursor:pointer;" onClick="{{ item.onClick }}">
+                  <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;">
+                    <span style="color:var(--ink-2);">{{ item.label }}</span>
+                    <span style="font-family:var(--mono);font-weight:600;color:var(--ink);">{{ item.count }}件</span>
+                  </div>
+                  <div style="height:6px;background:var(--line-2);border-radius:3px;overflow:hidden;">
+                    <div style="height:100%;border-radius:3px;background:var(--blue-2);width:{{ item.pct }}%;"></div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:17px 18px;">
+            <h2 style="margin:0 0 12px;font-size:14px;font-weight:600;color:var(--ink);">🆕 最近登録したデータソース</h2>
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <sc-for list="{{ recentSources }}" as="item" hint-placeholder-count="5">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line-2);cursor:pointer;" onClick="{{ item.goDetail }}">
+                  <div style="min-width:0;">
+                    <div style="font-size:12.5px;font-weight:500;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ item.name }}</div>
+                    <div style="font-size:11px;color:var(--muted);">{{ item.providerName }}</div>
+                  </div>
+                  <span style="{{ item.statusStyle }}">{{ item.statusIcon }} {{ item.statusLabel }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;">
+          <div style="padding:15px 18px;border-bottom:1px solid var(--line-2);display:flex;align-items:center;justify-content:space-between;">
+            <h2 style="margin:0;font-size:14px;font-weight:600;color:var(--ink);">🧾 最近の取得ログ</h2>
+            <a href="#" style="font-size:12px;" onClick="{{ goLogsPreventDefault }}">すべて見る →</a>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+            <thead><tr>
+              <th style="text-align:left;padding:11px 16px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);font-weight:600;background:var(--hover);">実行日時</th>
+              <th style="text-align:left;padding:11px 16px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);font-weight:600;background:var(--hover);">データソース</th>
+              <th style="text-align:left;padding:11px 16px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);font-weight:600;background:var(--hover);">種別</th>
+              <th style="text-align:left;padding:11px 16px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);font-weight:600;background:var(--hover);">結果</th>
+              <th style="text-align:left;padding:11px 16px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);font-weight:600;background:var(--hover);">応答</th>
+            </tr></thead>
+            <tbody>
+              <sc-for list="{{ dashboardLogs }}" as="item" hint-placeholder-count="8">
+                <tr style="cursor:pointer;" style-hover="background:var(--hover);" onClick="{{ item.goSource }}">
+                  <td style="padding:12px 16px;border-bottom:1px solid var(--line-2);white-space:nowrap;">{{ item.execLabel }}</td>
+                  <td style="padding:12px 16px;border-bottom:1px solid var(--line-2);color:var(--ink);font-weight:500;">{{ item.sourceName }}</td>
+                  <td style="padding:12px 16px;border-bottom:1px solid var(--line-2);">{{ item.typeLabel }}</td>
+                  <td style="padding:12px 16px;border-bottom:1px solid var(--line-2);{{ item.resultStyle }}">{{ item.resultLabel }}</td>
+                  <td style="padding:12px 16px;border-bottom:1px solid var(--line-2);font-family:var(--mono);">{{ item.responseTimeMs }}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isSources }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <h1 style="font-size:1.4rem;margin:0;">📚 データソース一覧</h1>
+          <button style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:#fff;padding:8px 14px;border-radius:8px;font:inherit;font-size:12.5px;font-weight:600;" onClick="{{ openNew }}">➕ 新規登録</button>
+        </div>
+
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;">
+          <div style="display:flex;flex-direction:column;gap:5px;">
+            <label style="font-size:11px;font-weight:600;color:var(--ink-2);">🔍 キーワード</label>
+            <input style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;width:180px;" placeholder="河川、道路、標高..." value="{{ filters.q }}" onChange="{{ onFilterQChange }}">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px;">
+            <label style="font-size:11px;font-weight:600;color:var(--ink-2);">カテゴリ</label>
+            <select style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ filters.category }}" onChange="{{ onFilterCategoryChange }}">
+              <sc-for list="{{ categoryFilterOptions }}" as="opt" hint-placeholder-count="11"><option value="{{ opt.value }}">{{ opt.label }}</option></sc-for>
+            </select>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px;">
+            <label style="font-size:11px;font-weight:600;color:var(--ink-2);">提供元</label>
+            <select style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ filters.providerId }}" onChange="{{ onFilterProviderChange }}">
+              <sc-for list="{{ providerFilterOptions }}" as="opt" hint-placeholder-count="13"><option value="{{ opt.value }}">{{ opt.label }}</option></sc-for>
+            </select>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px;">
+            <label style="font-size:11px;font-weight:600;color:var(--ink-2);">形式</label>
+            <select style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ filters.dataFormat }}" onChange="{{ onFilterFormatChange }}">
+              <sc-for list="{{ formatFilterOptions }}" as="opt" hint-placeholder-count="11"><option value="{{ opt.value }}">{{ opt.label }}</option></sc-for>
+            </select>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px;">
+            <label style="font-size:11px;font-weight:600;color:var(--ink-2);">🔑 APIキー</label>
+            <select style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ filters.requiresApiKey }}" onChange="{{ onFilterApiKeyChange }}">
+              <option value="">すべて</option><option value="true">必要</option><option value="false">不要</option>
+            </select>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px;">
+            <label style="font-size:11px;font-weight:600;color:var(--ink-2);">接続状態</label>
+            <select style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ filters.status }}" onChange="{{ onFilterStatusChange }}">
+              <sc-for list="{{ statusFilterOptions }}" as="opt" hint-placeholder-count="5"><option value="{{ opt.value }}">{{ opt.label }}</option></sc-for>
+            </select>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px;">
+            <label style="font-size:11px;font-weight:600;color:var(--ink-2);">🏷️ タグ</label>
+            <select style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ filters.tag }}" onChange="{{ onFilterTagChange }}">
+              <sc-for list="{{ tagFilterOptions }}" as="opt" hint-placeholder-count="17"><option value="{{ opt.value }}">{{ opt.label }}</option></sc-for>
+            </select>
+          </div>
+          <a href="#" style="font-size:12.5px;color:var(--muted);padding:8px 4px;" onClick="{{ onClearFilters }}">クリア</a>
+        </div>
+
+        <p style="font-size:12.5px;color:var(--muted);margin:0;">📊 {{ filteredCount }} 件</p>
+
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+            <thead><tr>
+              <th style="text-align:left;padding:11px 16px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);font-weight:600;background:var(--hover);">データソース名</th>
+              <th style="text-align:left;padding:11px 16px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);font-weight:600;background:var(--hover);">提供元</th>
+              <th style="text-align:left;padding:11px 16px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);font-weight:600;background:var(--hover);">カテゴリ</th>
+              <th style="text-align:left;padding:11px 16px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);font-weight:600;background:var(--hover);">形式</th>
+              <th style="text-align:left;padding:11px 16px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);font-weight:600;background:var(--hover);">🔑</th>
+              <th style="text-align:left;padding:11px 16px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);font-weight:600;background:var(--hover);">接続状態</th>
+              <th style="text-align:left;padding:11px 16px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);font-weight:600;background:var(--hover);">品質</th>
+              <th style="text-align:left;padding:11px 16px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);font-weight:600;background:var(--hover);">信頼度</th>
+              <th style="text-align:left;padding:11px 16px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);font-weight:600;background:var(--hover);">最終確認</th>
+            </tr></thead>
+            <tbody>
+              <sc-for list="{{ filteredSources }}" as="item" hint-placeholder-count="10">
+                <tr style="cursor:pointer;" style-hover="background:var(--hover);" onClick="{{ item.goDetail }}">
+                  <td style="padding:12px 16px;border-bottom:1px solid var(--line-2);">
+                    <div style="font-weight:500;color:var(--ink);">{{ item.name }}</div>
+                    <div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:3px;">
+                      <sc-for list="{{ item.tagChips }}" as="chip" hint-placeholder-count="2">
+                        <span style="font-family:var(--mono);background:var(--subtle);color:var(--ink-2);border-radius:5px;padding:1px 6px;font-size:10px;">{{ chip.name }}</span>
+                      </sc-for>
+                    </div>
+                  </td>
+                  <td style="padding:12px 16px;border-bottom:1px solid var(--line-2);">{{ item.providerName }}</td>
+                  <td style="padding:12px 16px;border-bottom:1px solid var(--line-2);">{{ item.categoryLabel }}</td>
+                  <td style="padding:12px 16px;border-bottom:1px solid var(--line-2);">{{ item.dataFormat }}</td>
+                  <td style="padding:12px 16px;border-bottom:1px solid var(--line-2);">{{ item.apiKeyIcon }}</td>
+                  <td style="padding:12px 16px;border-bottom:1px solid var(--line-2);"><span style="{{ item.statusStyle }}">{{ item.statusIcon }} {{ item.statusLabel }}</span></td>
+                  <td style="padding:12px 16px;border-bottom:1px solid var(--line-2);"><span style="{{ item.qualityStyle }}">⭐ {{ item.qualityScore }}</span></td>
+                  <td style="padding:12px 16px;border-bottom:1px solid var(--line-2);color:var(--amber);letter-spacing:1px;">{{ item.trustStarsText }}</td>
+                  <td style="padding:12px 16px;border-bottom:1px solid var(--line-2);color:var(--muted);font-size:11.5px;">{{ item.lastCheckedLabel }}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isSourceDetail }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <a href="#" style="font-size:12px;color:var(--muted);" onClick="{{ backToSources }}">← 一覧に戻る</a>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;">
+          <div>
+            <h1 style="font-size:1.3rem;margin:0;">📄 {{ selectedSource.name }}</h1>
+            <p style="margin:4px 0 0;font-size:12.5px;color:var(--muted);">{{ selectedSource.providerName }} / {{ selectedSource.categoryLabel }}</p>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="{{ selectedSource.statusStyle }}">{{ selectedSource.statusIcon }} {{ selectedSource.statusLabel }}</span>
+            <span style="{{ selectedSource.qualityStyle }}">⭐ {{ selectedSource.qualityScore }}</span>
+            <span style="color:var(--amber);letter-spacing:1px;font-size:13px;">{{ selectedSource.trustStarsText }}</span>
+            <button style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink-2);padding:8px 14px;border-radius:8px;font:inherit;font-size:12.5px;font-weight:600;" onClick="{{ selectedSource.goEdit }}">✏️ 編集</button>
+            <button style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--red-2);background:#fff;color:var(--red);padding:8px 14px;border-radius:8px;font:inherit;font-size:12.5px;font-weight:600;" onClick="{{ selectedSource.goDelete }}">🗑️ 削除</button>
+          </div>
+        </div>
+
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:17px 18px;">
+          <h3 style="margin:0 0 12px;font-size:14px;font-weight:600;color:var(--ink);">🔌 接続確認・サンプル取得</h3>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            <button disabled="{{ checkDisabled }}" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--blue);background:var(--blue);color:#fff;padding:8px 14px;border-radius:8px;font:inherit;font-size:12.5px;font-weight:600;opacity:{{ checkOpacity }};" onClick="{{ runConnectivityCheck }}">{{ checkLabel }}</button>
+            <button disabled="{{ checkDisabled }}" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--green-2);background:var(--green-2);color:#fff;padding:8px 14px;border-radius:8px;font:inherit;font-size:12.5px;font-weight:600;opacity:{{ checkOpacity }};" onClick="{{ runSampleFetch }}">{{ sampleLabel }}</button>
+            <button disabled="{{ checkDisabled }}" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--purple);background:var(--purple);color:#fff;padding:8px 14px;border-radius:8px;font:inherit;font-size:12.5px;font-weight:600;opacity:{{ checkOpacity }};" onClick="{{ runQualityRecalc }}">{{ qualityLabel }}</button>
+          </div>
+          <sc-if value="{{ hasCheckResult }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:12px;border-radius:8px;padding:10px 13px;font-size:13px;{{ checkResultStyle }}">
+              <p style="margin:0;">{{ checkResultText }}</p>
+            </div>
+          </sc-if>
+          <p style="margin:12px 0 0;font-size:11.5px;color:var(--faint);">⏱ タイムアウト30秒 / リダイレクト最大3回 / 取得対象は登録済みURLのみ</p>
+        </div>
+
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start;">
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:17px 18px;">
+            <h2 style="margin:0 0 12px;font-size:14px;font-weight:600;color:var(--ink);">📌 基本情報</h2>
+            <dl style="display:flex;flex-direction:column;gap:11px;margin:0;">
+              <div><dt style="color:var(--muted);font-weight:600;font-size:12px;">概要</dt><dd style="margin:2px 0 0;font-size:12.5px;color:var(--ink);">{{ selectedSource.description }}</dd></div>
+              <div><dt style="color:var(--muted);font-weight:600;font-size:12px;">🔗 公式URL</dt><dd style="margin:2px 0 0;font-size:12.5px;word-break:break-all;"><a href="{{ selectedSource.officialUrl }}" target="_blank" rel="noopener noreferrer">{{ selectedSource.officialUrl }}</a></dd></div>
+              <sc-if value="{{ selectedSource.hasEndpoint }}" hint-placeholder-val="{{ false }}">
+                <div><dt style="color:var(--muted);font-weight:600;font-size:12px;">🔌 APIエンドポイント</dt><dd style="margin:2px 0 0;font-size:12.5px;word-break:break-all;color:var(--ink);">{{ selectedSource.endpointUrl }}</dd></div>
+              </sc-if>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px;">
+                <div><dt style="color:var(--muted);font-weight:600;font-size:12px;">データ形式</dt><dd style="margin:2px 0 0;font-size:12.5px;">{{ selectedSource.dataFormat }}</dd></div>
+                <div><dt style="color:var(--muted);font-weight:600;font-size:12px;">アクセス方式</dt><dd style="margin:2px 0 0;font-size:12.5px;">{{ selectedSource.accessType }}</dd></div>
+                <div><dt style="color:var(--muted);font-weight:600;font-size:12px;">更新頻度</dt><dd style="margin:2px 0 0;font-size:12.5px;">{{ selectedSource.updateFrequencyLabel }}</dd></div>
+                <div><dt style="color:var(--muted);font-weight:600;font-size:12px;">最終確認日</dt><dd style="margin:2px 0 0;font-size:12.5px;">{{ selectedSource.lastCheckedFullLabel }}</dd></div>
+              </div>
+              <div><dt style="color:var(--muted);font-weight:600;font-size:12px;">🏷️ タグ</dt><dd style="margin:5px 0 0;display:flex;flex-wrap:wrap;gap:5px;">
+                <sc-for list="{{ selectedSource.tagChips }}" as="chip" hint-placeholder-count="3">
+                  <span style="border-radius:20px;background:var(--subtle);color:var(--ink-2);padding:2px 9px;font-size:11.5px;">{{ chip.name }}</span>
+                </sc-for>
+              </dd></div>
+              <sc-if value="{{ selectedSource.hasNote }}" hint-placeholder-val="{{ false }}">
+                <div><dt style="color:var(--muted);font-weight:600;font-size:12px;">備考</dt><dd style="margin:2px 0 0;font-size:12.5px;">{{ selectedSource.note }}</dd></div>
+              </sc-if>
+            </dl>
+          </div>
+
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:17px 18px;">
+            <h2 style="margin:0 0 12px;font-size:14px;font-weight:600;color:var(--ink);">📜 利用条件</h2>
+            <dl style="display:flex;flex-direction:column;gap:11px;margin:0;">
+              <div><dt style="color:var(--muted);font-weight:600;font-size:12px;">ライセンス</dt><dd style="margin:2px 0 0;font-size:12.5px;">{{ selectedSource.licenseLabel }}</dd></div>
+              <div><dt style="color:var(--muted);font-weight:600;font-size:12px;">商用利用</dt><dd style="margin:2px 0 0;font-size:12.5px;">{{ selectedSource.commercialUseLabel }}</dd></div>
+              <div><dt style="color:var(--muted);font-weight:600;font-size:12px;">出典表記</dt><dd style="margin:2px 0 0;font-size:12.5px;">{{ selectedSource.attributionLabel }}</dd></div>
+              <div><dt style="color:var(--muted);font-weight:600;font-size:12px;">🔑 APIキー</dt><dd style="margin:2px 0 0;font-size:12.5px;">{{ selectedSource.apiKeyLabel }}</dd></div>
+            </dl>
+            <p style="margin:14px 0 0;border-radius:8px;padding:9px 12px;font-size:11.5px;background:var(--amber-bg);color:var(--amber);">⚠️ 商用利用可否・再配布可否の最終判断は、必ず公式の利用規約を確認して人間が行ってください。</p>
+            <sc-if value="{{ selectedSource.hasUseCases }}" hint-placeholder-val="{{ false }}">
+              <h2 style="margin:16px 0 8px;font-size:14px;font-weight:600;color:var(--ink);">💡 関連ユースケース</h2>
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <sc-for list="{{ selectedSource.useCases }}" as="uc" hint-placeholder-count="1">
+                  <div style="background:var(--subtle);border-radius:7px;padding:7px 10px;">
+                    <div style="font-size:12.5px;font-weight:500;color:var(--ink);">{{ uc.useCaseName }}<span style="margin-left:6px;font-size:11px;font-weight:400;color:var(--muted);">→ {{ uc.targetSystem }}</span></div>
+                    <div style="font-size:11.5px;color:var(--muted);">{{ uc.description }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+
+        <sc-if value="{{ selectedSource.hasQualityChecks }}" hint-placeholder-val="{{ false }}">
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:17px 18px;overflow:auto;">
+            <h2 style="margin:0 0 12px;font-size:14px;font-weight:600;color:var(--ink);">⭐ 品質評価履歴</h2>
+            <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+              <thead><tr>
+                <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">評価日時</th>
+                <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">公式性</th>
+                <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">鮮度</th>
+                <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">接続安定性</th>
+                <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">利用条件</th>
+                <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">形式</th>
+                <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">関連度</th>
+                <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">合計</th>
+              </tr></thead>
+              <tbody>
+                <sc-for list="{{ selectedSource.qualityChecks }}" as="qc" hint-placeholder-count="1">
+                  <tr>
+                    <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);">{{ qc.checkedAtLabel }}</td>
+                    <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);">{{ qc.officialSourceScore }}/20</td>
+                    <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);">{{ qc.freshnessScore }}/15</td>
+                    <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);">{{ qc.accessibilityScore }}/15</td>
+                    <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);">{{ qc.licenseClarityScore }}/15</td>
+                    <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);">{{ qc.formatUsabilityScore }}/15</td>
+                    <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);">{{ qc.constructionRelevanceScore }}/20</td>
+                    <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);font-weight:700;">{{ qc.totalScore }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </sc-if>
+
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:17px 18px;overflow:auto;">
+          <h2 style="margin:0 0 12px;font-size:14px;font-weight:600;color:var(--ink);">🧾 取得ログ（直近）</h2>
+          <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+            <thead><tr>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">実行日時</th>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">種別</th>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">結果</th>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">HTTP</th>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">応答(ms)</th>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">サイズ</th>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">エラー</th>
+            </tr></thead>
+            <tbody>
+              <sc-for list="{{ selectedSource.logs }}" as="item" hint-placeholder-count="4">
+                <tr>
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);white-space:nowrap;">{{ item.execLabel }}</td>
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);">{{ item.typeLabel }}</td>
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);{{ item.resultStyle }}">{{ item.resultLabel }}</td>
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);">{{ item.statusCode }}</td>
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);">{{ item.responseTimeMs }}</td>
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);">{{ item.sizeLabel }}</td>
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);color:var(--red);font-size:11px;">{{ item.errorLabel }}</td>
+                </tr>
+              </sc-for>
+              <sc-if value="{{ selectedSource.hasNoLogs }}" hint-placeholder-val="{{ false }}">
+                <tr><td colspan="7" style="padding:16px;text-align:center;color:var(--faint);">🧾 取得ログはまだありません。</td></tr>
+              </sc-if>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isSourceForm }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:14px;max-width:760px;">
+        <h1 style="font-size:1.3rem;margin:0;">{{ formTitle }}</h1>
+        <form onSubmit="{{ saveForm }}" style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 20px;display:flex;flex-direction:column;gap:14px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+            <div style="display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">📚 データソース名 *</label><input required style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ form.name }}" onChange="{{ onFormName }}"></div>
+            <div style="display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">英語名</label><input style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ form.nameEn }}" onChange="{{ onFormNameEn }}"></div>
+            <div style="display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">🏛️ 提供元</label>
+              <select style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ form.providerId }}" onChange="{{ onFormProviderId }}">
+                <option value="">-- 新規提供元を入力 --</option>
+                <sc-for list="{{ providerOptions }}" as="p" hint-placeholder-count="12"><option value="{{ p.id }}">{{ p.name }}</option></sc-for>
+              </select>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">新規提供元名</label><input disabled="{{ formProviderCustomDisabled }}" style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ form.providerNameCustom }}" onChange="{{ onFormProviderNameCustom }}"></div>
+            <div style="grid-column:1/3;display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">📝 概要</label><textarea rows="3" style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;resize:vertical;" value="{{ form.description }}" onChange="{{ onFormDescription }}"></textarea></div>
+            <div style="display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">🔗 公式URL *</label><input required style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ form.officialUrl }}" onChange="{{ onFormOfficialUrl }}"></div>
+            <div style="display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">🔌 APIエンドポイントURL</label><input style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ form.endpointUrl }}" onChange="{{ onFormEndpointUrl }}"></div>
+            <div style="display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">カテゴリ *</label>
+              <select style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ form.category }}" onChange="{{ onFormCategory }}">
+                <sc-for list="{{ categoryOptions }}" as="c" hint-placeholder-count="10"><option value="{{ c.value }}">{{ c.label }}</option></sc-for>
+              </select>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">データ形式 *</label>
+              <select style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ form.dataFormat }}" onChange="{{ onFormDataFormat }}">
+                <sc-for list="{{ formatOptions }}" as="f" hint-placeholder-count="10"><option value="{{ f }}">{{ f }}</option></sc-for>
+              </select>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">アクセス方式 *</label>
+              <select style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ form.accessType }}" onChange="{{ onFormAccessType }}">
+                <sc-for list="{{ accessOptions }}" as="a" hint-placeholder-count="5"><option value="{{ a }}">{{ a }}</option></sc-for>
+              </select>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">ステータス</label>
+              <select style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ form.status }}" onChange="{{ onFormStatus }}">
+                <sc-for list="{{ statusOptions }}" as="s" hint-placeholder-count="4"><option value="{{ s.value }}">{{ s.label }}</option></sc-for>
+              </select>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">🔑 APIキー要否</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;color:var(--ink);padding-top:6px;"><input type="checkbox" checked="{{ form.requiresApiKey }}" onChange="{{ onFormRequiresApiKey }}"> APIキーが必要</label></div>
+            <div style="display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">APIキー環境変数名</label><input disabled="{{ formApiKeyEnvDisabled }}" placeholder="ESTAT_APP_ID" style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ form.apiKeyEnvName }}" onChange="{{ onFormApiKeyEnvName }}"></div>
+            <div style="display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">📜 ライセンス名</label><input style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ form.licenseName }}" onChange="{{ onFormLicenseName }}"></div>
+            <div style="display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">商用利用</label>
+              <select style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ form.commercialUse }}" onChange="{{ onFormCommercialUse }}">
+                <sc-for list="{{ commercialOptions }}" as="o" hint-placeholder-count="3"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+              </select>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">出典表記</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;color:var(--ink);padding-top:6px;"><input type="checkbox" checked="{{ form.attributionRequired }}" onChange="{{ onFormAttributionRequired }}"> 出典表記が必要</label></div>
+            <div style="display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">更新頻度</label><input placeholder="daily / monthly / irregular" style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ form.updateFrequency }}" onChange="{{ onFormUpdateFrequency }}"></div>
+            <div style="display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">⭐ 信頼度 (1〜5)</label><input type="number" min="1" max="5" style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ form.trustLevel }}" onChange="{{ onFormTrustLevel }}"></div>
+            <div style="display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">📊 品質スコア (0〜100)</label><input type="number" min="0" max="100" style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ form.qualityScore }}" onChange="{{ onFormQualityScore }}"></div>
+            <div style="grid-column:1/3;display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">🏷️ タグ</label>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                <sc-for list="{{ tagsForForm }}" as="t" hint-placeholder-count="16">
+                  <span style="{{ t.chipStyle }}" onClick="{{ t.toggle }}"><span style="width:7px;height:7px;border-radius:2px;background:{{ t.color }};display:inline-block;margin-right:4px;"></span>{{ t.name }}</span>
+                </sc-for>
+              </div>
+            </div>
+            <div style="grid-column:1/3;display:flex;flex-direction:column;gap:5px;"><label style="font-size:12px;font-weight:600;color:var(--ink-2);">備考</label><textarea rows="2" style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;resize:vertical;" value="{{ form.note }}" onChange="{{ onFormNote }}"></textarea></div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button type="submit" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:#fff;padding:9px 16px;border-radius:8px;font:inherit;font-size:13px;font-weight:600;">{{ formSubmitLabel }}</button>
+            <button type="button" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink-2);padding:9px 16px;border-radius:8px;font:inherit;font-size:13px;font-weight:600;" onClick="{{ cancelForm }}">キャンセル</button>
+          </div>
+        </form>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isMap }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div>
+          <h1 style="font-size:1.4rem;margin:0;">🗺️ 地図表示</h1>
+          <p style="margin:6px 0 0;font-size:12.5px;color:var(--muted);">OpenStreetMapによる地図表示。地図をクリックすると標高の目安を表示します（シミュレーション値）。</p>
+        </div>
+        <div ref="{{ mapRef }}" style="height:460px;border-radius:var(--radius);border:1px solid var(--line);overflow:hidden;"></div>
+        <sc-if value="{{ hasMapClick }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 13px;font-size:12.5px;box-shadow:var(--shadow);max-width:320px;">
+            <div>📍 {{ mapClick.lat }}, {{ mapClick.lng }}</div>
+            <div>{{ mapClick.elevationLine }}</div>
+          </div>
+        </sc-if>
+        <p style="font-size:11px;color:var(--faint);margin:0;">🏷️ 出典: 地図データは <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> の貢献者によって提供されています（© OpenStreetMap contributors）。標高値はプレビュー環境のためシミュレーションです。</p>
+
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:17px 18px;">
+          <h2 style="margin:0 0 8px;font-size:14px;font-weight:600;color:var(--ink);">📐 GeoJSON オーバーレイ</h2>
+          <p style="margin:0 0 8px;font-size:11.5px;color:var(--muted);">GeoJSON (FeatureCollection 等) を貼り付けると地図上に表示します。データはブラウザ内でのみ処理されます。</p>
+          <textarea rows="4" placeholder='{"type":"FeatureCollection","features":[...]}' style="width:100%;font:inherit;font-family:var(--mono);font-size:12px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;box-sizing:border-box;" value="{{ geoJsonText }}" onChange="{{ onGeoJsonTextChange }}"></textarea>
+          <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
+            <button style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--blue);background:var(--blue);color:#fff;padding:8px 14px;border-radius:8px;font:inherit;font-size:12.5px;font-weight:600;" onClick="{{ applyGeoJson }}">🗺️ 地図に表示</button>
+            <button style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink-2);padding:8px 14px;border-radius:8px;font:inherit;font-size:12.5px;font-weight:600;" onClick="{{ clearGeoJson }}">クリア</button>
+            <span style="font-size:12.5px;">{{ geoJsonMessage }}</span>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isLogs }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <h1 style="font-size:1.4rem;margin:0;">🧾 取得ログ一覧</h1>
+          <select style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ logsFilter }}" onChange="{{ onLogsFilterChange }}">
+            <option value="all">すべて</option><option value="success">✅ 成功のみ</option><option value="fail">❌ 失敗のみ</option>
+          </select>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:17px 18px;">
+          <p style="margin:0 0 10px;font-size:11.5px;color:var(--muted);">📊 直近 {{ filteredLogsCount }} 件を表示</p>
+          <div style="overflow:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+            <thead><tr>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">実行日時</th>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">データソース</th>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">種別</th>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">結果</th>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">HTTP</th>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">応答(ms)</th>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">サイズ</th>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">エラー</th>
+            </tr></thead>
+            <tbody>
+              <sc-for list="{{ filteredLogs }}" as="item" hint-placeholder-count="10">
+                <tr style="cursor:pointer;" style-hover="background:var(--hover);" onClick="{{ item.goSource }}">
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);white-space:nowrap;">{{ item.execLabel }}</td>
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);">{{ item.sourceName }}</td>
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);">{{ item.typeLabel }}</td>
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);{{ item.resultStyle }}">{{ item.resultLabel }}</td>
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);">{{ item.statusCode }}</td>
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);">{{ item.responseTimeMs }}</td>
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);">{{ item.sizeLabel }}</td>
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);color:var(--red);font-size:11px;">{{ item.errorLabel }}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isAudit }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+          <h1 style="font-size:1.4rem;margin:0;">🔍 監査ログ</h1>
+          <div style="display:flex;gap:8px;">
+            <button style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink-2);padding:8px 14px;border-radius:8px;font:inherit;font-size:12.5px;font-weight:600;" onClick="{{ exportAuditCsv }}">📊 CSV</button>
+            <button style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink-2);padding:8px 14px;border-radius:8px;font:inherit;font-size:12.5px;font-weight:600;" onClick="{{ exportAuditPdf }}">📕 PDF</button>
+            <button style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink-2);padding:8px 14px;border-radius:8px;font:inherit;font-size:12.5px;font-weight:600;" onClick="{{ exportAuditHtml }}">🌐 HTML</button>
+          </div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:17px 18px;overflow:auto;">
+          <p style="margin:0 0 10px;font-size:11.5px;color:var(--muted);">📊 {{ auditLogsCount }} 件の操作履歴</p>
+          <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+            <thead><tr>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">日時</th>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">実行者</th>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">操作</th>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">対象</th>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">詳細</th>
+              <th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-2);font-size:11px;color:var(--muted);">レベル</th>
+            </tr></thead>
+            <tbody>
+              <sc-for list="{{ auditLogsView }}" as="item" hint-placeholder-count="8">
+                <tr>
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);white-space:nowrap;">{{ item.occurredLabel }}</td>
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);">{{ item.actor }}</td>
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);">{{ item.action }}</td>
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);">{{ item.target }}</td>
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);color:var(--ink-2);">{{ item.detail }}</td>
+                  <td style="padding:9px 12px;border-bottom:1px solid var(--line-2);"><span style="{{ item.levelStyle }}">{{ item.levelLabel }}</span></td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isTags }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <h1 style="font-size:1.4rem;margin:0;">🏷️ タグ管理</h1>
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:17px 18px;">
+          <h2 style="margin:0 0 10px;font-size:14px;font-weight:600;color:var(--ink);">➕ タグ追加</h2>
+          <form onSubmit="{{ addTag }}" style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;">
+            <div style="display:flex;flex-direction:column;gap:5px;"><label style="font-size:11px;font-weight:600;color:var(--ink-2);">🏷️ タグ名</label><input required style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;width:200px;" value="{{ newTagName }}" onChange="{{ onNewTagNameChange }}"></div>
+            <div style="display:flex;flex-direction:column;gap:5px;"><label style="font-size:11px;font-weight:600;color:var(--ink-2);">色</label>
+              <div style="display:flex;gap:5px;">
+                <sc-for list="{{ colorSwatches }}" as="sw" hint-placeholder-count="8">
+                  <span onClick="{{ sw.onClick }}" style="width:22px;height:22px;border-radius:6px;cursor:pointer;background:{{ sw.hex }};{{ sw.ring }}"></span>
+                </sc-for>
+              </div>
+            </div>
+            <button type="submit" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:#fff;padding:8px 14px;border-radius:8px;font:inherit;font-size:12.5px;font-weight:600;">➕ 追加</button>
+          </form>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:17px 18px;">
+          <h2 style="margin:0 0 10px;font-size:14px;font-weight:600;color:var(--ink);">📚 登録済みタグ</h2>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            <sc-for list="{{ tagsWithCounts }}" as="t" hint-placeholder-count="16">
+              <span onClick="{{ t.goFilter }}" style="display:inline-flex;align-items:center;gap:6px;border-radius:20px;border:1px solid var(--line);padding:6px 13px;font-size:12.5px;cursor:pointer;background:#fff;">
+                <span style="width:9px;height:9px;border-radius:50%;background:{{ t.color }};"></span>{{ t.name }}<span style="font-size:11px;color:var(--faint);">({{ t.count }})</span>
+              </span>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:14px;max-width:640px;">
+        <h1 style="font-size:1.4rem;margin:0;">⚙️ 設定</h1>
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:17px 18px;">
+          <h2 style="margin:0 0 10px;font-size:14px;font-weight:600;color:var(--ink);">🔧 接続確認の動作設定</h2>
+          <div style="display:flex;flex-direction:column;gap:11px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+              <label style="font-size:13px;color:var(--ink-2);">⏱ タイムアウト</label>
+              <select style="font:inherit;font-size:13px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ settings.timeoutSec }}" onChange="{{ onSettingTimeout }}">
+                <sc-for list="{{ timeoutOptions }}" as="o" hint-placeholder-count="4"><option value="{{ o }}">{{ o }} 秒</option></sc-for>
+              </select>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+              <label style="font-size:13px;color:var(--ink-2);">🔁 リダイレクト上限</label>
+              <select style="font:inherit;font-size:13px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ settings.redirectLimit }}" onChange="{{ onSettingRedirect }}">
+                <sc-for list="{{ redirectOptions }}" as="o" hint-placeholder-count="4"><option value="{{ o }}">{{ o }} 回</option></sc-for>
+              </select>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+              <label style="font-size:13px;color:var(--ink-2);">📦 プレビュー保存上限</label>
+              <select style="font:inherit;font-size:13px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ settings.previewKb }}" onChange="{{ onSettingPreview }}">
+                <sc-for list="{{ previewOptions }}" as="o" hint-placeholder-count="4"><option value="{{ o }}">{{ o }} KB</option></sc-for>
+              </select>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+              <label style="font-size:13px;color:var(--ink-2);">⚠️ 要確認となる未確認期間</label>
+              <select style="font:inherit;font-size:13px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ settings.staleDays }}" onChange="{{ onSettingStale }}">
+                <sc-for list="{{ staleDaysOptions }}" as="o" hint-placeholder-count="4"><option value="{{ o }}">{{ o }} 日</option></sc-for>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:17px 18px;">
+          <h2 style="margin:0 0 10px;font-size:14px;font-weight:600;color:var(--ink);">🔑 APIキーの設定</h2>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="display:flex;flex-direction:column;gap:5px;">
+              <label style="font-size:12px;font-weight:600;color:var(--ink-2);">対象データソース</label>
+              <select style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ apiKeySourceId }}" onChange="{{ onApiKeySourceChange }}">
+                <sc-for list="{{ apiKeySourceOptions }}" as="o" hint-placeholder-count="2"><option value="{{ o.id }}">{{ o.label }}</option></sc-for>
+              </select>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:5px;">
+              <label style="font-size:12px;font-weight:600;color:var(--ink-2);">APIキー</label>
+              <input type="password" placeholder="APIキーを入力" style="font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);outline:none;" value="{{ apiKeyInputValue }}" onChange="{{ onApiKeyInputChange }}">
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--blue);background:var(--blue);color:#fff;padding:8px 14px;border-radius:8px;font:inherit;font-size:12.5px;font-weight:600;" onClick="{{ testApiKey }}">{{ apiKeyTestLabel }}</button>
+              <button style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:#fff;padding:8px 14px;border-radius:8px;font:inherit;font-size:12.5px;font-weight:600;" onClick="{{ saveApiKey }}">💾 保存</button>
+              <button style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink-2);padding:8px 14px;border-radius:8px;font:inherit;font-size:12.5px;font-weight:600;" onClick="{{ clearApiKeyInput }}">入力クリア</button>
+            </div>
+            <sc-if value="{{ hasApiKeyFeedback }}" hint-placeholder-val="{{ false }}">
+              <p style="margin:0;font-size:12.5px;{{ apiKeyFeedbackStyle }}">{{ apiKeyFeedbackText }}</p>
+            </sc-if>
+            <sc-if value="{{ hasSavedApiKey }}" hint-placeholder-val="{{ false }}">
+              <p style="margin:0;font-size:11.5px;color:var(--muted);">🔒 保存済み: <span style="font-family:var(--mono);">{{ savedApiKeyMasked }}</span>（{{ savedApiKeyAtLabel }}）</p>
+            </sc-if>
+          </div>
+          <p style="margin:12px 0 0;border-radius:8px;padding:9px 12px;font-size:11.5px;background:var(--red-bg);color:var(--red);">🚫 APIキーの値はブラウザ内にのみ保持され、外部へ送信されません。本番運用では <code>.env</code> に保存し、GitHub へは絶対にコミットしないでください。</p>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:17px 18px;">
+          <h2 style="margin:0 0 10px;font-size:14px;font-weight:600;color:var(--ink);">🛡️ セキュリティ制約</h2>
+          <ul style="margin:0;padding-left:20px;font-size:13px;color:var(--ink-2);display:flex;flex-direction:column;gap:5px;">
+            <li>取得対象は登録済みデータソースのURLのみ（任意URL取得は不可）</li>
+            <li>localhost・private IP・内部ドメインへのアクセスは拒否</li>
+            <li>http / https 以外のスキームは拒否</li>
+            <li>リダイレクト先も同じ検証を通過したもののみ追従</li>
+          </ul>
+        </div>
+      </div>
+    </sc-if>
+
+  </main>
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const CATEGORIES = [
+  {value:"gis",label:"国土・GIS"},{value:"3d-city",label:"3D都市"},{value:"road",label:"道路"},
+  {value:"map-elevation",label:"地図・標高"},{value:"weather",label:"気象・防災"},{value:"statistics",label:"統計"},
+  {value:"map",label:"地図情報"},{value:"municipality",label:"自治体"},{value:"research",label:"研究"},{value:"construction",label:"建設関連"},
+];
+const DATA_FORMATS = ["JSON","XML","CSV","GeoJSON","HTML","PDF","CityGML","PNG","Shapefile","other"];
+const ACCESS_TYPES = ["API","download","tile","web","manual"];
+const SOURCE_STATUSES = [
+  {value:"active",label:"接続成功"},{value:"unstable",label:"接続不安定"},
+  {value:"deprecated",label:"非推奨"},{value:"unknown",label:"未確認"},
+];
+const COMMERCIAL_USE_OPTIONS = [
+  {value:"allowed",label:"商用利用可"},{value:"restricted",label:"制限あり"},{value:"unknown",label:"要確認"},
+];
+const ERROR_TYPE_MESSAGES = {
+  timeout:"接続がタイムアウトしました", network:"ネットワーク接続に失敗しました",
+  invalid_url:"URL形式が正しくありません", auth_required:"APIキーまたは認証が必要です",
+  parse_error:"レスポンス形式を判定できませんでした", rate_limited:"アクセス制限の可能性があります",
+  blocked_url:"取得が許可されていないURLです", unknown:"不明なエラーが発生しました",
+};
+const STALE_DAYS = 90;
+const PALETTE = ["#dc2626","#ea580c","#ca8a04","#16a34a","#0891b2","#2563eb","#7c3aed","#4b5563"];
+
+function categoryLabel(v){ const c=CATEGORIES.find(x=>x.value===v); return c?c.label:v; }
+function statusLabel(v){ const s=SOURCE_STATUSES.find(x=>x.value===v); return s?s.label:v; }
+function fmtDate(d){ if(!d) return "未確認"; return new Date(d).toLocaleDateString("ja-JP"); }
+function fmtDateTime(d){ if(!d) return "-"; return new Date(d).toLocaleString("ja-JP"); }
+function daysAgo(d){ if(!d) return Infinity; return (Date.now() - new Date(d).getTime())/86400000; }
+function fmtBytes(n){ if(n==null) return "-"; if(n<1024) return n+" B"; if(n<1024*1024) return (n/1024).toFixed(1)+" KB"; return (n/(1024*1024)).toFixed(1)+" MB"; }
+function trustStars(level){ return "★".repeat(level)+"☆".repeat(Math.max(0,5-level)); }
+
+const STATUS_COLORS = {
+  active:{fg:"var(--green)",bg:"var(--green-bg)",icon:"✅"},
+  unstable:{fg:"var(--red)",bg:"var(--red-bg)",icon:"❌"},
+  deprecated:{fg:"var(--ink-2)",bg:"var(--subtle)",icon:"🚫"},
+  unknown:{fg:"var(--amber)",bg:"var(--amber-bg)",icon:"⚠️"},
+};
+function statusBadgeStyle(status){
+  const c = STATUS_COLORS[status] || STATUS_COLORS.unknown;
+  return `display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;color:${c.fg};background:${c.bg};`;
+}
+function qualityColor(score){
+  if(score>=80) return {fg:"var(--green)",bg:"var(--green-bg)"};
+  if(score>=60) return {fg:"var(--blue)",bg:"var(--blue-bg)"};
+  if(score>=40) return {fg:"var(--amber)",bg:"var(--amber-bg)"};
+  return {fg:"var(--red)",bg:"var(--red-bg)"};
+}
+function qualityBadgeStyle(score){
+  const c = qualityColor(score);
+  return `display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;color:${c.fg};background:${c.bg};`;
+}
+
+const PROVIDERS = [
+  "国土交通省","国土地理院","気象庁","総務省統計局","OpenStreetMap Foundation",
+  "日本道路交通情報センター(JARTIC)","防災科学技術研究所","内閣府","デジタル庁","東京都",
+  "科学技術振興機構(JST)","USGS",
+].map((name,i)=>({id:"pv-"+i, name}));
+function providerNameById(id){ const p=PROVIDERS.find(x=>x.id===id); return p?p.name:null; }
+
+const INITIAL_TAGS = [
+  {name:"災害",color:"#dc2626"},{name:"河川",color:"#0ea5e9"},{name:"道路",color:"#6b7280"},
+  {name:"地形",color:"#92400e"},{name:"標高",color:"#b45309"},{name:"気象",color:"#2563eb"},
+  {name:"交通",color:"#7c3aed"},{name:"都市計画",color:"#059669"},{name:"3D都市",color:"#0891b2"},
+  {name:"維持管理",color:"#4b5563"},{name:"施工判断",color:"#ea580c"},{name:"工事候補地",color:"#ca8a04"},
+  {name:"統計",color:"#9333ea"},{name:"自治体",color:"#16a34a"},{name:"APIキー必要",color:"#e11d48"},
+  {name:"利用条件要確認",color:"#f59e0b"},
+].map((t,i)=>({id:"tg-"+i, name:t.name, color:t.color}));
+
+const RAW_SOURCES = [
+  {name:"国土数値情報", nameEn:"National Land Numerical Information", providerName:"国土交通省",
+    description:"地形、土地利用、公共施設、交通、災害リスク、都市計画、地価など国土に関する基礎的なGISデータを無償提供。",
+    officialUrl:"https://nlftp.mlit.go.jp/ksj/", category:"gis", dataFormat:"GeoJSON", accessType:"download",
+    requiresApiKey:false, licenseName:"国土数値情報ダウンロードサービス利用約款", commercialUse:"allowed",
+    updateFrequency:"yearly", status:"active", trustLevel:5, qualityScore:90, lastCheckedAt:"2026-07-10",
+    tags:["災害","都市計画","地形","交通"], useCases:[{useCaseName:"工事候補地の災害リスク確認", targetSystem:"Site Risk Checker", description:"土砂災害警戒区域・浸水想定区域データの活用"}]},
+  {name:"PLATEAU", nameEn:"Project PLATEAU", providerName:"国土交通省",
+    description:"国土交通省主導の3D都市モデル整備・活用・オープンデータ化プロジェクト。CityGML形式の都市モデルを提供。",
+    officialUrl:"https://www.mlit.go.jp/plateau/", endpointUrl:"https://www.geospatial.jp/ckan/dataset/plateau",
+    category:"3d-city", dataFormat:"CityGML", accessType:"download", requiresApiKey:false,
+    licenseName:"PLATEAU Sites 利用規約 (CC BY 4.0 相当)", commercialUse:"allowed", updateFrequency:"yearly",
+    status:"active", trustLevel:5, qualityScore:85, lastCheckedAt:"2026-06-28",
+    tags:["3D都市","都市計画"], useCases:[{useCaseName:"都市デジタルツイン構築", targetSystem:"", description:"建物・都市構造の3D可視化"}]},
+  {name:"xROAD 道路データプラットフォーム", nameEn:"xROAD", providerName:"国土交通省",
+    description:"国土交通省道路局の道路データ利活用DX施策。道路基盤地図情報、交通量データ等の公開を推進。",
+    officialUrl:"https://www.xroad.mlit.go.jp/", category:"road", dataFormat:"other", accessType:"web",
+    requiresApiKey:false, commercialUse:"unknown", updateFrequency:"irregular", status:"unstable",
+    trustLevel:4, qualityScore:70, lastCheckedAt:"2026-05-02",
+    note:"データセットごとに利用条件が異なるため個別確認が必要",
+    tags:["道路","交通","維持管理","利用条件要確認"], useCases:[{useCaseName:"建設物流ルート検討", targetSystem:"Logistics Route Planner", description:""}]},
+  {name:"JARTIC 交通量API", nameEn:"JARTIC Traffic Volume API", providerName:"日本道路交通情報センター(JARTIC)",
+    description:"常時観測交通量データ等を提供するAPI。xROAD施策と連携した道路交通データ源。",
+    officialUrl:"https://www.jartic.or.jp/", endpointUrl:"https://api.jartic-open-traffic.org/geoserver",
+    category:"road", dataFormat:"JSON", accessType:"API", requiresApiKey:false, commercialUse:"restricted",
+    updateFrequency:"hourly", status:"active", trustLevel:4, qualityScore:70, lastCheckedAt:"2026-07-15",
+    tags:["交通","道路","利用条件要確認"], useCases:[{useCaseName:"工事車両の交通量影響確認", targetSystem:"", description:"施工計画時の周辺交通量把握"}]},
+  {name:"地理院タイル", nameEn:"GSI Tiles", providerName:"国土地理院",
+    description:"標準地図、写真、標高タイルなどをXYZ形式で提供する国土地理院の地図タイルサービス。",
+    officialUrl:"https://maps.gsi.go.jp/development/ichiran.html", endpointUrl:"https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
+    category:"map-elevation", dataFormat:"PNG", accessType:"tile", requiresApiKey:false,
+    licenseName:"国土地理院コンテンツ利用規約", commercialUse:"allowed", updateFrequency:"irregular",
+    status:"active", trustLevel:5, qualityScore:90, lastCheckedAt:"2026-07-16",
+    tags:["地形","道路"], useCases:[{useCaseName:"現場周辺の地図表示", targetSystem:"", description:"背景地図としての利用"}]},
+  {name:"国土地理院 標高API", nameEn:"GSI Elevation API", providerName:"国土地理院",
+    description:"指定した緯度経度の標高値をJSONで返すAPI。地形・災害リスク分析の基礎データとして利用可能。",
+    officialUrl:"https://maps.gsi.go.jp/development/elevation_s.html", endpointUrl:"https://cyberjapandata2.gsi.go.jp/general/dem/scripts/getelevation.php",
+    category:"map-elevation", dataFormat:"JSON", accessType:"API", requiresApiKey:false,
+    licenseName:"国土地理院コンテンツ利用規約", commercialUse:"allowed", updateFrequency:"irregular",
+    status:"active", trustLevel:5, qualityScore:90, lastCheckedAt:"2026-07-17",
+    tags:["標高","地形","工事候補地"], useCases:[{useCaseName:"工事候補地の標高・地形確認", targetSystem:"Site Risk Checker", description:""}]},
+  {name:"気象庁 防災情報XML", nameEn:"JMA Disaster Prevention Information XML", providerName:"気象庁",
+    description:"気象警報・地震・津波等の防災情報をXML形式でPULL型提供。Atomフィードから電文を取得できる。",
+    officialUrl:"https://xml.kishou.go.jp/", endpointUrl:"https://www.data.jma.go.jp/developer/xml/feed/regular.xml",
+    category:"weather", dataFormat:"XML", accessType:"API", requiresApiKey:false,
+    licenseName:"気象庁ホームページ利用規約 (CC BY 4.0 互換)", commercialUse:"allowed", updateFrequency:"realtime",
+    status:"active", trustLevel:5, qualityScore:85, lastCheckedAt:"2026-07-17",
+    tags:["気象","災害","施工判断"], useCases:[{useCaseName:"気象・河川による施工判断支援", targetSystem:"Weather & Water Decision", description:""}]},
+  {name:"e-Stat API", nameEn:"e-Stat API", providerName:"総務省統計局",
+    description:"政府統計の総合窓口。人口、地域統計、産業統計等をREST APIで機械判読可能な形式で提供。APIキー(appId)が必要。",
+    officialUrl:"https://www.e-stat.go.jp/api/", endpointUrl:"https://api.e-stat.go.jp/rest/3.0/app/json/getStatsList",
+    category:"statistics", dataFormat:"JSON", accessType:"API", requiresApiKey:true, apiKeyEnvName:"ESTAT_APP_ID",
+    licenseName:"e-Stat 利用規約", commercialUse:"allowed", updateFrequency:"monthly",
+    status:"active", trustLevel:5, qualityScore:85, lastCheckedAt:"2026-07-01",
+    tags:["統計","APIキー必要"], useCases:[{useCaseName:"地域人口・産業統計の把握", targetSystem:"", description:"工事エリアの地域特性分析"}]},
+  {name:"OpenStreetMap (Overpass API)", nameEn:"OpenStreetMap", providerName:"OpenStreetMap Foundation",
+    description:"コミュニティによる自由な地図データ。道路、施設、POI等をOverpass APIで取得可能。ODbLライセンス。",
+    officialUrl:"https://www.openstreetmap.org/", endpointUrl:"https://overpass-api.de/api/status",
+    category:"map", dataFormat:"JSON", accessType:"API", requiresApiKey:false,
+    licenseName:"ODbL 1.0", commercialUse:"allowed", updateFrequency:"realtime",
+    status:"unstable", trustLevel:4, qualityScore:75, lastCheckedAt:"2026-04-20",
+    note:"再配布時はODbLの条件(出典表記・同一ライセンス)に従うこと",
+    tags:["道路","地形"], useCases:[{useCaseName:"現場周辺施設の確認", targetSystem:"", description:"POI・道路網の参照"}]},
+  {name:"ハザードマップポータルサイト", providerName:"国土地理院",
+    description:"洪水・土砂災害・津波等のリスク情報を重ねて表示できるポータル。重ねるハザードマップのタイルも公開。",
+    officialUrl:"https://disaportal.gsi.go.jp/", category:"weather", dataFormat:"PNG", accessType:"tile",
+    requiresApiKey:false, licenseName:"国土地理院コンテンツ利用規約", commercialUse:"allowed",
+    updateFrequency:"irregular", status:"active", trustLevel:5, qualityScore:85, lastCheckedAt:"2026-07-12",
+    tags:["災害","工事候補地"], useCases:[{useCaseName:"工事候補地の災害リスク確認", targetSystem:"Site Risk Checker", description:""}]},
+  {name:"川の防災情報", providerName:"国土交通省",
+    description:"河川水位・雨量・洪水予報等のリアルタイム防災情報を提供する国土交通省のサイト。",
+    officialUrl:"https://www.river.go.jp/", category:"weather", dataFormat:"HTML", accessType:"web",
+    requiresApiKey:false, commercialUse:"unknown", updateFrequency:"realtime", status:"unknown",
+    trustLevel:5, qualityScore:75, lastCheckedAt:null,
+    tags:["河川","災害","施工判断","利用条件要確認"], useCases:[{useCaseName:"河川水位による施工判断", targetSystem:"Weather & Water Decision", description:""}]},
+  {name:"道路交通センサス", providerName:"国土交通省",
+    description:"全国道路・街路交通情勢調査。区間別交通量・旅行速度等の調査結果を公開。",
+    officialUrl:"https://www.mlit.go.jp/road/census/r3/", category:"road", dataFormat:"other", accessType:"download",
+    requiresApiKey:false, commercialUse:"unknown", updateFrequency:"irregular", status:"unknown",
+    trustLevel:5, qualityScore:70, lastCheckedAt:"2026-02-10",
+    tags:["道路","交通","統計"], useCases:[{useCaseName:"建設物流ルート検討", targetSystem:"Logistics Route Planner", description:""}]},
+  {name:"NETIS 新技術情報提供システム", providerName:"国土交通省",
+    description:"公共工事等における新技術の情報を共有するデータベース。技術検索・活用効果の確認が可能。",
+    officialUrl:"https://www.netis.mlit.go.jp/netis/", category:"construction", dataFormat:"HTML", accessType:"web",
+    requiresApiKey:false, commercialUse:"unknown", updateFrequency:"irregular", status:"unknown",
+    trustLevel:5, qualityScore:70, lastCheckedAt:null,
+    tags:["維持管理","施工判断","利用条件要確認"], useCases:[{useCaseName:"新技術の採用検討", targetSystem:"", description:"施工計画時の工法比較"}]},
+  {name:"J-SHIS 地震ハザードステーション", nameEn:"J-SHIS", providerName:"防災科学技術研究所",
+    description:"確率論的地震動予測地図等の地震ハザード情報を提供。Web APIで地点ごとのハザード情報を取得可能。",
+    officialUrl:"https://www.j-shis.bosai.go.jp/", endpointUrl:"https://www.j-shis.bosai.go.jp/map/api/pshm/",
+    category:"weather", dataFormat:"GeoJSON", accessType:"API", requiresApiKey:false,
+    licenseName:"J-SHIS 利用規約 (CC BY 4.0)", commercialUse:"allowed", updateFrequency:"yearly",
+    status:"active", trustLevel:5, qualityScore:85, lastCheckedAt:"2026-07-05",
+    tags:["災害","工事候補地"], useCases:[{useCaseName:"工事候補地の地震ハザード評価", targetSystem:"Site Risk Checker", description:""}]},
+  {name:"RESAS API", nameEn:"RESAS API", providerName:"内閣府",
+    description:"地域経済分析システム(RESAS)のデータをAPIで提供。人口・産業・観光等の地域データを取得可能。",
+    officialUrl:"https://opendata.resas-portal.go.jp/", endpointUrl:"https://opendata.resas-portal.go.jp/api/v1/prefectures",
+    category:"statistics", dataFormat:"JSON", accessType:"API", requiresApiKey:true, apiKeyEnvName:"RESAS_API_KEY",
+    licenseName:"RESAS API利用規約", commercialUse:"allowed", updateFrequency:"yearly",
+    status:"active", trustLevel:5, qualityScore:80, lastCheckedAt:"2026-06-15",
+    tags:["統計","APIキー必要"], useCases:[{useCaseName:"地域経済・人口動態の把握", targetSystem:"", description:"進出エリアの市場分析"}]},
+  {name:"東京都オープンデータカタログサイト", providerName:"東京都",
+    description:"東京都と都内区市町村のオープンデータを横断検索できるカタログ。CKAN APIを提供。",
+    officialUrl:"https://portal.data.metro.tokyo.lg.jp/", endpointUrl:"https://catalog.data.metro.tokyo.lg.jp/api/3/action/package_search",
+    category:"municipality", dataFormat:"JSON", accessType:"API", requiresApiKey:false,
+    licenseName:"CC BY 4.0 (原則)", commercialUse:"allowed", updateFrequency:"daily",
+    status:"active", trustLevel:4, qualityScore:80, lastCheckedAt:"2026-07-08",
+    tags:["自治体","統計"], useCases:[{useCaseName:"都内の公共施設・避難所データ取得", targetSystem:"Disaster Insight Map", description:""}]},
+  {name:"J-STAGE", providerName:"科学技術振興機構(JST)",
+    description:"国内の学協会誌等の学術論文プラットフォーム。土木学会論文集等を検索・閲覧可能。",
+    officialUrl:"https://www.jstage.jst.go.jp/", endpointUrl:"https://api.jstage.jst.go.jp/searchapi/do",
+    category:"research", dataFormat:"XML", accessType:"API", requiresApiKey:false,
+    commercialUse:"unknown", updateFrequency:"daily", status:"unknown", trustLevel:5, qualityScore:70,
+    lastCheckedAt:null, tags:["利用条件要確認"], useCases:[{useCaseName:"工法・技術の文献調査", targetSystem:"", description:"設計根拠の技術調査"}]},
+  {name:"USGS Earthquake API", nameEn:"USGS Earthquake Hazards API", providerName:"USGS",
+    description:"米国地質調査所の地震カタログAPI。世界の地震情報をGeoJSONで取得可能。",
+    officialUrl:"https://earthquake.usgs.gov/", endpointUrl:"https://earthquake.usgs.gov/fdsnws/event/1/query",
+    category:"weather", dataFormat:"GeoJSON", accessType:"API", requiresApiKey:false,
+    licenseName:"Public Domain (USGS)", commercialUse:"allowed", updateFrequency:"realtime",
+    status:"active", trustLevel:5, qualityScore:85, lastCheckedAt:"2026-07-14",
+    tags:["災害"], useCases:[{useCaseName:"世界の地震情報モニタリング", targetSystem:"", description:"海外拠点のリスク把握"}]},
+];
+
+const RAW_LOGS = [
+  {sourceName:"国土地理院 標高API", executedAt:"2026-07-17T09:12:00", executionType:"check", success:true, statusCode:200, responseTimeMs:142, responseSizeBytes:1280},
+  {sourceName:"気象庁 防災情報XML", executedAt:"2026-07-17T08:50:00", executionType:"check", success:true, statusCode:200, responseTimeMs:310, responseSizeBytes:45210},
+  {sourceName:"e-Stat API", executedAt:"2026-07-01T14:20:00", executionType:"sample", success:true, statusCode:200, responseTimeMs:610, responseSizeBytes:8820},
+  {sourceName:"xROAD 道路データプラットフォーム", executedAt:"2026-05-02T10:05:00", executionType:"check", success:false, errorType:"timeout"},
+  {sourceName:"OpenStreetMap (Overpass API)", executedAt:"2026-04-20T16:40:00", executionType:"check", success:false, statusCode:429, responseTimeMs:980, errorType:"rate_limited"},
+  {sourceName:"地理院タイル", executedAt:"2026-07-16T11:02:00", executionType:"check", success:true, statusCode:200, responseTimeMs:88, responseSizeBytes:15400},
+  {sourceName:"JARTIC 交通量API", executedAt:"2026-07-15T07:30:00", executionType:"check", success:true, statusCode:200, responseTimeMs:265, responseSizeBytes:3200},
+  {sourceName:"PLATEAU", executedAt:"2026-06-28T13:15:00", executionType:"sample", success:true, statusCode:200, responseTimeMs:540, responseSizeBytes:128000},
+  {sourceName:"国土数値情報", executedAt:"2026-07-10T09:40:00", executionType:"check", success:true, statusCode:200, responseTimeMs:190, responseSizeBytes:2100},
+  {sourceName:"ハザードマップポータルサイト", executedAt:"2026-07-12T10:00:00", executionType:"check", success:true, statusCode:200, responseTimeMs:120, responseSizeBytes:9800},
+  {sourceName:"J-SHIS 地震ハザードステーション", executedAt:"2026-07-05T15:22:00", executionType:"check", success:true, statusCode:200, responseTimeMs:410, responseSizeBytes:6400},
+  {sourceName:"RESAS API", executedAt:"2026-06-15T09:00:00", executionType:"check", success:true, statusCode:200, responseTimeMs:350, responseSizeBytes:4100},
+  {sourceName:"東京都オープンデータカタログサイト", executedAt:"2026-07-08T12:11:00", executionType:"check", success:true, statusCode:200, responseTimeMs:220, responseSizeBytes:5300},
+  {sourceName:"USGS Earthquake API", executedAt:"2026-07-14T05:00:00", executionType:"check", success:true, statusCode:200, responseTimeMs:300, responseSizeBytes:2600},
+  {sourceName:"道路交通センサス", executedAt:"2026-02-10T09:00:00", executionType:"check", success:false, statusCode:404, responseTimeMs:500, errorType:"invalid_url"},
+  {sourceName:"J-STAGE", executedAt:"2026-03-01T08:00:00", executionType:"check", success:false, errorType:"network"},
+];
+
+let uidCounter = 1000;
+function nextId(prefix){ uidCounter += 1; return prefix + "-" + uidCounter; }
+
+function buildSeed(){
+  const tags = INITIAL_TAGS.map(t=>({...t}));
+  const tagMap = {}; tags.forEach(t=>{ tagMap[t.name]=t.id; });
+  const provMap = {}; PROVIDERS.forEach(p=>{ provMap[p.name]=p.id; });
+  const sources = RAW_SOURCES.map((r,i)=>({
+    id:"src-"+i, name:r.name, nameEn:r.nameEn||"", providerId: provMap[r.providerName]||PROVIDERS[0].id, providerNameCustom:"",
+    description:r.description, officialUrl:r.officialUrl, endpointUrl:r.endpointUrl||"", documentationUrl:r.documentationUrl||"",
+    category:r.category, dataFormat:r.dataFormat, accessType:r.accessType,
+    requiresApiKey:!!r.requiresApiKey, apiKeyEnvName:r.apiKeyEnvName||"",
+    licenseName:r.licenseName||"", commercialUse:r.commercialUse, attributionRequired: r.attributionRequired!==false,
+    updateFrequency:r.updateFrequency||"", status:r.status, trustLevel:r.trustLevel, qualityScore:r.qualityScore,
+    lastCheckedAt:r.lastCheckedAt||null, createdAt:r.lastCheckedAt||"2026-01-15",
+    note:r.note||"", tagIds:(r.tags||[]).map(n=>tagMap[n]).filter(Boolean),
+    useCases:r.useCases||[], qualityChecks:[],
+  }));
+  const fetchLogs = RAW_LOGS.map((l,i)=>({
+    id:"log-"+i, sourceName:l.sourceName, executedAt:l.executedAt, executionType:l.executionType,
+    success:l.success, statusCode: l.statusCode!=null?l.statusCode:null, responseTimeMs: l.responseTimeMs!=null?l.responseTimeMs:null,
+    responseSizeBytes: l.responseSizeBytes!=null?l.responseSizeBytes:null, errorType:l.errorType||null,
+  }));
+  return {sources, tags, fetchLogs};
+}
+
+const EMPTY_FILTERS = {q:"",category:"",providerId:"",dataFormat:"",requiresApiKey:"",status:"",tag:""};
+const EMPTY_FORM = {name:"",nameEn:"",providerId:"",providerNameCustom:"",description:"",officialUrl:"",endpointUrl:"",
+  documentationUrl:"",category:"gis",dataFormat:"JSON",accessType:"API",requiresApiKey:false,apiKeyEnvName:"",
+  licenseName:"",commercialUse:"unknown",attributionRequired:true,updateFrequency:"",status:"unknown",
+  trustLevel:3,qualityScore:0,note:"",tagIds:[]};
+
+function sourceToForm(s){
+  return {name:s.name,nameEn:s.nameEn||"",providerId:s.providerId||"",providerNameCustom:s.providerNameCustom||"",
+    description:s.description||"",officialUrl:s.officialUrl,endpointUrl:s.endpointUrl||"",documentationUrl:s.documentationUrl||"",
+    category:s.category,dataFormat:s.dataFormat,accessType:s.accessType,requiresApiKey:s.requiresApiKey,
+    apiKeyEnvName:s.apiKeyEnvName||"",licenseName:s.licenseName||"",commercialUse:s.commercialUse,
+    attributionRequired:s.attributionRequired,updateFrequency:s.updateFrequency||"",status:s.status,
+    trustLevel:s.trustLevel,qualityScore:s.qualityScore,note:s.note||"",tagIds:[...s.tagIds]};
+}
+
+const VIEW_META = {
+  dashboard:{title:"🏠 ダッシュボード", sub:"登録データソースの状況を一目で確認"},
+  sources:{title:"📚 データソース一覧", sub:"公開データ・公開APIを検索・絞り込み"},
+  sourceDetail:{title:"📄 データソース詳細", sub:"接続確認・品質評価・取得ログ"},
+  sourceNew:{title:"➕ データソース新規登録", sub:"公開データ・公開APIを台帳に追加"},
+  sourceEdit:{title:"✏️ データソース編集", sub:"登録内容を更新"},
+  map:{title:"🗺️ 地図表示", sub:"地理院タイル・標高取得（プレースホルダー）"},
+  logs:{title:"🧾 取得ログ一覧", sub:"接続確認・サンプル取得の実行履歴"},
+  audit:{title:"🔍 監査ログ", sub:"操作・イベントの証跡とエクスポート"},
+  tags:{title:"🏷️ タグ管理", sub:"データソースの分類タグを管理"},
+  settings:{title:"⚙️ 設定", sub:"接続確認の動作設定とセキュリティ制約"},
+};
+
+const AUDIT_LEVELS = {
+  info:{fg:"var(--blue)",bg:"var(--blue-bg)",label:"情報"},
+  success:{fg:"var(--green)",bg:"var(--green-bg)",label:"成功"},
+  warning:{fg:"var(--amber)",bg:"var(--amber-bg)",label:"警告"},
+  danger:{fg:"var(--red)",bg:"var(--red-bg)",label:"危険"},
+};
+function auditLevelStyle(level){
+  const c = AUDIT_LEVELS[level] || AUDIT_LEVELS.info;
+  return `display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;color:${c.fg};background:${c.bg};`;
+}
+function maskKey(v){ if(v.length<=4) return "*".repeat(v.length); return v.slice(0,2)+"*".repeat(Math.max(0,v.length-4))+v.slice(-2); }
+function buildInitialAudit(){
+  const rows = [
+    {occurredAt:"2026-07-17T09:05:00", actor:"管理者", action:"ログイン", target:"-", detail:"MVP認証なし環境", level:"success"},
+    {occurredAt:"2026-07-17T09:12:30", actor:"システム", action:"接続確認実行", target:"国土地理院 標高API", detail:"疎通確認 成功", level:"success"},
+    {occurredAt:"2026-07-15T10:12:00", actor:"管理者", action:"データソース更新", target:"JARTIC 交通量API", detail:"ステータスをactiveに変更", level:"info"},
+    {occurredAt:"2026-07-12T08:40:00", actor:"システム", action:"要確認アラート", target:"川の防災情報", detail:"最終確認日が未設定", level:"warning"},
+    {occurredAt:"2026-05-02T10:05:30", actor:"システム", action:"接続失敗検知", target:"xROAD 道路データプラットフォーム", detail:"タイムアウト", level:"danger"},
+    {occurredAt:"2026-04-21T09:00:00", actor:"管理者", action:"タグ追加", target:"利用条件要確認", detail:"新規タグを登録", level:"info"},
+    {occurredAt:"2026-03-02T11:20:00", actor:"管理者", action:"データソース削除", target:"（重複データ）", detail:"重複登録のため削除", level:"danger"},
+    {occurredAt:"2026-02-10T09:00:00", actor:"システム", action:"設定変更", target:"接続確認タイムアウト", detail:"30秒 → 60秒", level:"info"},
+  ];
+  return rows.map((r,i)=>({id:"aud-"+i, ...r}));
+}
+
+class Component extends DCLogic {
+  state = (() => { const seed = buildSeed(); return {
+    view:"dashboard", sources:seed.sources, tags:seed.tags, fetchLogs:seed.fetchLogs,
+    selectedId:null, filters:{...EMPTY_FILTERS}, searchQuery:"",
+    checkBusy:null, checkResult:null,
+    form:null, formMode:null, newTagName:"", newTagColor:"#2563eb",
+    mapClick:null, geoJsonText:"", geoJsonMessage:"",
+    logsFilter:"all",
+    settings:{timeoutSec:30, redirectLimit:3, previewKb:4, staleDays:90},
+    apiKeySourceId: (seed.sources.find(x=>x.requiresApiKey)||{}).id || "",
+    apiKeyInputValue:"", apiKeyTesting:false, apiKeyTestResult:null, savedApiKeys:{},
+    auditLogs: buildInitialAudit(),
+  };})();
+
+  _fieldHandlers = {};
+  bindForm(key){
+    if(!this._fieldHandlers[key]){
+      this._fieldHandlers[key] = (e) => {
+        const val = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+        this.setState(s => ({ form: { ...s.form, [key]: val } }));
+      };
+    }
+    return this._fieldHandlers[key];
+  }
+  bindFilter(key){
+    const cacheKey = "filter_"+key;
+    if(!this._fieldHandlers[cacheKey]){
+      this._fieldHandlers[cacheKey] = (e) => {
+        const val = e.target.value;
+        this.setState(s => ({ filters: { ...s.filters, [key]: val } }));
+      };
+    }
+    return this._fieldHandlers[cacheKey];
+  }
+
+  getSource(id){ return this.state.sources.find(s=>s.id===id); }
+  getSourceByName(n){ return this.state.sources.find(s=>s.name===n); }
+  pushAudit(action, target, detail, level){
+    this.setState(s => ({ auditLogs:[{id:nextId("aud"), occurredAt:new Date().toISOString(), actor:"管理者", action, target, detail, level: level||"info"}, ...s.auditLogs] }));
+  }
+
+  goView(v){ this.setState({view:v}); }
+  openSource(id){ this.setState({view:"sourceDetail", selectedId:id, checkResult:null, checkBusy:null}); }
+  backToSources(e){ if(e&&e.preventDefault) e.preventDefault(); this.setState({view:"sources", selectedId:null}); }
+  openNew(){ this.setState({view:"sourceNew", formMode:"new", form:{...EMPTY_FORM}}); }
+  openEdit(id){ const src=this.getSource(id); this.setState({view:"sourceEdit", formMode:"edit", selectedId:id, form:sourceToForm(src)}); }
+  cancelForm(){ this.setState(s => s.formMode==="edit" ? {view:"sourceDetail", form:null, formMode:null} : {view:"sources", form:null, formMode:null}); }
+
+  saveForm(e){
+    e.preventDefault();
+    const wasNew = this.state.formMode === "new";
+    const nameForAudit = this.state.form.name;
+    this.setState(s => {
+      const f = s.form;
+      if(s.formMode === "new"){
+        const id = nextId("src");
+        const newSrc = {
+          id, name:f.name, nameEn:f.nameEn, providerId:f.providerId||"", providerNameCustom:f.providerId?"":f.providerNameCustom,
+          description:f.description, officialUrl:f.officialUrl, endpointUrl:f.endpointUrl, documentationUrl:f.documentationUrl,
+          category:f.category, dataFormat:f.dataFormat, accessType:f.accessType, requiresApiKey:f.requiresApiKey,
+          apiKeyEnvName:f.apiKeyEnvName, licenseName:f.licenseName, commercialUse:f.commercialUse,
+          attributionRequired:f.attributionRequired, updateFrequency:f.updateFrequency, status:f.status,
+          trustLevel:Number(f.trustLevel)||3, qualityScore:Number(f.qualityScore)||0, note:f.note,
+          tagIds:[...f.tagIds], useCases:[], qualityChecks:[], lastCheckedAt:null, createdAt:new Date().toISOString(),
+        };
+        return { sources:[newSrc, ...s.sources], view:"sourceDetail", selectedId:id, form:null, formMode:null };
+      }
+      const sources = s.sources.map(x => x.id===s.selectedId ? {
+        ...x, name:f.name, nameEn:f.nameEn, providerId:f.providerId||"", providerNameCustom:f.providerId?"":f.providerNameCustom,
+        description:f.description, officialUrl:f.officialUrl, endpointUrl:f.endpointUrl, documentationUrl:f.documentationUrl,
+        category:f.category, dataFormat:f.dataFormat, accessType:f.accessType, requiresApiKey:f.requiresApiKey,
+        apiKeyEnvName:f.apiKeyEnvName, licenseName:f.licenseName, commercialUse:f.commercialUse,
+        attributionRequired:f.attributionRequired, updateFrequency:f.updateFrequency, status:f.status,
+        trustLevel:Number(f.trustLevel)||3, qualityScore:Number(f.qualityScore)||0, note:f.note, tagIds:[...f.tagIds],
+      } : x);
+      return { sources, view:"sourceDetail", form:null, formMode:null };
+    });
+    this.pushAudit(wasNew?"データソース登録":"データソース更新", nameForAudit, wasNew?"新規登録":"内容を更新", "info");
+  }
+
+  deleteSource(id){
+    const src = this.getSource(id);
+    if(!src) return;
+    if(!window.confirm(`「${src.name}」を削除しますか？関連する取得ログも削除されます。`)) return;
+    this.setState(s => ({
+      sources: s.sources.filter(x=>x.id!==id),
+      fetchLogs: s.fetchLogs.filter(l=>l.sourceName!==src.name),
+      view:"sources", selectedId:null,
+    }));
+    this.pushAudit("データソース削除", src.name, "台帳から削除", "danger");
+  }
+
+  toggleFormTag(id){
+    this.setState(s => {
+      const has = s.form.tagIds.includes(id);
+      const tagIds = has ? s.form.tagIds.filter(x=>x!==id) : [...s.form.tagIds, id];
+      return { form: { ...s.form, tagIds } };
+    });
+  }
+
+  runConnectivityCheck(){
+    if(this.state.checkBusy || !this.state.selectedId) return;
+    const src = this.getSource(this.state.selectedId);
+    this.setState({checkBusy:"check"});
+    setTimeout(() => {
+      const fail = src.status === "unstable";
+      const result = fail
+        ? {success:false, statusCode:null, responseTimeMs:null, contentType:null, message:ERROR_TYPE_MESSAGES.timeout, errorType:"timeout"}
+        : {success:true, statusCode:200, responseTimeMs:120+Math.floor(Math.random()*300), contentType:src.dataFormat, responseSizeBytes:2000+Math.floor(Math.random()*8000), message:null};
+      this.setState(s => {
+        const sources = s.sources.map(x => x.id===src.id ? {...x, lastCheckedAt:new Date().toISOString().slice(0,10), status: result.success?"active":x.status} : x);
+        const fetchLogs = [{id:nextId("log"), sourceName:src.name, executedAt:new Date().toISOString(), executionType:"check",
+          success:result.success, statusCode:result.statusCode, responseTimeMs:result.responseTimeMs,
+          responseSizeBytes:result.responseSizeBytes||null, errorType: result.success?null:result.errorType}, ...s.fetchLogs];
+        return { sources, fetchLogs, checkBusy:null, checkResult:{kind:"check", data:result} };
+      });
+      this.pushAudit("接続確認実行", src.name, result.success?"疎通確認 成功":"疎通確認 失敗", result.success?"success":"danger");
+    }, 800);
+  }
+
+  runSampleFetch(){
+    if(this.state.checkBusy || !this.state.selectedId) return;
+    const src = this.getSource(this.state.selectedId);
+    this.setState({checkBusy:"fetch-sample"});
+    setTimeout(() => {
+      const result = {success:true, statusCode:200, responseTimeMs:200+Math.floor(Math.random()*500), detectedFormat:src.dataFormat, responseSizeBytes:1500+Math.floor(Math.random()*20000), message:"サンプルを取得しました"};
+      this.setState(s => {
+        const fetchLogs = [{id:nextId("log"), sourceName:src.name, executedAt:new Date().toISOString(), executionType:"sample",
+          success:true, statusCode:200, responseTimeMs:result.responseTimeMs, responseSizeBytes:result.responseSizeBytes, errorType:null}, ...s.fetchLogs];
+        return { fetchLogs, checkBusy:null, checkResult:{kind:"fetch-sample", data:result} };
+      });
+      this.pushAudit("サンプル取得実行", src.name, "サンプルデータを取得", "success");
+    }, 900);
+  }
+
+  runQualityRecalc(){
+    if(this.state.checkBusy || !this.state.selectedId) return;
+    this.setState({checkBusy:"quality"});
+    setTimeout(() => {
+      this.setState(s => {
+        const src = s.sources.find(x=>x.id===s.selectedId);
+        const officialSourceScore = Math.min(20, src.trustLevel*4);
+        const fresh = daysAgo(src.lastCheckedAt);
+        const freshnessScore = fresh<=7?15: fresh<=30?11: fresh<=90?7:3;
+        const accessibilityScore = src.status==="active"?15: src.status==="unstable"?7:4;
+        const licenseClarityScore = src.commercialUse==="unknown"?5: src.licenseName?15:10;
+        const formatUsabilityScore = ["JSON","GeoJSON","CSV","XML","CityGML"].includes(src.dataFormat)?15: src.dataFormat==="PNG"?10:6;
+        const constructionRelevanceScore = Math.min(20, 8+src.tagIds.length*2);
+        const totalScore = officialSourceScore+freshnessScore+accessibilityScore+licenseClarityScore+formatUsabilityScore+constructionRelevanceScore;
+        const qc = {id:nextId("qc"), checkedAt:new Date().toISOString(), officialSourceScore, freshnessScore, accessibilityScore, licenseClarityScore, formatUsabilityScore, constructionRelevanceScore, totalScore};
+        const sources = s.sources.map(x => x.id===src.id ? {...x, qualityScore:totalScore, qualityChecks:[qc, ...x.qualityChecks]} : x);
+        return { sources, checkBusy:null };
+      });
+      const src2 = this.getSource(this.state.selectedId);
+      if(src2) this.pushAudit("品質スコア再計算", src2.name, "スコア: "+src2.qualityScore, "info");
+    }, 700);
+  }
+
+  filterByCategory(v){ this.setState({filters:{...EMPTY_FILTERS, category:v}, view:"sources"}); }
+  filterByTag(id){ this.setState({filters:{...EMPTY_FILTERS, tag:id}, view:"sources"}); }
+  clearFilters(e){ if(e&&e.preventDefault) e.preventDefault(); this.setState({filters:{...EMPTY_FILTERS}}); }
+  runQuickSearch(){ this.setState(s => ({filters:{...EMPTY_FILTERS, q:s.searchQuery}, view:"sources"})); }
+  onSearchKeyDown(e){ if(e.key==="Enter") this.runQuickSearch(); }
+  onSearchQueryChange(e){ this.setState({searchQuery:e.target.value}); }
+  goLogsPreventDefault(e){ e.preventDefault(); this.setState({view:"logs"}); }
+
+  mapRefCallback(node){
+    if(!node){
+      if(this._leafletMap){ this._leafletMap.remove(); this._leafletMap=null; this._leafletMarker=null; this._geoJsonLayer=null; }
+      return;
+    }
+    if(this._leafletMap || !window.L) return;
+    const map = window.L.map(node).setView([36.2, 138.2], 6);
+    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors', maxZoom:19,
+    }).addTo(map);
+    map.on("click", (e)=>this.onMapClick(e));
+    this._leafletMap = map;
+    if(this.state.mapClick) this.placeMarker(this.state.mapClick.lat, this.state.mapClick.lng);
+  }
+  placeMarker(lat, lng){
+    if(!this._leafletMap || !window.L) return;
+    if(this._leafletMarker) this._leafletMap.removeLayer(this._leafletMarker);
+    this._leafletMarker = window.L.marker([Number(lat), Number(lng)]).addTo(this._leafletMap);
+  }
+  onMapClick(e){
+    const lat = e.latlng.lat.toFixed(5), lng = e.latlng.lng.toFixed(5);
+    this.placeMarker(lat, lng);
+    this.setState({mapClick:{lat, lng, loading:true, elevation:null}});
+    setTimeout(() => {
+      this.setState(s => s.mapClick ? {mapClick:{...s.mapClick, loading:false, elevation: Math.round(Math.abs(Math.sin(lat*3)*Math.cos(lng*3))*380+5)}} : s);
+    }, 700);
+  }
+  applyGeoJson(){
+    this.setState(s => {
+      if(!s.geoJsonText.trim()) return {geoJsonMessage:""};
+      try {
+        const data = JSON.parse(s.geoJsonText);
+        if(this._leafletMap && window.L){
+          if(this._geoJsonLayer) this._leafletMap.removeLayer(this._geoJsonLayer);
+          this._geoJsonLayer = window.L.geoJSON(data, {style:{color:"#dc2626", weight:2}}).addTo(this._leafletMap);
+          try { this._leafletMap.fitBounds(this._geoJsonLayer.getBounds(), {maxZoom:14}); } catch(err2){}
+        }
+        return {geoJsonMessage:"✅ 地図に反映しました"};
+      } catch(err){ return {geoJsonMessage:"⚠️ JSON の構文が正しくありません"}; }
+    });
+  }
+  clearGeoJson(){
+    if(this._geoJsonLayer && this._leafletMap){ this._leafletMap.removeLayer(this._geoJsonLayer); this._geoJsonLayer=null; }
+    this.setState({geoJsonText:"", geoJsonMessage:""});
+  }
+  onGeoJsonTextChange(e){ this.setState({geoJsonText:e.target.value}); }
+
+  addTag(e){
+    e.preventDefault();
+    const name = this.state.newTagName.trim();
+    if(!name) return;
+    this.setState(s => ({ tags:[...s.tags, {id:nextId("tag"), name, color:s.newTagColor}], newTagName:"" }));
+    this.pushAudit("タグ追加", name, "新規タグを登録", "info");
+  }
+  onNewTagNameChange(e){ this.setState({newTagName:e.target.value}); }
+  pickColor(hex){ this.setState({newTagColor:hex}); }
+  onLogsFilterChange(e){ this.setState({logsFilter:e.target.value}); }
+
+  onSettingTimeout(e){ const v=Number(e.target.value); this.setState(s=>({settings:{...s.settings, timeoutSec:v}})); this.pushAudit("設定変更","タイムアウト", v+"秒に変更","info"); }
+  onSettingRedirect(e){ const v=Number(e.target.value); this.setState(s=>({settings:{...s.settings, redirectLimit:v}})); this.pushAudit("設定変更","リダイレクト上限", v+"回に変更","info"); }
+  onSettingPreview(e){ const v=Number(e.target.value); this.setState(s=>({settings:{...s.settings, previewKb:v}})); this.pushAudit("設定変更","プレビュー保存上限", v+"KBに変更","info"); }
+  onSettingStale(e){ const v=Number(e.target.value); this.setState(s=>({settings:{...s.settings, staleDays:v}})); this.pushAudit("設定変更","要確認となる未確認期間", v+"日に変更","info"); }
+
+  onApiKeySourceChange(e){ this.setState({apiKeySourceId:e.target.value, apiKeyTestResult:null}); }
+  onApiKeyInputChange(e){ this.setState({apiKeyInputValue:e.target.value}); }
+  testApiKey(){
+    const val = this.state.apiKeyInputValue.trim();
+    if(!val){ this.setState({apiKeyTestResult:{ok:false, msg:"⚠️ APIキーを入力してください"}}); return; }
+    this.setState({apiKeyTesting:true});
+    setTimeout(() => {
+      const ok = val.length>=6;
+      this.setState({apiKeyTesting:false, apiKeyTestResult:{ok, msg: ok?"✅ 有効な形式です(実際の疎通確認は保存後にデータソース詳細から実行してください)":"❌ 形式が正しくない可能性があります(6文字以上を推奨)"}});
+      const src = this.getSource(this.state.apiKeySourceId);
+      this.pushAudit("APIキーのテスト", src?src.name:"-", ok?"形式チェックOK":"形式チェックNG", ok?"info":"warning");
+    }, 600);
+  }
+  saveApiKey(){
+    const val = this.state.apiKeyInputValue.trim();
+    if(!val) return;
+    const id = this.state.apiKeySourceId;
+    this.setState(s => ({ savedApiKeys:{...s.savedApiKeys, [id]:{maskedValue:maskKey(val), savedAt:new Date().toISOString()}}, apiKeyTestResult:{ok:true, msg:"✅ 保存しました(値はブラウザ内のみに保持され、送信されません)"} }));
+    const src = this.getSource(id);
+    this.pushAudit("APIキー保存", src?src.name:"-", "環境変数への保存をシミュレート", "success");
+  }
+  clearApiKeyInput(){ this.setState({apiKeyInputValue:"", apiKeyTestResult:null}); }
+
+  downloadBlob(content, filename, mime){
+    const blob = new Blob([content], {type:mime});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  }
+  auditRowsForExport(){
+    return this.state.auditLogs.map(a => [fmtDateTime(a.occurredAt), a.actor, a.action, a.target, a.detail, (AUDIT_LEVELS[a.level]||AUDIT_LEVELS.info).label]);
+  }
+  exportAuditCsv(){
+    const header = ["日時","実行者","操作","対象","詳細","レベル"];
+    const rows = [header, ...this.auditRowsForExport()];
+    const csv = rows.map(r => r.map(v => '"'+String(v==null?"":v).replace(/"/g,'""')+'"').join(",")).join("\r\n");
+    this.downloadBlob("\uFEFF"+csv, "audit-log.csv", "text/csv;charset=utf-8;");
+    this.pushAudit("エクスポート","監査ログ","CSV形式で出力","info");
+  }
+  auditHtmlDoc(){
+    const rowsHtml = this.auditRowsForExport().map(r => "<tr>"+r.map(v=>"<td>"+v+"</td>").join("")+"</tr>").join("");
+    return "<!doctype html><html><head><meta charset=\"utf-8\"><title>監査ログ</title><style>body{font-family:sans-serif;padding:24px;color:#1A2433;}h1{font-size:20px;}table{border-collapse:collapse;width:100%;margin-top:12px;}th,td{border:1px solid #E3E8EF;padding:6px 10px;font-size:12.5px;text-align:left;}th{background:#F2F4F8;}</style></head><body><h1>🔍 監査ログ</h1><table><thead><tr><th>日時</th><th>実行者</th><th>操作</th><th>対象</th><th>詳細</th><th>レベル</th></tr></thead><tbody>"+rowsHtml+"</tbody></table></body></html>";
+  }
+  exportAuditHtml(){
+    this.downloadBlob(this.auditHtmlDoc(), "audit-log.html", "text/html;charset=utf-8;");
+    this.pushAudit("エクスポート","監査ログ","HTML形式で出力","info");
+  }
+  exportAuditPdf(){
+    const w = window.open("", "_blank");
+    if(!w) return;
+    const tag1 = String.fromCharCode(60) + "script>window.onload=function(){window.print();};" + String.fromCharCode(60) + "/script>";
+    w.document.write(this.auditHtmlDoc() + tag1);
+    w.document.close();
+    this.pushAudit("エクスポート","監査ログ","PDF形式で出力(印刷ダイアログ)","info");
+  }
+
+  navStyle(key, active){
+    return active
+      ? "position:relative;display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;background:var(--side-2);color:var(--ink);"
+      : "position:relative;display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;color:var(--side-fg);";
+  }
+
+  renderVals() {
+    const s = this.state;
+    const view = s.view;
+    const isSourcesGroup = view==="sources" || view==="sourceDetail" || view==="sourceNew" || view==="sourceEdit";
+
+    const navDef = [
+      {key:"dashboard", icon:"🏠", label:"ダッシュボード", group:1},
+      {key:"sources", icon:"📚", label:"データソース", group:2},
+      {key:"map", icon:"🗺️", label:"地図", group:2},
+      {key:"logs", icon:"🧾", label:"取得ログ", group:3},
+      {key:"audit", icon:"🔍", label:"監査ログ", group:3},
+      {key:"tags", icon:"🏷️", label:"タグ管理", group:3},
+      {key:"settings", icon:"⚙️", label:"設定", group:3},
+    ].map(n => {
+      const active = n.key==="sources" ? isSourcesGroup : view===n.key;
+      return { ...n, style:this.navStyle(n.key, active), barBg: active?"var(--accent)":"transparent", onClick:()=>this.goView(n.key) };
+    });
+    const navGroup1 = navDef.filter(n=>n.group===1);
+    const navGroup2 = navDef.filter(n=>n.group===2);
+    const navGroup3 = navDef.filter(n=>n.group===3);
+
+    const meta = VIEW_META[view] || VIEW_META.dashboard;
+
+    // KPIs
+    const total = s.sources.length;
+    const active = s.sources.filter(x=>x.status==="active").length;
+    const failed = s.sources.filter(x=>x.status==="unstable"||x.status==="deprecated").length;
+    const needsReview = s.sources.filter(x=> x.status==="unknown" || x.commercialUse==="unknown" || !x.lastCheckedAt || daysAgo(x.lastCheckedAt)>s.settings.staleDays).length;
+    const kpis = [
+      {label:"登録データソース", value:total, dot:"var(--blue-2)", sub:"全カテゴリ合計", subColor:"var(--muted)"},
+      {label:"接続成功", value:active, dot:"var(--green-2)", sub:active+" 件 稼働中", subColor:"var(--green)"},
+      {label:"接続失敗", value:failed, dot:"var(--red-2)", sub:"要対応", subColor:"var(--red)"},
+      {label:"要確認", value:needsReview, dot:"var(--amber)", sub:"未確認・要確認", subColor:"var(--amber)"},
+    ];
+
+    // category breakdown
+    const catCounts = CATEGORIES.map(c => ({label:c.label, value:c.value, count:s.sources.filter(x=>x.category===c.value).length}));
+    const maxCat = Math.max(1, ...catCounts.map(c=>c.count));
+    const categoryBreakdown = catCounts.filter(c=>c.count>0).map(c => ({label:c.label, count:c.count, pct:Math.round(c.count/maxCat*100), onClick:()=>this.filterByCategory(c.value)}));
+
+    // recent sources
+    const recentSources = [...s.sources].sort((a,b)=> new Date(b.createdAt||0) - new Date(a.createdAt||0)).slice(0,5).map(src => ({
+      id:src.id, name:src.name, providerName: providerNameById(src.providerId)||src.providerNameCustom||"-",
+      statusStyle: statusBadgeStyle(src.status), statusIcon: (STATUS_COLORS[src.status]||STATUS_COLORS.unknown).icon, statusLabel: statusLabel(src.status),
+      goDetail: ()=>this.openSource(src.id),
+    }));
+
+    const sortedLogs = [...s.fetchLogs].sort((a,b)=> new Date(b.executedAt) - new Date(a.executedAt));
+    const decorateLog = (l) => {
+      const src = this.getSourceByName(l.sourceName);
+      return { ...l,
+        execLabel: fmtDateTime(l.executedAt), sourceName: l.sourceName,
+        typeLabel: l.executionType==="sample"?"📦 サンプル":"🔌 疎通",
+        resultLabel: l.success?"✅ 成功":"❌ 失敗",
+        resultStyle: l.success?"color:var(--green);font-weight:600;":"color:var(--red);font-weight:600;",
+        sizeLabel: fmtBytes(l.responseSizeBytes),
+        errorLabel: l.errorType ? (ERROR_TYPE_MESSAGES[l.errorType]||l.errorType) : "",
+        goSource: src ? ()=>this.openSource(src.id) : ()=>{},
+      };
+    };
+    const dashboardLogs = sortedLogs.slice(0,8).map(decorateLog);
+
+    // filters / sources list
+    const f = s.filters;
+    const filteredSourcesRaw = s.sources.filter(x => {
+      if(f.q){
+        const q = f.q.toLowerCase();
+        if(!(x.name.toLowerCase().includes(q) || (x.nameEn||"").toLowerCase().includes(q) || (x.description||"").toLowerCase().includes(q))) return false;
+      }
+      if(f.category && x.category!==f.category) return false;
+      if(f.providerId && x.providerId!==f.providerId) return false;
+      if(f.dataFormat && x.dataFormat!==f.dataFormat) return false;
+      if(f.requiresApiKey==="true" && !x.requiresApiKey) return false;
+      if(f.requiresApiKey==="false" && x.requiresApiKey) return false;
+      if(f.status && x.status!==f.status) return false;
+      if(f.tag && !x.tagIds.includes(f.tag)) return false;
+      return true;
+    }).sort((a,b)=> new Date(b.createdAt||0) - new Date(a.createdAt||0));
+
+    const tagById = {}; s.tags.forEach(t=>{ tagById[t.id]=t; });
+    const filteredSources = filteredSourcesRaw.map(src => ({
+      id:src.id, name:src.name, providerName: providerNameById(src.providerId)||src.providerNameCustom||"-",
+      categoryLabel: categoryLabel(src.category), dataFormat:src.dataFormat, apiKeyIcon: src.requiresApiKey?"🔑":"-",
+      statusStyle: statusBadgeStyle(src.status), statusIcon:(STATUS_COLORS[src.status]||STATUS_COLORS.unknown).icon, statusLabel: statusLabel(src.status),
+      qualityStyle: qualityBadgeStyle(src.qualityScore), qualityScore:src.qualityScore, trustStarsText: trustStars(src.trustLevel),
+      lastCheckedLabel: fmtDate(src.lastCheckedAt),
+      tagChips: src.tagIds.map(id=>({name: tagById[id]?tagById[id].name:""})),
+      goDetail: ()=>this.openSource(src.id),
+    }));
+
+    const categoryFilterOptions = [{value:"",label:"すべて"}, ...CATEGORIES];
+    const providerFilterOptions = [{value:"",label:"すべて"}, ...PROVIDERS];
+    const formatFilterOptions = [{value:"",label:"すべて"}, ...DATA_FORMATS.map(x=>({value:x,label:x}))];
+    const statusFilterOptions = [{value:"",label:"すべて"}, ...SOURCE_STATUSES];
+    const tagFilterOptions = [{value:"",label:"すべて"}, ...s.tags.map(t=>({value:t.id,label:t.name}))];
+
+    // selected source detail
+    let selectedSource = null;
+    if(s.selectedId){
+      const src = this.getSource(s.selectedId);
+      if(src){
+        selectedSource = {
+          id:src.id, name:src.name, providerName: providerNameById(src.providerId)||src.providerNameCustom||"-",
+          categoryLabel: categoryLabel(src.category), description:src.description||"", officialUrl:src.officialUrl,
+          hasEndpoint: !!src.endpointUrl, endpointUrl:src.endpointUrl,
+          dataFormat:src.dataFormat, accessType:src.accessType, updateFrequencyLabel: src.updateFrequency||"不明",
+          lastCheckedFullLabel: src.lastCheckedAt? fmtDateTime(src.lastCheckedAt) : "未確認",
+          tagChips: src.tagIds.map(id=>({name: tagById[id]?tagById[id].name:""})),
+          hasNote: !!src.note, note:src.note,
+          licenseLabel: src.licenseName || "要確認",
+          commercialUseLabel: src.commercialUse==="allowed"?"✅ 可": src.commercialUse==="restricted"?"⚠️ 制限あり":"❓ 要確認",
+          attributionLabel: src.attributionRequired?"必要":"不要",
+          apiKeyLabel: src.requiresApiKey ? `必要（環境変数: ${src.apiKeyEnvName||"未設定"}）` : "不要",
+          hasUseCases: (src.useCases||[]).length>0,
+          useCases: (src.useCases||[]).map(u=>({useCaseName:u.useCaseName, targetSystem:u.targetSystem||"", description:u.description||""})),
+          hasQualityChecks: (src.qualityChecks||[]).length>0,
+          qualityChecks: (src.qualityChecks||[]).map(qc=>({...qc, checkedAtLabel: fmtDateTime(qc.checkedAt)})),
+          statusStyle: statusBadgeStyle(src.status), statusIcon:(STATUS_COLORS[src.status]||STATUS_COLORS.unknown).icon, statusLabel: statusLabel(src.status),
+          qualityStyle: qualityBadgeStyle(src.qualityScore), qualityScore:src.qualityScore, trustStarsText: trustStars(src.trustLevel),
+          goEdit: ()=>this.openEdit(src.id), goDelete: ()=>this.deleteSource(src.id),
+          logs: sortedLogs.filter(l=>l.sourceName===src.name).slice(0,20).map(decorateLog),
+          hasNoLogs: sortedLogs.filter(l=>l.sourceName===src.name).length===0,
+        };
+      }
+    }
+
+    const checkDisabled = !!s.checkBusy;
+    const checkOpacity = checkDisabled ? 0.55 : 1;
+    const checkLabel = s.checkBusy==="check" ? "⏳ 確認中..." : "🔌 疎通確認";
+    const sampleLabel = s.checkBusy==="fetch-sample" ? "⏳ 取得中..." : "📦 サンプル取得";
+    const qualityLabel = s.checkBusy==="quality" ? "⏳ 計算中..." : "⭐ 品質スコア再計算";
+    let hasCheckResult=false, checkResultStyle="", checkResultText="";
+    if(s.checkResult){
+      hasCheckResult = true;
+      const d = s.checkResult.data;
+      checkResultStyle = d.success ? "background:var(--green-bg);color:var(--green);" : "background:var(--red-bg);color:var(--red);";
+      const parts = [d.success?"✅ 成功":"❌ 失敗"];
+      if(d.statusCode!=null) parts.push("HTTP "+d.statusCode);
+      if(d.responseTimeMs!=null) parts.push(d.responseTimeMs+"ms");
+      if(d.contentType) parts.push(d.contentType);
+      if(d.detectedFormat) parts.push("形式: "+d.detectedFormat);
+      if(d.message) parts.push(d.message);
+      checkResultText = parts.join(" / ");
+    }
+
+    // form
+    const form = s.form || EMPTY_FORM;
+    const formTitle = s.formMode==="edit" ? "✏️ データソース編集" : "➕ データソース新規登録";
+    const formSubmitLabel = s.formMode==="edit" ? "💾 更新する" : "➕ 登録する";
+    const formProviderCustomDisabled = !!form.providerId;
+    const formApiKeyEnvDisabled = !form.requiresApiKey;
+    const tagsForForm = s.tags.map(t => {
+      const selected = form.tagIds.includes(t.id);
+      const chipStyle = selected
+        ? "cursor:pointer;font-size:12px;font-weight:500;padding:6px 12px;border-radius:20px;border:1px solid var(--accent);background:var(--amber-bg);color:var(--amber);"
+        : "cursor:pointer;font-size:12px;font-weight:500;padding:6px 12px;border-radius:20px;border:1px solid var(--line);background:#fff;color:var(--ink-2);";
+      return { id:t.id, name:t.name, color:t.color, chipStyle, toggle:()=>this.toggleFormTag(t.id) };
+    });
+
+    // map
+    let mapClick = null, hasMapClick = false;
+    if(s.mapClick){
+      hasMapClick = true;
+      mapClick = { lat:s.mapClick.lat, lng:s.mapClick.lng, elevationLine: s.mapClick.loading ? "⏳ 標高取得中..." : `⛰️ 標高目安: ${s.mapClick.elevation} m（シミュレーション値）` };
+    }
+
+    // logs view
+    const filteredLogs = sortedLogs.filter(l => s.logsFilter==="success" ? l.success : s.logsFilter==="fail" ? !l.success : true).map(decorateLog);
+
+    // tags
+    const tagsWithCounts = s.tags.map(t => ({ ...t, count: s.sources.filter(x=>x.tagIds.includes(t.id)).length, goFilter: ()=>this.filterByTag(t.id) }));
+    const colorSwatches = PALETTE.map(hex => ({ hex, ring: hex===s.newTagColor?"box-shadow:0 0 0 2px #fff,0 0 0 4px var(--ink-2);":"", onClick:()=>this.pickColor(hex) }));
+
+    // audit log
+    const auditLogsView = [...s.auditLogs].sort((a,b)=> new Date(b.occurredAt)-new Date(a.occurredAt)).map(a => ({
+      ...a, occurredLabel: fmtDateTime(a.occurredAt), levelStyle: auditLevelStyle(a.level), levelLabel: (AUDIT_LEVELS[a.level]||AUDIT_LEVELS.info).label,
+    }));
+
+    // settings
+    const timeoutOptions = [10,30,60,120];
+    const redirectOptions = [0,1,3,5];
+    const previewOptions = [1,4,8,16];
+    const staleDaysOptions = [30,60,90,180];
+    const apiKeySourceOptions = s.sources.filter(x=>x.requiresApiKey).map(x=>({id:x.id, label: x.name+"("+(x.apiKeyEnvName||"ENV未設定")+")"}));
+    const hasApiKeyFeedback = !!s.apiKeyTestResult;
+    const apiKeyFeedbackStyle = s.apiKeyTestResult && s.apiKeyTestResult.ok ? "color:var(--green);" : "color:var(--red);";
+    const apiKeyFeedbackText = s.apiKeyTestResult ? s.apiKeyTestResult.msg : "";
+    const savedEntry = s.savedApiKeys[s.apiKeySourceId];
+    const hasSavedApiKey = !!savedEntry;
+    const savedApiKeyMasked = savedEntry ? savedEntry.maskedValue : "";
+    const savedApiKeyAtLabel = savedEntry ? fmtDateTime(savedEntry.savedAt) : "";
+    const apiKeyTestLabel = s.apiKeyTesting ? "⏳ テスト中..." : "🧪 テスト";
+
+    return {
+      navGroup1, navGroup2, navGroup3,
+      topbarTitle: meta.title, topbarSub: meta.sub,
+      searchQuery: s.searchQuery, onSearchQueryChange: (e)=>this.onSearchQueryChange(e), onSearchKeyDown: (e)=>this.onSearchKeyDown(e),
+      isDashboard: view==="dashboard", isSources: view==="sources", isSourceDetail: view==="sourceDetail",
+      isSourceForm: view==="sourceNew"||view==="sourceEdit", isMap: view==="map", isLogs: view==="logs", isAudit: view==="audit", isTags: view==="tags", isSettings: view==="settings",
+      openNew: ()=>this.openNew(), backToSources: (e)=>this.backToSources(e), goLogsPreventDefault: (e)=>this.goLogsPreventDefault(e),
+      kpis, categoryBreakdown, recentSources, dashboardLogs,
+      filters: f, filteredSources, filteredCount: filteredSources.length,
+      categoryFilterOptions, providerFilterOptions, formatFilterOptions, statusFilterOptions, tagFilterOptions,
+      onFilterQChange: this.bindFilter("q"), onFilterCategoryChange: this.bindFilter("category"),
+      onFilterProviderChange: this.bindFilter("providerId"), onFilterFormatChange: this.bindFilter("dataFormat"),
+      onFilterApiKeyChange: this.bindFilter("requiresApiKey"), onFilterStatusChange: this.bindFilter("status"),
+      onFilterTagChange: this.bindFilter("tag"), onClearFilters: (e)=>this.clearFilters(e),
+      selectedSource,
+      checkDisabled, checkOpacity, checkLabel, sampleLabel, qualityLabel,
+      runConnectivityCheck: ()=>this.runConnectivityCheck(), runSampleFetch: ()=>this.runSampleFetch(), runQualityRecalc: ()=>this.runQualityRecalc(),
+      hasCheckResult, checkResultStyle, checkResultText,
+      form, formTitle, formSubmitLabel, formProviderCustomDisabled, formApiKeyEnvDisabled, tagsForForm,
+      providerOptions: PROVIDERS, categoryOptions: CATEGORIES, formatOptions: DATA_FORMATS, accessOptions: ACCESS_TYPES,
+      statusOptions: SOURCE_STATUSES, commercialOptions: COMMERCIAL_USE_OPTIONS,
+      onFormName: this.bindForm("name"), onFormNameEn: this.bindForm("nameEn"), onFormProviderId: this.bindForm("providerId"),
+      onFormProviderNameCustom: this.bindForm("providerNameCustom"), onFormDescription: this.bindForm("description"),
+      onFormOfficialUrl: this.bindForm("officialUrl"), onFormEndpointUrl: this.bindForm("endpointUrl"),
+      onFormCategory: this.bindForm("category"), onFormDataFormat: this.bindForm("dataFormat"), onFormAccessType: this.bindForm("accessType"),
+      onFormStatus: this.bindForm("status"), onFormRequiresApiKey: this.bindForm("requiresApiKey"), onFormApiKeyEnvName: this.bindForm("apiKeyEnvName"),
+      onFormLicenseName: this.bindForm("licenseName"), onFormCommercialUse: this.bindForm("commercialUse"),
+      onFormAttributionRequired: this.bindForm("attributionRequired"), onFormUpdateFrequency: this.bindForm("updateFrequency"),
+      onFormTrustLevel: this.bindForm("trustLevel"), onFormQualityScore: this.bindForm("qualityScore"), onFormNote: this.bindForm("note"),
+      saveForm: (e)=>this.saveForm(e), cancelForm: ()=>this.cancelForm(),
+      mapRef: (node)=>this.mapRefCallback(node), hasMapClick, mapClick,
+      geoJsonText: s.geoJsonText, geoJsonMessage: s.geoJsonMessage,
+      onGeoJsonTextChange: (e)=>this.onGeoJsonTextChange(e), applyGeoJson: ()=>this.applyGeoJson(), clearGeoJson: ()=>this.clearGeoJson(),
+      logsFilter: s.logsFilter, onLogsFilterChange: (e)=>this.onLogsFilterChange(e), filteredLogs, filteredLogsCount: filteredLogs.length,
+      newTagName: s.newTagName, onNewTagNameChange: (e)=>this.onNewTagNameChange(e), colorSwatches, addTag: (e)=>this.addTag(e), tagsWithCounts,
+      auditLogsView, auditLogsCount: auditLogsView.length,
+      exportAuditCsv: ()=>this.exportAuditCsv(), exportAuditHtml: ()=>this.exportAuditHtml(), exportAuditPdf: ()=>this.exportAuditPdf(),
+      settings: s.settings, timeoutOptions, redirectOptions, previewOptions, staleDaysOptions,
+      onSettingTimeout: (e)=>this.onSettingTimeout(e), onSettingRedirect: (e)=>this.onSettingRedirect(e),
+      onSettingPreview: (e)=>this.onSettingPreview(e), onSettingStale: (e)=>this.onSettingStale(e),
+      apiKeySourceId: s.apiKeySourceId, apiKeySourceOptions, apiKeyInputValue: s.apiKeyInputValue,
+      onApiKeySourceChange: (e)=>this.onApiKeySourceChange(e), onApiKeyInputChange: (e)=>this.onApiKeyInputChange(e),
+      testApiKey: ()=>this.testApiKey(), saveApiKey: ()=>this.saveApiKey(), clearApiKeyInput: ()=>this.clearApiKeyInput(),
+      apiKeyTestLabel, hasApiKeyFeedback, apiKeyFeedbackStyle, apiKeyFeedbackText, hasSavedApiKey, savedApiKeyMasked, savedApiKeyAtLabel,
+    };
+  }
+}
+
+</script>
+</body>
+</html>
+
