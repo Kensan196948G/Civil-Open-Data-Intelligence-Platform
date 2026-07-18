@@ -237,11 +237,11 @@ WebUI:
 http://localhost:3000
 ```
 
-現在の共有確認用ローカルpreview:
+Docker preview (compose が公開するポート):
 
 ```text
-http://localhost:3104
-http://192.168.0.185:3104
+http://127.0.0.1:3100   # docker-compose.preview.yml (SQLite)
+http://127.0.0.1:3102   # docker-compose.postgresql-preview.yml (PostgreSQL/PostGIS)
 ```
 
 管理操作をローカルで試す場合:
@@ -335,6 +335,8 @@ production `runner` は `npm ci --omit=dev` を使い、起動時migrationを行
 | [docs/13-deployment-and-operations.md](docs/13-deployment-and-operations.md) | デプロイ・運用 |
 | [docs/16-release-readiness-checklist.md](docs/16-release-readiness-checklist.md) | リリース直前チェック |
 | [docs/runbooks/cloudflare-neon-staging.md](docs/runbooks/cloudflare-neon-staging.md) | Cloudflare/Neon staging runbook |
+| [docs/runbooks/database-deployment.md](docs/runbooks/database-deployment.md) | DBデプロイ、バックアップ、SQLite復元、PostgreSQL/PostGIS移行前チェック |
+| [docs/runbooks/rollback.md](docs/runbooks/rollback.md) | 障害時の切り戻し手順 (判断フロー、Workers、GHCR、Neon PITR、Prisma、SQLite) |
 
 ---
 

@@ -42,11 +42,34 @@ docker compose -f docker-compose.preview.yml exec codip sh scripts/db/sqlite-bac
 
 共有previewのSQLite復元は、単一インスタンス停止中に実施する。担当はリリース作業者、想定停止時間は5〜10分とする。
 
+> ⚠️ バックアップファイル名は `scripts/db/sqlite-backup.sh` が `mktemp` で採番するため、
+> `<元DB名>.<UTC時刻>.<ランダム6文字>` 形式になる (例: `dev.db.20260718T111650Z.fnyabJ`)。
+> 固定名を決め打ちせず、下記のように**実ファイルを列挙して選ぶ**こと。
+
+```bash
+# 戻せるバックアップを新しい順に確認する
+ls -1t backups/sqlite/
+```
+
 ローカルDBへ戻す場合:
 
 ```bash
+# 0. 復元対象を変数に取る (上の ls で確認したファイル名)
+BACKUP="backups/sqlite/<選んだファイル名>"
+
+# 1. アプリを止める (稼働中に差し替えるとWALと本体が不整合になる)
+docker compose -f docker-compose.preview.yml down 2>/dev/null || true
+
+# 2. 現物を退避する
 cp prisma/dev.db "prisma/dev.db.before-restore.$(date -u +%Y%m%dT%H%M%SZ)"
-cp backups/sqlite/codip-YYYYMMDDTHHMMSSZ.db prisma/dev.db
+
+# 3. ⚠️ 旧WAL/SHMを必ず削除する
+#    sqlite3 ".backup" は単体完結のDBファイルを作るため、
+#    古い -wal / -shm が残っていると復元後のDBが壊れる
+rm -f prisma/dev.db-wal prisma/dev.db-shm
+
+# 4. 復元して検証する
+cp "$BACKUP" prisma/dev.db
 DATABASE_URL='file:./dev.db' npm run release:validate-env:local
 DATABASE_URL='file:./dev.db' npm run db:check-duplicates
 ```
@@ -54,14 +77,21 @@ DATABASE_URL='file:./dev.db' npm run db:check-duplicates
 Docker preview volumeへ戻す場合:
 
 ```bash
+BACKUP_NAME="<backups/sqlite 配下から選んだファイル名>"
+
 docker compose -f docker-compose.preview.yml down
 docker run --rm \
   -v civil-open-data-intelligence-platform_codip-data:/data \
   -v "$PWD/backups/sqlite:/backup:ro" \
-  alpine sh -lc 'cp /data/codip.db /data/codip.db.before-restore && cp /backup/codip-YYYYMMDDTHHMMSSZ.db /data/codip.db'
+  -e BACKUP_NAME="$BACKUP_NAME" \
+  alpine sh -lc 'cp /data/codip.db "/data/codip.db.before-restore.$(date -u +%Y%m%dT%H%M%SZ)" \
+    && rm -f /data/codip.db-wal /data/codip.db-shm \
+    && cp "/backup/$BACKUP_NAME" /data/codip.db'
 docker compose -f docker-compose.preview.yml up -d
 CODIP_ADMIN_TOKEN="$CODIP_ADMIN_TOKEN" npm run release:smoke -- --base-url http://127.0.0.1:3100
 ```
+
+> 📎 切り戻し全体の判断フロー (コードのみ戻すか、DBも戻すか) は `docs/runbooks/rollback.md` §1 を参照。
 
 復元後は `/api/ready`、`/sources`、`/logs`、管理セッション開始、代表データソース詳細を確認し、復元したbackup名と確認者をリリース証跡へ記録する。
 

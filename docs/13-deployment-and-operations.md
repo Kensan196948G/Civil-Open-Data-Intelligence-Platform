@@ -23,6 +23,7 @@ Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、C
 | 変数 | 必須 | 内容 |
 | --- | --- | --- |
 | `DATABASE_URL` | Yes | Prisma接続先。MVPはSQLite、本番はPostgreSQL/PostGIS。外部production PostgreSQLは `sslmode=require` または `sslmode=verify-full` 必須 |
+| `CODIP_ENV_MODE` | 実質必須 | 実行モード。`local` / `preview` / `production`。未指定時は `production` 扱い。`preview` または `production` は strict runtime mode となり、`CODIP_ALLOW_INSECURE_ADMIN` / `CODIP_ALLOW_INSECURE_LOCAL_COOKIES` による緩和を無効化する (`src/lib/admin-auth.ts` `strictRuntimeMode()`)。起動時の `validate-env` もこの値でモードを決める |
 | `CODIP_ACCEPT_SQLITE_PREVIEW` | Preview only | SQLiteを共有プレビューで使うことを明示するフラグ。本番では使用禁止 |
 | `CODIP_SEED_ON_START` | Preview only | Docker preview起動時にseedを投入するか |
 | `CODIP_RUN_MIGRATIONS_ON_START` | Preview only | Docker previewの単一インスタンス検証でのみ、起動時migrationを許可する |
