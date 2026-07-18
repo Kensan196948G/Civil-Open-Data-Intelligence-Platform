@@ -21,12 +21,12 @@ export default async function TagsPage() {
     <div className="flex flex-col gap-[14px]">
       <h1 className="m-0 text-[1.4rem] font-semibold">🏷️ タグ管理</h1>
 
-      {canManage ? (
-        <div className="dc-card px-[18px] py-[17px]">
-          <h2 className="mb-2.5 text-[14px] font-semibold text-[var(--ink)]">➕ タグ追加</h2>
-          <TagForm />
-        </div>
-      ) : null}
+      {/* デザイン正本どおり常時表示。追加操作 (API) は管理者のみのため、
+          未認証時は設定画面と同じパターンで disabled + 案内を表示する */}
+      <div className="dc-card px-[18px] py-[17px]">
+        <h2 className="mb-2.5 text-[14px] font-semibold text-[var(--ink)]">➕ タグ追加</h2>
+        <TagForm disabled={!canManage} />
+      </div>
 
       <div className="dc-card px-[18px] py-[17px]">
         <h2 className="mb-2.5 text-[14px] font-semibold text-[var(--ink)]">📚 登録済みタグ</h2>
