@@ -27,6 +27,28 @@ function simulateElevation(lat: number, lng: number): number {
   return Math.round(Math.abs(Math.sin(lat * 3) * Math.cos(lng * 3)) * 380 + 5);
 }
 
+// RFC 7946 の GeoJSON type 一覧。構文上有効な JSON との区別に使う
+const GEOJSON_TYPES = new Set([
+  "FeatureCollection",
+  "Feature",
+  "Point",
+  "MultiPoint",
+  "LineString",
+  "MultiLineString",
+  "Polygon",
+  "MultiPolygon",
+  "GeometryCollection",
+]);
+
+function isGeoJsonObject(value: unknown): value is GeoJsonObject {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    GEOJSON_TYPES.has((value as { type?: unknown }).type as string)
+  );
+}
+
 function ClickHandler({ onClick }: { onClick: (lat: number, lng: number) => void }) {
   useMapEvents({
     click(e) {
@@ -69,7 +91,13 @@ export default function MapView() {
       return;
     }
     try {
-      const data = JSON.parse(geoJsonText) as GeoJsonObject;
+      const data = JSON.parse(geoJsonText) as unknown;
+      // 構文上有効な JSON でも GeoJSON でない値 ({} や [] 等) は Leaflet の
+      // 描画層で例外になりうるため、type を構造検証してから反映する
+      if (!isGeoJsonObject(data)) {
+        setGeoJsonMessage("⚠️ GeoJSON として解釈できません (type を確認してください)");
+        return;
+      }
       setGeoJsonData(data);
       setGeoJsonVersion((v) => v + 1);
       setGeoJsonMessage("✅ 地図に反映しました");
