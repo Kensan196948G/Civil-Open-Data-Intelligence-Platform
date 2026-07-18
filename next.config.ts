@@ -25,7 +25,8 @@ const securityHeaders = [
       // (上記 webpack ワークアラウンドと同根) でビルド不能のため <link> 方式を採用
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data: blob: https://cyberjapandata.gsi.go.jp",
+      // OSM タイルはモック完全一致の人間判断 (2026-07-18) による。GSI は標高 API 等で残置
+      "img-src 'self' data: blob: https://cyberjapandata.gsi.go.jp https://*.tile.openstreetmap.org",
       "connect-src 'self' https://cyberjapandata.gsi.go.jp",
     ].join("; "),
   },

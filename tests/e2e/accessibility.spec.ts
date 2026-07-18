@@ -22,14 +22,13 @@ test.describe("アクセシビリティ基本回帰", () => {
     await page.goto("/logs");
     await expect(page.getByText(/管理者のみ表示します/)).toBeVisible();
 
+    // 地図: デザイン正本のモック完全一致 (2026-07-18) により緯度経度入力パネルは廃止。
+    // GeoJSON 入力のラベルと、不正入力時の通知 (role=status) を検証する
     await page.goto("/map");
-    await expect(page.getByLabel("緯度")).toBeVisible();
-    await expect(page.getByLabel("経度")).toBeVisible();
     await expect(page.getByLabel("GeoJSONデータ")).toBeVisible();
-    await page.getByLabel("緯度").fill("91");
-    await page.getByLabel("経度").fill("139");
-    await page.getByRole("button", { name: /標高取得/ }).click();
-    await expect(page.locator('p[role="alert"]')).toContainText(/緯度は -90/);
+    await page.getByLabel("GeoJSONデータ").fill("{invalid json");
+    await page.getByRole("button", { name: /地図に表示/ }).click();
+    await expect(page.getByRole("status").filter({ hasText: /JSON の構文が正しくありません/ })).toBeVisible();
   });
 
   test("未認証時は管理操作UIを表示しない", async ({ page }) => {
