@@ -8,6 +8,13 @@ import { safeSourceDto } from "@/lib/source-dto";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+/** トランザクション内の commit 後再検査で不変条件違反を検出したことを表す */
+class ApiKeyHttpsConflictError extends Error {
+  constructor(readonly violation: { path: "endpointUrl" | "officialUrl"; message: string }) {
+    super("api key https invariant violated by concurrent update");
+  }
+}
+
 export async function GET(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const includeSensitive = isAdminHeaders(request.headers);
@@ -104,23 +111,48 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
   let updated;
   try {
-    updated = await prisma.dataSource.update({
-      where: { id },
-      data: {
-        ...data,
-        ...(providerId ? { providerId } : {}),
-        ...(distinctTagIds !== undefined
-          ? {
-              tags: {
-                deleteMany: {},
-                create: distinctTagIds.map((tagId) => ({ tagId })),
-              },
-            }
-          : {}),
-      },
-      include: { provider: true, tags: { include: { tag: true } } },
+    // 上のマージ後検査は「読み取った existing」に基づくため、並行更新同士が
+    // それぞれ検査を通過して合成結果が不変条件を破る TOCTOU が残る
+    // (CodeRabbit 指摘)。トランザクション内で UPDATE 後の実際の行 (並行更新の
+    // commit 済み値を含む) を再検査し、違反していれば rollback する。
+    updated = await prisma.$transaction(async (tx) => {
+      const row = await tx.dataSource.update({
+        where: { id },
+        data: {
+          ...data,
+          ...(providerId ? { providerId } : {}),
+          ...(distinctTagIds !== undefined
+            ? {
+                tags: {
+                  deleteMany: {},
+                  create: distinctTagIds.map((tagId) => ({ tagId })),
+                },
+              }
+            : {}),
+        },
+        include: { provider: true, tags: { include: { tag: true } } },
+      });
+      const committedViolation = apiKeyHttpsInvariantViolation({
+        requiresApiKey: row.requiresApiKey,
+        endpointUrl: row.endpointUrl,
+        officialUrl: row.officialUrl,
+      });
+      if (committedViolation) {
+        throw new ApiKeyHttpsConflictError(committedViolation);
+      }
+      return row;
     });
   } catch (error) {
+    if (error instanceof ApiKeyHttpsConflictError) {
+      return NextResponse.json(
+        {
+          error: "conflict",
+          message: "並行する更新と競合し、APIキー利用データソースのHTTPS要件を満たせませんでした。最新の状態を取得してやり直してください",
+          details: { formErrors: [], fieldErrors: { [error.violation.path]: [error.violation.message] } },
+        },
+        { status: 409 },
+      );
+    }
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       return NextResponse.json(
         { error: "duplicate", message: "同じ公式URLのデータソースが既に登録されています" },

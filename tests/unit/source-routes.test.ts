@@ -15,6 +15,10 @@ vi.mock("@/lib/db", () => ({
       findUnique: dataSourceFindUniqueMock,
       update: dataSourceUpdateMock,
     },
+    // route の PUT は $transaction(async tx => ...) を使う。テストでは tx に
+    // 同じ update mock を渡してコールバックを実行する
+    $transaction: (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({ dataSource: { update: dataSourceUpdateMock } }),
   },
 }));
 
@@ -118,6 +122,28 @@ describe("sources PUT route: requiresApiKey→HTTPS 不変条件のマージ後�
 
     expect(response.status).toBe(200);
     expect(dataSourceUpdateMock).toHaveBeenCalledTimes(1);
+    vi.unstubAllEnvs();
+  });
+
+  it("CodeRabbit 指摘 (TOCTOU): 事前検査通過後に並行更新で不変条件が破れた場合、commit 後再検査が 409 で拒否する", async () => {
+    stubAdminEnv();
+    // 事前検査時点: requiresApiKey=false + https → {requiresApiKey:true} の merged は OK
+    dataSourceFindUniqueMock.mockResolvedValueOnce({ ...existingApiKeySource, requiresApiKey: false });
+    // しかし UPDATE の実行結果行は、並行リクエストが officialUrl を http へ変えた後の状態
+    dataSourceUpdateMock.mockResolvedValueOnce({
+      ...existingApiKeySource,
+      requiresApiKey: true,
+      officialUrl: "http://raced.example.jp/data",
+      provider: { id: "prov-1", name: "テスト提供元" },
+      tags: [],
+    });
+
+    const response = await sourcePUT(adminPut({ requiresApiKey: true }), routeContext);
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toBe("conflict");
+    expect(body.details.fieldErrors.officialUrl?.[0]).toContain("HTTPS");
     vi.unstubAllEnvs();
   });
 
