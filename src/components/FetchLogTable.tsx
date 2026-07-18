@@ -17,34 +17,34 @@ export type FetchLogRow = {
 
 export function FetchLogTable({ logs, showSource = true }: { logs: FetchLogRow[]; showSource?: boolean }) {
   if (logs.length === 0) {
-    return <p className="py-4 text-sm text-slate-500">🧾 取得ログはまだありません。</p>;
+    return <p className="py-4 text-sm text-[var(--muted)]">🧾 取得ログはまだありません。</p>;
   }
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full text-sm">
+      <table className="min-w-full border-collapse text-[12.5px]">
         <caption className="sr-only">取得ログ一覧</caption>
         <thead>
-          <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-            <th scope="col" className="px-2 py-2">実行日時</th>
-            {showSource && <th scope="col" className="px-2 py-2">データソース</th>}
-            <th scope="col" className="px-2 py-2">種別</th>
-            <th scope="col" className="px-2 py-2">結果</th>
-            <th scope="col" className="px-2 py-2">HTTP</th>
-            <th scope="col" className="px-2 py-2">応答(ms)</th>
-            <th scope="col" className="px-2 py-2">サイズ</th>
-            <th scope="col" className="px-2 py-2">エラー</th>
+          <tr>
+            <th scope="col" className="dc-th">実行日時</th>
+            {showSource && <th scope="col" className="dc-th">データソース</th>}
+            <th scope="col" className="dc-th">種別</th>
+            <th scope="col" className="dc-th">結果</th>
+            <th scope="col" className="dc-th">HTTP</th>
+            <th scope="col" className="dc-th">応答(ms)</th>
+            <th scope="col" className="dc-th">サイズ</th>
+            <th scope="col" className="dc-th">エラー</th>
           </tr>
         </thead>
         <tbody>
           {logs.map((log) => (
-            <tr key={log.id} className="border-b border-slate-100 hover:bg-slate-50">
-              <th scope="row" className="px-2 py-2 text-left whitespace-nowrap">
+            <tr key={log.id} className="hover:bg-[var(--hover)]">
+              <th scope="row" className="dc-td whitespace-nowrap text-left font-normal tabular-nums">
                 {new Date(log.executedAt).toLocaleString("ja-JP")}
               </th>
               {showSource && (
-                <td className="px-2 py-2">
+                <td className="dc-td">
                   {log.dataSource ? (
-                    <Link href={`/sources/${log.dataSource.id}`} className="text-blue-600 hover:underline">
+                    <Link href={`/sources/${log.dataSource.id}`} className="text-[var(--blue)] hover:underline">
                       {log.dataSource.name}
                     </Link>
                   ) : (
@@ -52,12 +52,14 @@ export function FetchLogTable({ logs, showSource = true }: { logs: FetchLogRow[]
                   )}
                 </td>
               )}
-              <td className="px-2 py-2">{log.executionType === "sample" ? "📦 サンプル" : "🔌 疎通"}</td>
-              <td className="px-2 py-2">{log.success ? "✅ 成功" : "❌ 失敗"}</td>
-              <td className="px-2 py-2">{log.statusCode ?? "-"}</td>
-              <td className="px-2 py-2">{log.responseTimeMs ?? "-"}</td>
-              <td className="px-2 py-2">{formatBytes(log.responseSizeBytes)}</td>
-              <td className="px-2 py-2 text-xs text-red-600">
+              <td className="dc-td">{log.executionType === "sample" ? "📦 サンプル" : "🔌 疎通"}</td>
+              <td className="dc-td font-semibold" style={{ color: log.success ? "var(--green)" : "var(--red)" }}>
+                {log.success ? "✅ 成功" : "❌ 失敗"}
+              </td>
+              <td className="dc-td tabular-nums">{log.statusCode ?? "-"}</td>
+              <td className="dc-td tabular-nums">{log.responseTimeMs ?? "-"}</td>
+              <td className="dc-td tabular-nums">{formatBytes(log.responseSizeBytes)}</td>
+              <td className="dc-td text-[11px] text-[var(--red)]">
                 {log.errorType ? (ERROR_TYPE_MESSAGES[log.errorType] ?? log.errorType) : ""}
               </td>
             </tr>

@@ -113,19 +113,19 @@ export function SourceForm({
     }
   }
 
-  const inputCls =
-    "w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none";
-  const labelCls = "block text-xs font-medium text-slate-600 mb-1";
+  // デザイン正本 (2307-3006 行): 共通 .dc-input + ラベル 12px/600/ink-2
+  const inputCls = "dc-input disabled:opacity-60";
+  const labelCls = "mb-1 block text-xs font-semibold text-[var(--ink-2)]";
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="dc-card flex flex-col gap-[14px] px-5 py-[18px]">
       {error && (
-        <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+        <div className="rounded-lg border border-[var(--red-2)] bg-[var(--red-bg)] px-3 py-2 text-sm text-[var(--red)]" role="alert">
           ⚠️ {error}
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-[14px] md:grid-cols-2">
         <div>
           <label htmlFor="ds-name" className={labelCls}>📚 データソース名 *</label>
           <input id="ds-name" required className={inputCls} value={values.name} onChange={(e) => set("name", e.target.value)} />
@@ -157,7 +157,7 @@ export function SourceForm({
         </div>
         <div className="md:col-span-2">
           <label htmlFor="ds-description" className={labelCls}>📝 概要</label>
-          <textarea id="ds-description" rows={3} className={inputCls} value={values.description} onChange={(e) => set("description", e.target.value)} />
+          <textarea id="ds-description" rows={3} className={`${inputCls} resize-y`} value={values.description} onChange={(e) => set("description", e.target.value)} />
         </div>
         <div>
           <label htmlFor="ds-officialUrl" className={labelCls}>🔗 公式URL *</label>
@@ -213,12 +213,10 @@ export function SourceForm({
         </div>
         <div>
           <span className={labelCls}>🔑 APIキー要否</span>
-          <div className="flex items-center gap-4 py-1.5 text-sm">
-            <label className="flex items-center gap-1">
-              <input type="checkbox" checked={values.requiresApiKey} onChange={(e) => set("requiresApiKey", e.target.checked)} />
-              APIキーが必要
-            </label>
-          </div>
+          <label className="flex items-center gap-1.5 pt-1.5 text-[13px] text-[var(--ink)]">
+            <input type="checkbox" checked={values.requiresApiKey} onChange={(e) => set("requiresApiKey", e.target.checked)} />
+            APIキーが必要
+          </label>
         </div>
         <div>
           <label htmlFor="ds-apiKeyEnvName" className={labelCls}>APIキー環境変数名（値は保存しない）</label>
@@ -247,16 +245,14 @@ export function SourceForm({
         </div>
         <div>
           <span className={labelCls}>出典表記</span>
-          <div className="flex items-center gap-4 py-1.5 text-sm">
-            <label className="flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked={values.attributionRequired}
-                onChange={(e) => set("attributionRequired", e.target.checked)}
-              />
-              出典表記が必要
-            </label>
-          </div>
+          <label className="flex items-center gap-1.5 pt-1.5 text-[13px] text-[var(--ink)]">
+            <input
+              type="checkbox"
+              checked={values.attributionRequired}
+              onChange={(e) => set("attributionRequired", e.target.checked)}
+            />
+            出典表記が必要
+          </label>
         </div>
         <div>
           <label htmlFor="ds-updateFrequency" className={labelCls}>更新頻度</label>
@@ -288,14 +284,14 @@ export function SourceForm({
         </div>
         <div className="md:col-span-2">
           <span className={labelCls}>🏷️ タグ</span>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {tags.map((tag) => {
               const checked = values.tagIds.includes(tag.id);
               return (
                 <label
                   key={tag.id}
-                  className={`cursor-pointer rounded-full border px-2 py-0.5 text-xs focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-1 ${
-                    checked ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-300 text-slate-600"
+                  className={`cursor-pointer rounded-full border px-2 py-0.5 text-[11.5px] focus-within:ring-2 focus-within:ring-[var(--accent)] focus-within:ring-offset-1 ${
+                    checked ? "border-[var(--accent)] bg-[var(--amber-bg)] text-[var(--amber)]" : "border-[var(--line)] text-[var(--ink-2)]"
                   }`}
                 >
                   <input
@@ -319,23 +315,15 @@ export function SourceForm({
         </div>
         <div className="md:col-span-2">
           <label htmlFor="ds-note" className={labelCls}>備考</label>
-          <textarea id="ds-note" rows={2} className={inputCls} value={values.note} onChange={(e) => set("note", e.target.value)} />
+          <textarea id="ds-note" rows={2} className={`${inputCls} resize-y`} value={values.note} onChange={(e) => set("note", e.target.value)} />
         </div>
       </div>
 
       <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-        >
+        <button type="submit" disabled={submitting} className="dc-btn-accent disabled:opacity-50">
           {submitting ? "⏳ 保存中..." : sourceId ? "💾 更新する" : "➕ 登録する"}
         </button>
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100"
-        >
+        <button type="button" onClick={() => router.back()} className="dc-btn-ghost">
           キャンセル
         </button>
       </div>

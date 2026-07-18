@@ -1,25 +1,18 @@
 import { statusLabel } from "@/lib/constants";
 
-const STYLES: Record<string, string> = {
-  active: "bg-green-100 text-green-800",
-  unstable: "bg-red-100 text-red-800",
-  deprecated: "bg-gray-200 text-gray-600",
-  unknown: "bg-amber-100 text-amber-800",
-};
-
-const ICONS: Record<string, string> = {
-  active: "✅",
-  unstable: "❌",
-  deprecated: "🚫",
-  unknown: "⚠️",
+// デザイン正本の STATUS_COLORS と同一
+const STYLES: Record<string, { fg: string; bg: string; icon: string }> = {
+  active: { fg: "var(--green)", bg: "var(--green-bg)", icon: "✅" },
+  unstable: { fg: "var(--red)", bg: "var(--red-bg)", icon: "❌" },
+  deprecated: { fg: "var(--ink-2)", bg: "var(--subtle)", icon: "🚫" },
+  unknown: { fg: "var(--amber)", bg: "var(--amber-bg)", icon: "⚠️" },
 };
 
 export function StatusBadge({ status }: { status: string }) {
+  const c = STYLES[status] ?? STYLES.unknown;
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${STYLES[status] ?? STYLES.unknown}`}
-    >
-      {ICONS[status] ?? "⚠️"} {statusLabel(status)}
+    <span className="dc-badge" style={{ color: c.fg, background: c.bg }}>
+      {c.icon} {statusLabel(status)}
     </span>
   );
 }

@@ -14,31 +14,32 @@ export default async function TagsPage() {
   });
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-bold">🏷️ タグ管理</h1>
+    <div className="flex flex-col gap-[14px]">
+      <h1 className="m-0 text-[1.4rem] font-semibold">🏷️ タグ管理</h1>
 
       {canManage ? (
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold text-slate-700">➕ タグ追加</h2>
+        <div className="dc-card px-[18px] py-[17px]">
+          <h2 className="mb-2.5 text-[14px] font-semibold text-[var(--ink)]">➕ タグ追加</h2>
           <TagForm />
         </div>
       ) : null}
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">📚 登録済みタグ</h2>
+      <div className="dc-card px-[18px] py-[17px]">
+        <h2 className="mb-2.5 text-[14px] font-semibold text-[var(--ink)]">📚 登録済みタグ</h2>
         <div className="flex flex-wrap gap-2">
           {tags.map((tag) => (
             <Link
               key={tag.id}
               href={`/sources?tag=${tag.id}`}
-              className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1 text-sm hover:bg-slate-50"
+              className="inline-flex items-center gap-1.5 rounded-[20px] border border-[var(--line)] bg-[var(--surface)] px-[13px] py-1.5 text-[12.5px] hover:bg-[var(--hover)]"
             >
               <span
-                className="inline-block h-2.5 w-2.5 rounded-full"
+                aria-hidden="true"
+                className="inline-block h-[9px] w-[9px] rounded-full"
                 style={{ backgroundColor: tag.color ?? "#94a3b8" }}
               />
               {tag.name}
-              <span className="text-xs text-slate-600">({tag._count.sources})</span>
+              <span className="text-[11px] text-[var(--faint)]">({tag._count.sources})</span>
             </Link>
           ))}
         </div>
