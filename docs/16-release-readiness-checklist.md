@@ -318,6 +318,39 @@ Cloudflare / Neon への実デプロイは、以下の**人間承認必須**の�
 | 5 | `infra/cloudflare/` の `terraform apply` (Access 保護) | 本番アクセス制御の変更 |
 | 6 | `wrangler deploy --env production` | 本番デプロイ |
 
+### 2026-07-18 Codex レビュー (通常・対抗) 実施と裁定
+
+5 日間人間実行待ちだった Codex レビューについて、人間が「以降のレビュー実行を CTO へ委任
+(merge のみ Y/N 人間判断)」と明示したことを受け、CTO が companion script 直接起動で両方を実行した。
+
+| レビュー | 実行方式 | 結果 |
+| --- | --- | --- |
+| Codex review (通常) | built-in reviewer, `--base main` | 指摘 1 件 (P2)。Critical/High 0 件 |
+| Codex adversarial review | 全差分投入方式は 19k 行差分で context window 超過 ×2 → **agentic task モードへ切替**、critical surface (prisma/ + admin-auth + url-guard/http-client/url-safety + standard-records + rate-limit + validators + api/) に限定して成功 | P1 1・P2 3・P3 1、PASS 1 領域 |
+
+#### 裁定と対応 (全 6 指摘)
+
+| # | 指摘 | 裁定 | 対応 |
+| --- | --- | --- | --- |
+| 通常-P2 | `dataSourceUpdateSchema` が部分更新 (`{requiresApiKey:true}` のみ等) を誤って拒否 | ✅ 採用 (実証再現済み) | **本 PR で修正**。update schema から `superRefine` を外し、PUT route が既存レコードとマージした実効状態で検査する方式へ変更 |
+| 対抗-1 P1 | PostGIS migration が環境非依存でなく、down 経路もない | ⚠️ 部分採用 | rollback playbook は `docs/runbooks/rollback.md` (2026-07-18 作成) が既に充足。残る「能力事前確認」を staging runbook §3.0 に **PostGIS capability preflight** として追加。なお Neon は PostGIS を標準サポートしており、指摘中の「Neon で postgis が利用不可」という前提は当てはまらない |
+| 対抗-2 P2 | token auth + proxy auth 併存時に token 経路が proxy 境界を迂回 | 📋 条件付き採用 → Issue #24 | token 認証維持は docs/09 記載の意図した設計であり、token 経路に CSRF 検査がないのは正当 (カスタムヘッダーはブラウザが cross-origin 自動送信できない)。ただし「本番は proxy 単独へ絞れるべき」は妥当なため、無効化フラグの追加を Issue 化。PR 凍結方針により merge 後対応 |
+| 対抗-3 P2 | 部分更新で URL のみ http へ変更すると requiresApiKey→HTTPS 不変条件が破れる | ✅ 採用 (実証再現済み: `{officialUrl:"http://..."}` が schema を通過) | **本 PR で修正**。通常-P2 と同一のマージ後検査で両方向を同時に閉じた。route テスト 3 件 + 検査関数テスト 5 件を追加 |
+| 対抗-4 P2 | rate-limit の識別子が偽装可能/脆弱で分散非対応 | 📋 既知・文書化済み (保留) | TRUST=true の前提条件は docs/09:71 に、単一プロセス制約と WAF 併用は docs/09:69 に記載済み。未設定時のグローバルバケット化は Issue #23 で docs 修正済み (followup branch)。分散ストアは Workers 移行 (#18) と同一スコープ |
+| 対抗-5 P3 | `standardRecordsAvailable` が一度 true になると再評価されない | 📋 採用 → Issue #25 | 発生条件 (全レコード運用削除) が稀で再起動で復旧するため P3 妥当。TTL 化を Issue 化し merge 後対応 |
+
+#### 本 PR で適用した修正 (通常-P2 + 対抗-3)
+
+| ファイル | 変更 |
+| --- | --- |
+| `src/lib/validators.ts` | `apiKeyHttpsInvariantViolation()` を新設 (マージ後の実効状態を検査)。`dataSourceUpdateSchema` から `superRefine` を除去し検査点を route に一本化。create schema は従来どおり |
+| `src/app/api/sources/[id]/route.ts` | PUT で既存レコードとマージした実効値に対して不変条件を検査し、違反時は `validation_error` 400 (`.flatten()` 互換形状) |
+| `tests/unit/validators.test.ts` | 検査関数 5 ケース + update schema の受理変更を反映 (21 tests) |
+| `tests/unit/source-routes.test.ts` | PUT route の両方向 3 ケース追加 (4 tests) |
+
+検証: lint 0 / `tsc --noEmit` 0 / vitest **230/230** pass / production build 成功 / `release:gate` OK / 契約チェック OK。
+両指摘は修正前に scratchpad の再現スクリプトで実証し、修正後はテストで回帰化した。
+
 ### 実ターゲットリリース時の記録欄
 
 | 項目 | 記録 |

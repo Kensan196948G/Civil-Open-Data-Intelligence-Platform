@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { isAdminHeaders, requireAdminRequest } from "@/lib/admin-auth";
-import { dataSourceUpdateSchema } from "@/lib/validators";
+import { apiKeyHttpsInvariantViolation, dataSourceUpdateSchema } from "@/lib/validators";
 import { safeFetchLogDto, safeSampleResponseDto } from "@/lib/operational-dto";
 import { safeSourceDto } from "@/lib/source-dto";
 
@@ -62,6 +62,24 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   const { providerId, providerName, providerOrganizationType, tagIds, ...data } = parsed.data;
   void providerName;
   void providerOrganizationType;
+
+  // requiresApiKey→HTTPS 不変条件は複数フィールドにまたがるため、部分更新の
+  // payload 単体では検査できない。既存レコードとマージした「保存後の実効状態」で
+  // 検査する (Codex review / adversarial review 指摘対応)。
+  const invariantViolation = apiKeyHttpsInvariantViolation({
+    requiresApiKey: data.requiresApiKey ?? existing.requiresApiKey,
+    endpointUrl: data.endpointUrl !== undefined ? data.endpointUrl : existing.endpointUrl,
+    officialUrl: data.officialUrl !== undefined ? data.officialUrl : existing.officialUrl,
+  });
+  if (invariantViolation) {
+    return NextResponse.json(
+      {
+        error: "validation_error",
+        details: { formErrors: [], fieldErrors: { [invariantViolation.path]: [invariantViolation.message] } },
+      },
+      { status: 400 },
+    );
+  }
 
   if (providerId) {
     const provider = await prisma.provider.findUnique({ where: { id: providerId } });

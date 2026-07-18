@@ -34,17 +34,44 @@ function isHttpsUrl(value: string | null | undefined): boolean {
   }
 }
 
+const API_KEY_HTTPS_MESSAGE = "APIキーを利用するデータソースはHTTPS URLのみ登録できます";
+
+/**
+ * requiresApiKey → HTTPS 不変条件を「保存後の実効状態」に対して検査する。
+ *
+ * この不変条件は複数フィールドにまたがるため、部分更新の payload 単体では
+ * 判定できない (Codex review: requiresApiKey だけの更新が誤って拒否される /
+ * Codex adversarial review: URL だけを http へ更新すると不変条件が破れる)。
+ * 更新系は必ず既存レコードとマージした実効値で本関数を呼ぶこと。
+ */
+export function apiKeyHttpsInvariantViolation(effective: {
+  requiresApiKey: boolean;
+  endpointUrl: string | null;
+  officialUrl: string | null;
+}): { path: "endpointUrl" | "officialUrl"; message: string } | null {
+  if (!effective.requiresApiKey) return null;
+  const targetUrl = effective.endpointUrl || effective.officialUrl;
+  if (isHttpsUrl(targetUrl ?? undefined)) return null;
+  return {
+    path: effective.endpointUrl ? "endpointUrl" : "officialUrl",
+    message: API_KEY_HTTPS_MESSAGE,
+  };
+}
+
 function enforceApiKeyHttps(
   data: { requiresApiKey?: boolean; officialUrl?: string; endpointUrl?: string | null },
   ctx: z.RefinementCtx,
 ) {
-  if (!data.requiresApiKey) return;
-  const targetUrl = data.endpointUrl || data.officialUrl;
-  if (!isHttpsUrl(targetUrl)) {
+  const violation = apiKeyHttpsInvariantViolation({
+    requiresApiKey: data.requiresApiKey ?? false,
+    endpointUrl: data.endpointUrl ?? null,
+    officialUrl: data.officialUrl ?? null,
+  });
+  if (violation) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      path: [data.endpointUrl ? "endpointUrl" : "officialUrl"],
-      message: "APIキーを利用するデータソースはHTTPS URLのみ登録できます",
+      path: [violation.path],
+      message: violation.message,
     });
   }
 }
@@ -106,9 +133,11 @@ const dataSourceBaseSchema = z.object({
 
 export const dataSourceCreateSchema = dataSourceBaseSchema.superRefine(enforceApiKeyHttps);
 
-export const dataSourceUpdateSchema = dataSourceBaseSchema
-  .partial()
-  .superRefine(enforceApiKeyHttps);
+// 注意: update schema には enforceApiKeyHttps を付けない。
+// 部分更新では payload 単体で requiresApiKey→HTTPS 不変条件を判定できないため、
+// PUT route が既存レコードとマージした実効状態に対して
+// apiKeyHttpsInvariantViolation で検査する (単一の検査点)。
+export const dataSourceUpdateSchema = dataSourceBaseSchema.partial();
 
 export const tagCreateSchema = z.object({
   name: z.string().trim().min(1, "タグ名は必須です").max(100),

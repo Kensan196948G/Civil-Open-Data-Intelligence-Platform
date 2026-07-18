@@ -38,6 +38,29 @@ Cloudflare Access保護は `infra/cloudflare/` のTerraformテンプレートを
 
 ## 3. Migration
 
+### 3.0 PostGIS capability preflight (migration 実行前に必須)
+
+初回 migration (`20260713113000_init`) は先頭で `CREATE EXTENSION IF NOT EXISTS postgis` を実行する。
+対象 DB で PostGIS 拡張が利用できない場合 (拡張ポリシーが制限された managed PostgreSQL 等)、
+migration が途中失敗して中途半端な状態が残るため、**適用前に必ず拡張の利用可否を確認する**。
+
+```bash
+# postgis が利用可能な拡張として提供されているか (1行返れば OK)
+DATABASE_URL="$CODIP_MIGRATION_DATABASE_URL" \
+  psql "$CODIP_MIGRATION_DATABASE_URL" -c \
+  "SELECT name, default_version FROM pg_available_extensions WHERE name = 'postgis';"
+
+# 権限も含めて実際に有効化できるか (migration と同じ文。冪等)
+psql "$CODIP_MIGRATION_DATABASE_URL" -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+```
+
+- Neon は PostGIS を標準サポートしており `CREATE EXTENSION postgis` で有効化できる
+- preflight が失敗する環境では migration を実行しない。拡張が有効化できる DB を用意するか、
+  対象 DB の選定をやり直す (Codex adversarial review 指摘: 拡張前提の migration は
+  環境非依存ではないため、能力確認を deploy 手順の必須ステップとする)
+- migration 失敗時の復旧は §5 Rollback と `docs/runbooks/rollback.md` §4/§5 を参照
+  (Prisma に down migration はなく、branch 破棄 / PITR / forward fix で戻す)
+
 ```bash
 DATABASE_URL="$CODIP_MIGRATION_DATABASE_URL" \
   npx prisma migrate status --schema prisma/postgresql/schema.prisma

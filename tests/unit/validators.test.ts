@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { dataSourceCreateSchema, dataSourceUpdateSchema, tagCreateSchema } from "@/lib/validators";
+import {
+  apiKeyHttpsInvariantViolation,
+  dataSourceCreateSchema,
+  dataSourceUpdateSchema,
+  tagCreateSchema,
+} from "@/lib/validators";
 
 const validSource = {
   name: "国土数値情報",
@@ -123,13 +128,22 @@ describe("dataSourceCreateSchema", () => {
         apiKeyEnvName: "ESTAT_APP_ID",
       }).success,
     ).toBe(false);
+    // update schema は payload 単体では不変条件を判定できないため schema 検査しない
+    // (route が既存レコードとマージした実効状態で検査する。下の describe を参照)
     expect(
       dataSourceUpdateSchema.safeParse({
         officialUrl: "http://example.com/open-data.json",
         requiresApiKey: true,
         apiKeyEnvName: "ESTAT_APP_ID",
       }).success,
-    ).toBe(false);
+    ).toBe(true);
+    // Codex review 指摘: APIキー関連フィールドのみの部分更新が拒否されない
+    expect(
+      dataSourceUpdateSchema.safeParse({
+        requiresApiKey: true,
+        apiKeyEnvName: "ESTAT_APP_ID",
+      }).success,
+    ).toBe(true);
     expect(
       dataSourceCreateSchema.safeParse({
         ...validSource,
@@ -157,6 +171,55 @@ describe("dataSourceCreateSchema", () => {
     expect(
       dataSourceCreateSchema.safeParse({ ...validSource, attributionRequired: "0" }).success,
     ).toBe(false);
+  });
+});
+
+describe("apiKeyHttpsInvariantViolation (マージ後の実効状態検査)", () => {
+  it("requiresApiKey=true + http officialUrl は違反", () => {
+    const v = apiKeyHttpsInvariantViolation({
+      requiresApiKey: true,
+      endpointUrl: null,
+      officialUrl: "http://example.com/data.json",
+    });
+    expect(v).toEqual({ path: "officialUrl", message: expect.stringContaining("HTTPS") });
+  });
+
+  it("Codex adversarial 指摘の再現: 既存 requiresApiKey=true へ URL のみ http に部分更新すると違反", () => {
+    // 既存: requiresApiKey=true, officialUrl=https / patch: officialUrl=http のマージ結果
+    const v = apiKeyHttpsInvariantViolation({
+      requiresApiKey: true, // 既存値を引き継ぐ
+      endpointUrl: null,
+      officialUrl: "http://insecure.example.jp/api", // patch で http へ
+    });
+    expect(v).not.toBeNull();
+  });
+
+  it("Codex review 指摘の再現: APIキーのみの部分更新でも既存 https URL があれば違反なし", () => {
+    // 既存: officialUrl=https / patch: requiresApiKey=true のみ のマージ結果
+    const v = apiKeyHttpsInvariantViolation({
+      requiresApiKey: true,
+      endpointUrl: null,
+      officialUrl: "https://nlftp.mlit.go.jp/ksj/", // 既存値を引き継ぐ
+    });
+    expect(v).toBeNull();
+  });
+
+  it("endpointUrl があればそちらを優先して検査する", () => {
+    const v = apiKeyHttpsInvariantViolation({
+      requiresApiKey: true,
+      endpointUrl: "http://api.example.com/",
+      officialUrl: "https://example.com/",
+    });
+    expect(v).toEqual({ path: "endpointUrl", message: expect.stringContaining("HTTPS") });
+  });
+
+  it("requiresApiKey=false なら URL が http でも違反なし", () => {
+    const v = apiKeyHttpsInvariantViolation({
+      requiresApiKey: false,
+      endpointUrl: null,
+      officialUrl: "http://example.com/data.json",
+    });
+    expect(v).toBeNull();
   });
 });
 
