@@ -37,6 +37,15 @@ function rawCsvValues(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Issue #24 / Codex adversarial P2: CODIP_DISABLE_TOKEN_AUTH の正規化パース。
+ * 大文字・空白の揺れ (TRUE / " true ") で「無効化したつもりが有効のまま」という
+ * fail-open を避ける。不正値の fail-fast は validate-env.js が担う。
+ */
+export function isTokenAuthDisabled(): boolean {
+  return (process.env.CODIP_DISABLE_TOKEN_AUTH ?? "").trim().toLowerCase() === "true";
+}
+
 function bearerToken(headers: HeaderReader): string | null {
   const authorization = headers.get("authorization");
   if (!authorization) return null;
@@ -284,8 +293,7 @@ function adminAuthSource(headers: HeaderReader): AdminAuthSource {
     // 本番では、token ヘッダー経路を明示フラグで無効化できる。token が漏洩しても
     // proxy を経由しない直接アクセスで管理操作できなくなる。既定は後方互換 (有効)。
     // session (ブラウザ Cookie) 経路はトークン値を送らないため無効化対象外
-    const tokenHeaderDisabled = process.env.CODIP_DISABLE_TOKEN_AUTH === "true";
-    if (!tokenHeaderDisabled) {
+    if (!isTokenAuthDisabled()) {
       const requestToken = headers.get(ADMIN_TOKEN_HEADER) ?? bearerToken(headers);
       if (requestToken && safeEqual(requestToken, configuredToken)) return "token";
     }

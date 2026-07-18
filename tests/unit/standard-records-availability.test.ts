@@ -81,4 +81,20 @@ describe("standardRecordsAvailable", () => {
 
     expect(queryRawMock).toHaveBeenCalledTimes(2);
   });
+
+  it("並行呼び出しは 1 回の評価を共有する (single-flight)", async () => {
+    let resolveQuery: (rows: { count: number }[]) => void = () => {};
+    queryRawMock.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveQuery = resolve; }),
+    );
+
+    const p1 = standardRecordsAvailable();
+    const p2 = standardRecordsAvailable();
+    resolveQuery([{ count: 2 }]);
+
+    await expect(p1).resolves.toBe(true);
+    await expect(p2).resolves.toBe(true);
+    expect(queryRawMock).toHaveBeenCalledTimes(1);
+  });
 });
+

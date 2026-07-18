@@ -94,6 +94,11 @@ export type StandardFeatureCollectionResult = {
 // プロセス再起動まで standard モードに固定される。false は従来どおり毎回再評価する
 const AVAILABILITY_TTL_MS = 60_000;
 let standardRecordsAvailableUntil = 0;
+// 並行評価の single-flight 化 (CodeRabbit major / Codex thundering-herd):
+// 同時リクエストで複数の COUNT クエリが走ると、古い非空結果が新しい空結果より
+// 後に完了して TTL を復活させる last-write-wins race が起きうる。
+// 評価を 1 本に共有すれば順序逆転もクエリ多重も構造的に消える
+let availabilityInFlight: Promise<boolean> | null = null;
 
 function parseJson(value: unknown) {
   if (!value) return null;
@@ -166,6 +171,7 @@ function bboxFromGeometries(geometries: unknown[]) {
 
 export function resetStandardRecordsAvailabilityForTests() {
   standardRecordsAvailableUntil = 0;
+  availabilityInFlight = null;
 }
 
 export async function standardRecordsAvailable() {
@@ -173,12 +179,21 @@ export async function standardRecordsAvailable() {
   // true は TTL 内のみキャッシュ (期限切れ後は再評価し、空化を検知して fallback へ戻れる)。
   // false(未投入)は後続の取り込みで true に変わりうるため毎回再評価する
   if (Date.now() < standardRecordsAvailableUntil) return true;
-  const rows = await prisma.$queryRaw<{ count: number | bigint }[]>`
-    SELECT COUNT(*)::int AS "count" FROM "standard_records"
-  `;
-  const available = Number(rows[0]?.count ?? 0) > 0;
-  standardRecordsAvailableUntil = available ? Date.now() + AVAILABILITY_TTL_MS : 0;
-  return available;
+  if (!availabilityInFlight) {
+    availabilityInFlight = (async () => {
+      try {
+        const rows = await prisma.$queryRaw<{ count: number | bigint }[]>`
+          SELECT COUNT(*)::int AS "count" FROM "standard_records"
+        `;
+        const available = Number(rows[0]?.count ?? 0) > 0;
+        standardRecordsAvailableUntil = available ? Date.now() + AVAILABILITY_TTL_MS : 0;
+        return available;
+      } finally {
+        availabilityInFlight = null;
+      }
+    })();
+  }
+  return availabilityInFlight;
 }
 
 function standardRecordDto(row: RawStandardRecord) {

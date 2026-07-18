@@ -2,6 +2,19 @@
 
 CODIPをCloudflare + Neon/PostGISへ出す前のstaging確認手順である。現行MVPの正式デプロイ可否は、このrunbookの証跡が揃ってから判断する。
 
+## 0. 対象サブドメイン候補
+
+本番・staging で使うサブドメインの **候補** を以下に記録する。いずれも管理ドメイン `mirai-dx-platform.com` 配下を想定した候補であり、**確定は人間判断**とする。
+
+| 用途 | サブドメイン候補 | 位置づけ |
+| --- | --- | --- |
+| 本番 | `codip.mirai-dx-platform.com` | 本命候補 |
+| staging | `codip-staging.mirai-dx-platform.com` | staging 候補 |
+
+- ⚠️ **本 runbook では DNS レコードの変更・作成は行わない**。上表はあくまで候補の文書化であり、実際の DNS 設定・サブドメイン確定・証明書発行はすべて人間が判断・実行する。
+- サブドメインが確定したら、`CODIP_BASE_URL` / `CODIP_STAGING_BASE_URL` および Cloudflare Access の allowlist・Terraform 変数へ実値を反映する (§1・§3.1 参照)。
+- 本番と staging は別サブドメインで分離し、Cloudflare Access の保護対象をそれぞれ設定する。
+
 ## 1. 接続方針
 
 | 用途 | 接続先 | 方針 |

@@ -40,9 +40,9 @@ CODIPは公開データを扱うが、APIキー、接続情報、取得ログ、
 
 ブラウザUIでは `CODIP_ADMIN_TOKEN` をlocalStorageへ保存しない。設定画面でトークンを入力すると、サーバーが `CODIP_ADMIN_TOKEN` と定数時間比較で照合し、トークン値そのものではなく発行時刻・期限・nonceを署名したHttpOnly Cookieを発行する。HTTPSでは `__Host-` prefix付きCookieを使う。HTTPローカル検証でブラウザ保存が必要な場合だけ `CODIP_ALLOW_INSECURE_LOCAL_COOKIES=true` を明示し、通常Cookieへ切り替える。管理セッション開始は `5 req/min` に制限する。クライアント識別は `CODIP_TRUST_PROXY_HEADERS=true` のときのみForwarded系ヘッダー由来のIP単位となり、未設定時は信頼できる識別子が得られないため**インスタンス全体で共有する単一バケット**として動作する (ヘッダー偽装によるバイパスを拒否するfail-safe設計の副作用。Cloudflare経由の本番構成では `wrangler.jsonc` が全環境で `true` を設定済み)。
 
-Cookie認証で `POST`、`PUT`、`PATCH`、`DELETE` の管理操作を行う場合は、`Origin` または `Referer` がリクエストURL、または `CODIP_ALLOWED_ORIGINS` に一致することを必須にする。APIクライアント互換のため、`x-codip-admin-token` と `Authorization: Bearer` は引き続き利用できる。
+Cookie認証で `POST`、`PUT`、`PATCH`、`DELETE` の管理操作を行う場合は、`Origin` または `Referer` がリクエストURL、または `CODIP_ALLOWED_ORIGINS` に一致することを必須にする。APIクライアント互換のため、`x-codip-admin-token` と `Authorization: Bearer` は引き続き利用できる (`CODIP_DISABLE_TOKEN_AUTH` が未設定または無効の場合のみ)。
 
-`/api/admin/session` によるブラウザ向け管理セッション開始・終了でも、`Origin` または `Referer` の欠落を拒否する。非ブラウザの管理API利用では、セッションCookieではなく `x-codip-admin-token` または `Authorization: Bearer` を使う。
+`/api/admin/session` によるブラウザ向け管理セッション開始・終了でも、`Origin` または `Referer` の欠落を拒否する。非ブラウザの管理API利用では、セッションCookieではなく `x-codip-admin-token` または `Authorization: Bearer` を使う (`CODIP_DISABLE_TOKEN_AUTH=true` の環境ではトークン経路自体が無効のため、認証プロキシ経由でアクセスする)。
 
 ## 2.2 ログ・サンプルレスポンスの保護
 

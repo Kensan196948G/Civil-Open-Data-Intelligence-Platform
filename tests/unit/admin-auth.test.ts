@@ -463,5 +463,18 @@ describe("requireAdminRequest", () => {
 
     expect(response).toBeNull();
   });
+
+  it("Issue #24: フラグ値は正規化される (大文字 TRUE でも無効化が効く)", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("CODIP_ADMIN_TOKEN", "secret-token-12345678901234567890");
+    vi.stubEnv("CODIP_DISABLE_TOKEN_AUTH", " TRUE ");
+
+    const response = requireAdminRequest(
+      request({ "x-codip-admin-token": "secret-token-12345678901234567890" }),
+    );
+
+    expect(response?.status).toBe(401);
+  });
 });
+
 

@@ -24,6 +24,7 @@ Civil Open Data Intelligence Platform（CODIP）は、土木建設関連の公�
 | 計画 | [14-roadmap.md](14-roadmap.md) | フェーズ0から5までの開発計画 |
 | 用語 | [15-glossary.md](15-glossary.md) | 用語と略語 |
 | リリース | [16-release-readiness-checklist.md](16-release-readiness-checklist.md) | デプロイ直前のテスト、監視、セキュリティ、運用確認 |
+| リリースノート | [release-notes.md](release-notes.md) | 利用者向けリリースノート (2026-07-18 デザイン刷新 + リリース基盤ほか) |
 
 ## Runbook
 
@@ -31,6 +32,7 @@ Civil Open Data Intelligence Platform（CODIP）は、土木建設関連の公�
 | --- | --- |
 | [runbooks/database-deployment.md](runbooks/database-deployment.md) | SQLite preview運用、バックアップ、PostgreSQL/PostGIS移行前チェック |
 | [runbooks/cloudflare-neon-staging.md](runbooks/cloudflare-neon-staging.md) | Cloudflare/Neon stagingのmigration、smoke、rollback、証跡 |
+| [runbooks/monitoring.md](runbooks/monitoring.md) | 監視手順書 (systemd healthcheck timer、日常確認コマンド、アラート初動) |
 | [runbooks/rollback.md](runbooks/rollback.md) | 障害時の切り戻し手順 (判断フロー、Workers、GHCR、Neon PITR、Prisma、SQLite、復旧後検証) |
 
 ## テンプレート

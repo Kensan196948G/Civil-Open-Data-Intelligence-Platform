@@ -11,6 +11,7 @@ import {
   isSecureRequest,
   rejectCrossOriginBrowserRequest,
   safeTokenEqual,
+  isTokenAuthDisabled,
 } from "@/lib/admin-auth";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
   // Issue #24: CODIP_DISABLE_TOKEN_AUTH=true はトークン認証経路全体の無効化を意味する。
   // ヘッダー経路 (admin-auth.ts) だけ閉じてもここで Cookie を発行できると迂回になるため、
   // トークンによるセッション開始も同時に拒否する (proxy auth 経由のみが管理経路になる)
-  if (process.env.CODIP_DISABLE_TOKEN_AUTH === "true") {
+  if (isTokenAuthDisabled()) {
     return NextResponse.json(
       {
         error: "token_auth_disabled",

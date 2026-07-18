@@ -193,6 +193,29 @@ function main() {
     fail(errors, "CODIP_TRUST_PROXY_AUTH=true requires CODIP_ADMIN_EMAILS or CODIP_ADMIN_EMAIL_DOMAINS");
   }
 
+  // Issue #24 (Codex adversarial P2/P3): CODIP_DISABLE_TOKEN_AUTH の検証。
+  // (a) 真偽の揺れ (TRUE 等) は正規化して受理し、それ以外の値は fail-open を防ぐため拒否する。
+  // (b) 有効化時は proxy auth が完全構成されていることを必須にする
+  //     (トークン経路とトークンによるセッション開始が両方閉じるため、
+  //      proxy 不備だと管理経路が消失するロックアウトになる)。
+  const disableTokenAuthRaw = (env.CODIP_DISABLE_TOKEN_AUTH ?? "").trim();
+  const disableTokenAuthNormalized = disableTokenAuthRaw.toLowerCase();
+  if (disableTokenAuthRaw && !["true", "false"].includes(disableTokenAuthNormalized)) {
+    fail(
+      errors,
+      `CODIP_DISABLE_TOKEN_AUTH must be "true", "false", or unset (got "${disableTokenAuthRaw}")`,
+    );
+  }
+  if (disableTokenAuthNormalized === "true" && mode !== "local") {
+    if (!trustProxy) {
+      fail(
+        errors,
+        "CODIP_DISABLE_TOKEN_AUTH=true requires CODIP_TRUST_PROXY_AUTH=true (otherwise no admin path remains)",
+      );
+    }
+    // proxy 側の詳細要件 (secret 長・allowlist) は上の trustProxy 検証が担う
+  }
+
   for (const message of warnings) {
     console.warn(`[env][warn] ${message}`);
   }

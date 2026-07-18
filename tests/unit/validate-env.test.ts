@@ -166,4 +166,40 @@ describe("validate-env release contract", () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("[production-target-env] OK (staging)");
   });
+
+  it("Issue #24: CODIP_DISABLE_TOKEN_AUTH の不正値を拒否する (fail-open 防止)", () => {
+    const result = runValidateEnv("preview", {
+      DATABASE_URL: "postgresql://codip:codip@example.com:5432/codip?sslmode=require",
+      CODIP_ADMIN_TOKEN: "preview-admin-token-1234567890123",
+      CODIP_DISABLE_TOKEN_AUTH: "yes",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("CODIP_DISABLE_TOKEN_AUTH must be");
+  });
+
+  it("Issue #24: 大文字 TRUE も正規値として受理する", () => {
+    const result = runValidateEnv("preview", {
+      DATABASE_URL: "postgresql://codip:codip@example.com:5432/codip?sslmode=require",
+      CODIP_ADMIN_TOKEN: "preview-admin-token-1234567890123",
+      CODIP_DISABLE_TOKEN_AUTH: "TRUE",
+      CODIP_TRUST_PROXY_AUTH: "true",
+      CODIP_TRUST_PROXY_SECRET: "proxy-shared-secret-123456789012345",
+      CODIP_ADMIN_EMAILS: "admin@example.com",
+    });
+
+    expect(result.status).toBe(0);
+  });
+
+  it("Issue #24: フラグ有効時に proxy auth 未構成ならロックアウトとして拒否する", () => {
+    const result = runValidateEnv("preview", {
+      DATABASE_URL: "postgresql://codip:codip@example.com:5432/codip?sslmode=require",
+      CODIP_ADMIN_TOKEN: "preview-admin-token-1234567890123",
+      CODIP_DISABLE_TOKEN_AUTH: "true",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("no admin path remains");
+  });
 });
+

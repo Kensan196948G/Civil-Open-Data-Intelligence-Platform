@@ -241,14 +241,17 @@ flowchart TB
 | 5 | `infra/cloudflare/` の `terraform apply` | 本番アクセス制御の変更 |
 | 6 | `wrangler deploy --env production` | 本番デプロイ |
 
-### ⚠️ 残課題
+### ⚠️ 残課題 (open issues)
 
-- **Codex review (通常・対抗)**: `disable-model-invocation` により自律 CTO から起動不可。人間実行待ち ([Issue #19](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/19))
-- **Cloudflare Workers ランタイム互換**: [Issue #18](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/18)。Cloudflare 公式ドキュメントで確認したとおり、`nodejs_compat` の `node:dns` は `lookup` / `lookupService` / `resolve` が "Not implemented" を throw する。CODIP の SSRF ガードは例外を捕捉して拒否側へ倒れる (fail-closed) ため脆弱性化はしないが、Workers 上では外部URL取得が機能しない。修正経路は `dns.promises.resolve4` / `resolve6` への置換
-- **main の branch protection 未設定**: 「CI 未通過 merge 禁止」「main 直 push 禁止」が技術的に強制されていない。PR #17 merge 前の設定を推奨
-- **PR #17 Draft → Ready**: Codex レビュー結果待ち。main への merge は人間判断待ち。**merge すると `docker-supply-chain` job が GHCR へイメージを push する** (リポジトリが private のためイメージも既定 private)
+| Issue | 区分 | 内容 |
+| --- | --- | --- |
+| [#18](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/18) | P1 | Cloudflare Workers ランタイム互換。`nodejs_compat` の `node:dns` は `lookup` / `lookupService` / `resolve` が "Not implemented" を throw する。SSRF ガードは例外を拒否側へ倒す (fail-closed) ため脆弱性化はしないが、Workers 上では外部URL取得が機能しない。修正経路は `dns.promises.resolve4` / `resolve6` 置換 |
+| [#35](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/35) | 移行 | Docker 廃止 (systemd 配信への移行) |
+| [#36](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/36) | UI | フォント関連の改善 |
+| [#24](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/24) | セキュリティ | token 認証を本番で無効化するフラグの追加 (proxy 単独化) |
+| [#25](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/25) | 品質 | `standardRecordsAvailable` の TTL 化 |
 
-🔒 **本番リリース・本番デプロイは未実施**。リリース直前の完成状態まで整え、承認待ちで停止しています。
+🔒 **本番リリース・本番デプロイは未実施**。現在は LAN 限定の systemd 配信で稼働し、Cloudflare/Neon 本番化は人間承認待ちです。
 切り戻し手順は [`docs/runbooks/rollback.md`](docs/runbooks/rollback.md) を参照してください。
 
 ---
