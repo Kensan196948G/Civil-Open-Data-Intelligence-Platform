@@ -38,6 +38,20 @@ export async function POST(request: NextRequest) {
   const rate = checkRateLimit("api:admin-session", clientIdentifier(request), 5, 60_000);
   if (!rate.allowed) return rateLimitResponse(rate);
 
+  // Issue #24: CODIP_DISABLE_TOKEN_AUTH=true はトークン認証経路全体の無効化を意味する。
+  // ヘッダー経路 (admin-auth.ts) だけ閉じてもここで Cookie を発行できると迂回になるため、
+  // トークンによるセッション開始も同時に拒否する (proxy auth 経由のみが管理経路になる)
+  if (process.env.CODIP_DISABLE_TOKEN_AUTH === "true") {
+    return NextResponse.json(
+      {
+        error: "token_auth_disabled",
+        message:
+          "トークン認証は無効化されています (CODIP_DISABLE_TOKEN_AUTH)。認証プロキシ経由でアクセスしてください",
+      },
+      { status: 403 },
+    );
+  }
+
   const body = await request.json().catch(() => null);
   const token = typeof body?.token === "string" ? body.token.trim() : "";
   const rawConfiguredToken = process.env.CODIP_ADMIN_TOKEN?.trim();

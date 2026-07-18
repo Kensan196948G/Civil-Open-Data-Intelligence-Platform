@@ -280,8 +280,15 @@ function adminAuthSource(headers: HeaderReader): AdminAuthSource {
 
   const configuredToken = configuredAdminToken();
   if (configuredToken) {
-    const requestToken = headers.get(ADMIN_TOKEN_HEADER) ?? bearerToken(headers);
-    if (requestToken && safeEqual(requestToken, configuredToken)) return "token";
+    // Issue #24 (Codex adversarial P2): proxy auth (Cloudflare Access) を主境界とする
+    // 本番では、token ヘッダー経路を明示フラグで無効化できる。token が漏洩しても
+    // proxy を経由しない直接アクセスで管理操作できなくなる。既定は後方互換 (有効)。
+    // session (ブラウザ Cookie) 経路はトークン値を送らないため無効化対象外
+    const tokenHeaderDisabled = process.env.CODIP_DISABLE_TOKEN_AUTH === "true";
+    if (!tokenHeaderDisabled) {
+      const requestToken = headers.get(ADMIN_TOKEN_HEADER) ?? bearerToken(headers);
+      if (requestToken && safeEqual(requestToken, configuredToken)) return "token";
+    }
     if (sessionCookieMatches(headers, configuredToken)) return "session";
   }
 

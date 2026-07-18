@@ -28,6 +28,7 @@ CODIPは公開データを扱うが、APIキー、接続情報、取得ログ、
 | `CODIP_ALLOW_INSECURE_ADMIN` | ローカル開発でのみ管理操作を無認証許可する明示フラグ |
 | `CODIP_ALLOW_INSECURE_LOCAL_COOKIES` | ローカルHTTP検証でのみ管理CookieのSecure強制を解除する明示フラグ |
 | `CODIP_TRUST_PROXY_AUTH` | Cloudflare Access等の認証済みプロキシヘッダーを信頼する場合のみ `true` |
+| `CODIP_DISABLE_TOKEN_AUTH` | proxy authを主境界とする本番で、トークン認証経路 (`x-codip-admin-token`・`Authorization: Bearer`・トークンによるセッション開始) を無効化する明示フラグ。既定は無効(トークン認証は利用可能)。署名済みセッションCookieの検証は影響を受けない |
 | `CODIP_TRUST_PROXY_HEADERS` | 信頼済みプロキシ配下でのみ、Forwarded系IP/host/protoヘッダーを使う |
 | `CODIP_TRUST_PROXY_SECRET` | プロキシが `x-codip-proxy-secret` として付与する共有シークレット |
 | `CODIP_ADMIN_EMAILS` | プロキシ認証時に管理者として扱うメールアドレス |

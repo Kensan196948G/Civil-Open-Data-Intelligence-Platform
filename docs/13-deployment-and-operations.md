@@ -36,6 +36,7 @@ Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、C
 | `CODIP_ADMIN_TOKEN` | Preview/Production | 管理操作APIの保護トークン。32文字以上の十分ランダムな値 |
 | `CODIP_ALLOW_INSECURE_ADMIN` | Local only | ローカル開発でのみ管理操作を無認証許可する明示フラグ |
 | `CODIP_TRUST_PROXY_AUTH` | Optional | Cloudflare Access等の認証済みプロキシを信頼する場合のみ `true` |
+| `CODIP_DISABLE_TOKEN_AUTH` | Optional | proxy auth主境界の本番でトークン認証経路を無効化する (Issue #24)。既定は無効 |
 | `CODIP_TRUST_PROXY_HEADERS` | Optional | 信頼済みプロキシ配下でのみ、レート制限にForwarded系IPヘッダーを使う |
 | `CODIP_TRUST_PROXY_SECRET` | Proxy auth時 | プロキシから `x-codip-proxy-secret` として送る共有シークレット |
 | `CODIP_ADMIN_EMAILS` | Proxy auth時 | 管理者として許可するメールアドレス |

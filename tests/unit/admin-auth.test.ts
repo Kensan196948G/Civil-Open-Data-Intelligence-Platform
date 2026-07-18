@@ -439,4 +439,29 @@ describe("requireAdminRequest", () => {
       error: "admin_guard_not_configured",
     });
   });
+
+  it("Issue #24: CODIP_DISABLE_TOKEN_AUTH=true はトークンヘッダー経路を拒否する", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("CODIP_ADMIN_TOKEN", "secret-token-12345678901234567890");
+    vi.stubEnv("CODIP_DISABLE_TOKEN_AUTH", "true");
+
+    const response = requireAdminRequest(
+      request({ "x-codip-admin-token": "secret-token-12345678901234567890" }),
+    );
+
+    expect(response?.status).toBe(401);
+  });
+
+  it("Issue #24: フラグ有効時も署名済みセッション Cookie 経路は維持される", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("CODIP_ADMIN_TOKEN", "secret-token-12345678901234567890");
+    vi.stubEnv("CODIP_DISABLE_TOKEN_AUTH", "true");
+
+    const response = requireAdminRequest(
+      request({ cookie: `${ADMIN_SESSION_COOKIE}=${adminSessionValue("secret-token-12345678901234567890")}` }),
+    );
+
+    expect(response).toBeNull();
+  });
 });
+

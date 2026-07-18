@@ -177,4 +177,22 @@ describe("admin session route", () => {
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toMatchObject({ error: "csrf_check_failed" });
   });
+
+  it("Issue #24: CODIP_DISABLE_TOKEN_AUTH=true ではトークンによるセッション開始も 403 で拒否する", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("CODIP_ADMIN_TOKEN", "secret-token-12345678901234567890");
+    vi.stubEnv("CODIP_DISABLE_TOKEN_AUTH", "true");
+
+    const response = await sessionPOST(
+      request({
+        method: "POST",
+        body: JSON.stringify({ token: "secret-token-12345678901234567890" }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: "token_auth_disabled" });
+  });
 });
+
