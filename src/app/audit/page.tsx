@@ -6,6 +6,10 @@ import { AuditLogPanel } from "@/components/AuditLogPanel";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "監査ログ",
+};
+
 // デザイン正本 (AUDIT_LEVELS) と同一の配色・ラベル
 const AUDIT_LEVELS = {
   info: { fg: "var(--blue)", bg: "var(--blue-bg)", label: "情報" },
