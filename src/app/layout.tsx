@@ -10,6 +10,11 @@ export const metadata: Metadata = {
     default: "Civil Open Data Intelligence Platform",
   },
   description: "土木建設オープンデータ統合分析基盤",
+  // 注意: src/app/icon.svg のメタデータ規約は next-metadata-image-loader が WASM を
+  // 使うため本環境ではビルド不能 (next/font と同根)。public/ 静的配信 + URL 参照にする
+  icons: {
+    icon: { url: "/icon.svg", type: "image/svg+xml" },
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
