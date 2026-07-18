@@ -179,3 +179,24 @@ model StandardRecord {
   @@index([category])
   @@map("standard_records")
 }
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actor      String // 管理者 / システム
+  action     String // データソース登録 / 設定変更 / 接続確認実行 など
+  target     String
+  detail     String
+  level      String   @default("info") // info / success / warning / danger
+  occurredAt DateTime @default(now())
+
+  @@index([occurredAt])
+  @@map("audit_logs")
+}
+
+model AppSetting {
+  key       String   @id // timeoutSec / redirectLimit / previewKb / staleDays
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
+}
