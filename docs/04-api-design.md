@@ -56,6 +56,8 @@ CODIPのAPIは3種類に分ける。
 | `/api/tags` | GET/POST | タグ一覧・登録 |
 | `/api/tags/{id}` | DELETE | タグ削除 |
 | `/api/map/elevation` | GET | 緯度経度から標高取得 |
+| `/api/admin/settings` | GET/PUT | 接続確認の動作設定の取得・変更 (変更は管理者のみ、監査ログへ記録) |
+| `/api/admin/audit-events` | POST | クライアント操作 (エクスポート・APIキー) の監査イベント記録 (種別はサーバー側写像で固定) |
 
 ## 4. 後続システム向けAPI
 

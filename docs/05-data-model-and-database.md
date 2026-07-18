@@ -25,6 +25,8 @@ erDiagram
 | `sample_responses` | サンプルレスポンス |
 | `quality_checks` | 品質評価履歴 |
 | `related_use_cases` | 後続利用候補 |
+| `audit_logs` | 操作・イベントの監査証跡 (実行者・操作・対象・詳細・レベル) |
+| `app_settings` | 接続確認の動作設定 (タイムアウト・リダイレクト上限・プレビュー保存上限・要確認期間) |
 
 ## 3. 共通データモデル
 
