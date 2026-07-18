@@ -135,7 +135,7 @@ flowchart TD
 
 ## 🚦 記録済みリリースゲート証跡
 
-2026-07-13時点のDraft PR #17で取得したgreen baselineです。最新のPR headに対する状態はGitHub PR checksを正とし、run IDはリリース時に [docs/16-release-readiness-checklist.md](docs/16-release-readiness-checklist.md) へ追記します。
+2026-07-13時点のDraft PR #17で取得したgreen baselineです (**PR #17 は 2026-07-18 に main へ merge 済み**。最新の配信状況は下の「リリース準備状況」節を参照)。run IDと詳細な証跡は [docs/16-release-readiness-checklist.md](docs/16-release-readiness-checklist.md) を正とします。
 
 | 区分 | 状態 | 証跡 |
 | --- | --- | --- |
@@ -156,31 +156,77 @@ flowchart TD
 
 ---
 
-## ✅ リリース準備状況 (2026-07-18 再検証)
+## ✅ リリース準備状況 (2026-07-18 リリース反映)
 
-`branch agent/release-readiness-postgis-ci` (PR #17 Draft, commit `1f1d570`) を 2026-07-18 に再検証した結果。すべての単体ゲートがgreen、PostgreSQL/PostGIS Docker previewの起動とruntime smokeも成功しました。GitHub Actions CI も同一 commit に対して全 job green です。
+2026-07-18 に **7 本の PR を main へ merge** し、リリース準備基盤とデザイン刷新を反映しました。現在は **社内 LAN 限定の systemd 配信** で稼働しており、Cloudflare Workers + Neon への本番化は人間承認待ちで未実施です。詳細なリリース内容は [docs/release-notes.md](docs/release-notes.md)、CI ゲート証跡は [docs/16-release-readiness-checklist.md](docs/16-release-readiness-checklist.md) を参照してください。
 
-| 区分 | コマンド | 結果 |
+### 📦 2026-07-18 マージ実績 (7 PR)
+
+| PR | 区分 | 内容 |
 | --- | --- | --- |
-| 静的解析 | `npm run lint` | 🟢 0 errors |
-| 型検査 | `npx tsc --noEmit` | 🟢 0 errors |
-| 単体テスト | `npm run test` | 🟢 222 passed / 21 files |
-| 契約チェック | `release:check-{v1-contract,doc-api-contract,openapi-coverage,docker-contract,cloudflare-contract,github-actions-contract}` | 🟢 all OK (19 API routes covered) |
-| 本番ビルド | `npm run build` | 🟢 success (27 routes) |
-| リリースゲート | `npm run release:gate` | 🟢 OK |
-| SQLite duplicate公式URL | `db:check-duplicates` | 🟢 no duplicates |
-| 標準レコード方針 | `db:check-standard-record-policy` (PostgreSQL) | 🟢 standard_records=1 |
-| Prisma model parity | `db:compare-schemas` | 🟢 OK |
-| PostgreSQL schema検証 | `db:pg:validate` | 🟢 schema valid |
-| PostgreSQL drift | `db:pg:check-drift` (PostGIS docker上) | 🟢 OK (GiST index ignoredは仕様) |
-| PostGIS DDL | `db:pg:check-postgis-ddl` | 🟢 OK |
-| env検証 (local) | `validate-env --mode local` | 🟢 OK (警告のみ) |
-| env検証 (preview) | `validate-env --mode preview` | 🟢 OK |
-| Docker PostGIS preview | `docker compose -f docker-compose.postgresql-preview.yml up --build` | 🟢 healthy (port 3102) |
-| `release:smoke` (PostGIS環境) | `npm run release:smoke -- --base-url http://127.0.0.1:3102 --expect-standard-records --expect-seed-standard-record` | 🟢 80 checks passed |
-| 秘密情報混入確認 | `grep -E "password|api[_-]?key|secret|token" --include="*.ts"` | 🟢 ソース内の機密値ゼロ (URL safety regex, label, placeholder のみ) |
-| TODO/FIXME | `grep -E "TODO|FIXME|XXX|HACK"` src/ scripts/ docs/ | 🟢 検出0件 |
-| E2E (ローカル) | `npm run test:e2e` | ⚪ Chromium `SIGTRAP` で18件失敗。CI `e2e` ジョブは `pass` 実績。本制約は §既知制約 に既載 |
+| [#17](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/pull/17) | 🚦 基盤 | リリース準備 + PostGIS CI |
+| [#30](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/pull/30) | 🎨 UI | WebUI デザイン 100% 適用 (250px サイドバー / IBM Plex / 監査ログ画面新設) |
+| [#37](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/pull/37) | 🎨 UI / 品質 | TtlCache / アクセシビリティ改善 / 404 ページ |
+| [#38](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/pull/38) | 🧪 品質 | モバイル E2E 追加 (CI 34 テスト) |
+| [#39](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/pull/39) | 🎨 UI | favicon |
+| [#40](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/pull/40) | 🎨 UI | 設定画面 (API キー設定パネル) |
+| [#41](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/pull/41) | 🗺️ 地図 | OSM タイル + 標高シミュレーション |
+
+### 🖥️ 現在の配信形態 (systemd LAN)
+
+現行の稼働は Docker を使わず、systemd user unit による直接配信です (Docker 廃止方針は [Issue #35](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/35) で進行中)。
+
+| 項目 | 値 |
+| --- | --- |
+| 配信方式 | systemd user unit `codip-webui.service` |
+| 起動コマンド | `next start -H 0.0.0.0 -p 3100` |
+| 公開範囲 | 社内 LAN のみ |
+| 環境変数 | `~/.config/codip/codip-webui.env` (パーミッション 600) |
+| 確認 URL | http://192.168.0.185:3100/ |
+| DB | SQLite preview (台帳中心) |
+
+### 🧱 現在と目標のアーキテクチャ
+
+```mermaid
+flowchart TB
+    subgraph NOW["🟢 現在: Linux / systemd + SQLite(preview)"]
+        direction LR
+        U1["👤 LAN 利用者<br/>http://192.168.0.185:3100/"] --> S1["systemd user unit<br/>codip-webui.service"]
+        S1 --> N1["next start<br/>-H 0.0.0.0 -p 3100"]
+        N1 --> DB1["🗄️ SQLite preview"]
+    end
+    subgraph TARGET["🎯 目標: Cloudflare Workers + Neon"]
+        direction LR
+        U2["🌐 公開利用者"] --> CF["🛡️ Cloudflare Access + Workers"]
+        CF --> HD["⚡ Hyperdrive"]
+        HD --> DB2["🐘 Neon PostgreSQL + PostGIS"]
+    end
+    NOW -. 本番化 (Issue #18 / #35 解消後・人間承認必須) .-> TARGET
+```
+
+### 🎨 UI 刷新の要点
+
+| 要素 | 内容 | PR |
+| --- | --- | --- |
+| レイアウト | 250px 固定サイドバーによる情報設計の刷新 | #30 |
+| フォント | IBM Plex 採用 | #30 |
+| 新画面 | 監査ログ画面を新設 | #30 |
+| 設定 | 設定画面に API キー設定パネルを追加 | #40 |
+| 品質 | TtlCache / アクセシビリティ改善 / 404 ページ整備 | #37 |
+| テスト | モバイル viewport の E2E を CI へ追加 (34 テスト) | #38 |
+| その他 | favicon | #39 |
+
+### 🗺️ 既知の意図的差分 (地図)
+
+地図はモックデザインと完全一致させることを人間判断で優先し、以下の構成を採用しています。
+
+| 項目 | 内容 |
+| --- | --- |
+| タイル | OpenStreetMap (OSM) |
+| 標高表示 | シミュレーション標高で描画 (モックと完全一致・#41) |
+| 実標高取得経路 | 国土地理院からの実標高 API はサーバー側に残置。UI 表示はシミュレーション値を使用 |
+
+> ⚠️ 地図の標高がシミュレーション値である点は、意図した設計上の差分です。実データ標高への切替は本番化フェーズで扱います。
 
 ### 🏗️ 本番インフラの状態
 
