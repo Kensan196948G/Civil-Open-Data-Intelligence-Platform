@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminRequest } from "@/lib/admin-auth";
 import { recordAudit } from "@/lib/audit";
+import { ERROR_TYPE_MESSAGES } from "@/lib/constants";
 import { sanitizeUrl } from "@/lib/http-client";
 import { redactOperationalText } from "@/lib/operational-dto";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
@@ -62,10 +63,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }),
   ]);
 
+  // 失敗時は backfill (migration) と同じ分類 (接続失敗検知 + エラー種別詳細) を使い、
+  // 生成時期によって audit_logs の action ラベルが割れないようにする
   await recordAudit({
-    action: "接続確認実行",
+    action: result.success ? "接続確認実行" : "接続失敗検知",
     target: source.name,
-    detail: result.success ? "疎通確認 成功" : "疎通確認 失敗",
+    detail: result.success
+      ? "疎通確認 成功"
+      : (ERROR_TYPE_MESSAGES[result.errorType ?? "unknown"] ?? "疎通確認 失敗"),
     level: result.success ? "success" : "danger",
   });
 

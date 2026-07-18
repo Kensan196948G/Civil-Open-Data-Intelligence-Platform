@@ -88,6 +88,16 @@ export async function DELETE(request: NextRequest) {
   const csrfResponse = rejectCrossOriginBrowserRequest(request);
   if (csrfResponse) return csrfResponse;
 
+  // Cookie未保持の呼び出しでは記録しない (未認証リクエストによる監査ログの水増し防止)
+  if (hasAdminSessionCookie(request)) {
+    await recordAudit({
+      action: "ログアウト",
+      target: "-",
+      detail: "管理セッションを終了",
+      level: "info",
+    });
+  }
+
   const response = NextResponse.json({ authenticated: false });
   response.cookies.set(ADMIN_SESSION_COOKIE, "", {
     ...sessionCookieOptions(request),
