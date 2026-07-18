@@ -8,6 +8,12 @@ import { SummaryCard } from "@/components/SummaryCard";
 import { FetchLogTable } from "@/components/FetchLogTable";
 import { StatusBadge } from "@/components/StatusBadge";
 
+export const metadata = {
+  // 注意: title.template はそれを定義したセグメントの「子」にのみ適用されるため、
+  // root layout と同一セグメントの本ページはフル表記が必要
+  title: "ダッシュボード | Civil Open Data Intelligence Platform",
+};
+
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {

@@ -79,7 +79,7 @@ export function AdminTokenPanel() {
           <input
             id="admin-token"
             type="password"
-            className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+            className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
             placeholder="CODIP_ADMIN_TOKEN と同じ値"
             value={token}
             onChange={(event) => setToken(event.target.value)}

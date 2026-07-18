@@ -1,6 +1,10 @@
 import { FETCH_TIMEOUT_MS, MAX_REDIRECTS, PREVIEW_MAX_BYTES, STALE_CHECK_DAYS } from "@/lib/constants";
 import { AdminTokenPanel } from "@/components/AdminTokenPanel";
 
+export const metadata = {
+  title: "設定",
+};
+
 export default function SettingsPage() {
   return (
     <div className="space-y-4">
@@ -10,6 +14,7 @@ export default function SettingsPage() {
 
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="mb-3 text-sm font-semibold text-slate-700">🔧 接続確認の動作設定</h2>
+        <div className="overflow-x-auto">
         <table className="text-sm">
           <tbody>
             <tr className="border-b border-slate-100">
@@ -30,6 +35,7 @@ export default function SettingsPage() {
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">

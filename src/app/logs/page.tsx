@@ -3,6 +3,10 @@ import { prisma } from "@/lib/db";
 import { isAdminHeaders } from "@/lib/admin-auth";
 import { FetchLogTable } from "@/components/FetchLogTable";
 
+export const metadata = {
+  title: "取得ログ",
+};
+
 export const dynamic = "force-dynamic";
 
 type SearchParams = Promise<{ success?: string }>;

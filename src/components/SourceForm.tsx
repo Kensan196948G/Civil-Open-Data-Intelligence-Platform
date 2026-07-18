@@ -114,7 +114,7 @@ export function SourceForm({
   }
 
   const inputCls =
-    "w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none";
+    "w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1";
   const labelCls = "block text-xs font-medium text-slate-600 mb-1";
 
   return (

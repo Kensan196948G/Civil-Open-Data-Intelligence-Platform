@@ -37,7 +37,7 @@ CODIPは公開データを扱うが、APIキー、接続情報、取得ログ、
 
 `cf-access-authenticated-user-email` のようなプロキシ由来ヘッダーは、オリジンへ直接到達できる構成では偽装可能である。共有プレビュー・本番では、オリジンをCloudflare経由に限定し、さらに `x-codip-proxy-secret` と管理者メールallowlistを照合する。
 
-ブラウザUIでは `CODIP_ADMIN_TOKEN` をlocalStorageへ保存しない。設定画面でトークンを入力すると、サーバーが `CODIP_ADMIN_TOKEN` と定数時間比較で照合し、トークン値そのものではなく発行時刻・期限・nonceを署名したHttpOnly Cookieを発行する。HTTPSでは `__Host-` prefix付きCookieを使う。HTTPローカル検証でブラウザ保存が必要な場合だけ `CODIP_ALLOW_INSECURE_LOCAL_COOKIES=true` を明示し、通常Cookieへ切り替える。管理セッション開始はIP単位で `5 req/min` に制限する。
+ブラウザUIでは `CODIP_ADMIN_TOKEN` をlocalStorageへ保存しない。設定画面でトークンを入力すると、サーバーが `CODIP_ADMIN_TOKEN` と定数時間比較で照合し、トークン値そのものではなく発行時刻・期限・nonceを署名したHttpOnly Cookieを発行する。HTTPSでは `__Host-` prefix付きCookieを使う。HTTPローカル検証でブラウザ保存が必要な場合だけ `CODIP_ALLOW_INSECURE_LOCAL_COOKIES=true` を明示し、通常Cookieへ切り替える。管理セッション開始は `5 req/min` に制限する。クライアント識別は `CODIP_TRUST_PROXY_HEADERS=true` のときのみForwarded系ヘッダー由来のIP単位となり、未設定時は信頼できる識別子が得られないため**インスタンス全体で共有する単一バケット**として動作する (ヘッダー偽装によるバイパスを拒否するfail-safe設計の副作用。Cloudflare経由の本番構成では `wrangler.jsonc` が全環境で `true` を設定済み)。
 
 Cookie認証で `POST`、`PUT`、`PATCH`、`DELETE` の管理操作を行う場合は、`Origin` または `Referer` がリクエストURL、または `CODIP_ALLOWED_ORIGINS` に一致することを必須にする。APIクライアント互換のため、`x-codip-admin-token` と `Authorization: Bearer` は引き続き利用できる。
 

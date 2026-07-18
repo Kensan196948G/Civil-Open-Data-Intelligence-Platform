@@ -212,7 +212,7 @@ export default function MapView() {
               max="90"
               value={latInput}
               onChange={(event) => setLatInput(event.target.value)}
-              className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+              className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
             />
           </div>
           <div>
@@ -227,7 +227,7 @@ export default function MapView() {
               max="180"
               value={lonInput}
               onChange={(event) => setLonInput(event.target.value)}
-              className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+              className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
             />
           </div>
           <button
@@ -319,7 +319,7 @@ export default function MapView() {
           rows={5}
           placeholder='{"type":"FeatureCollection","features":[...]}'
           aria-describedby="geojson-overlay-description"
-          className="w-full rounded border border-slate-300 px-2 py-1.5 font-mono text-xs focus:border-blue-500 focus:outline-none"
+          className="w-full rounded border border-slate-300 px-2 py-1.5 font-mono text-xs focus:border-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
         />
         <div className="mt-2 flex items-center gap-2">
           <button

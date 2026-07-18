@@ -3,11 +3,15 @@ import { prisma } from "@/lib/db";
 import { fetchWithGuard, sanitizeUrl } from "@/lib/http-client";
 import { buildElevationUrl, isGsiElevationEndpoint, isValidLatLon, parseElevationResponse } from "@/lib/gsi";
 import { checkRateLimit, clientIdentifier, rateLimitHeaders, rateLimitResponse } from "@/lib/rate-limit";
+import { TtlCache } from "@/lib/ttl-cache";
 
 const ELEVATION_RATE_LIMIT = 60;
 const ELEVATION_RATE_WINDOW_MS = 60_000;
 const ELEVATION_CACHE_TTL_MS = 10 * 60_000;
-const elevationCache = new Map<string, { expiresAt: number; value: unknown }>();
+// lat/lon の組み合わせは実質無限のため、上限なしMapだと長時間稼働でヒープが
+// 単調増加する (Issue #21)。上限付きTTLキャッシュで物理サイズを抑える。
+const ELEVATION_CACHE_MAX_ENTRIES = 500;
+const elevationCache = new TtlCache<unknown>(ELEVATION_CACHE_MAX_ENTRIES, ELEVATION_CACHE_TTL_MS);
 
 /**
  * 地図クリック地点の標高取得。
@@ -35,8 +39,8 @@ export async function GET(request: NextRequest) {
 
   const cacheKey = `${lat.toFixed(5)},${lon.toFixed(5)}`;
   const cached = elevationCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) {
-    return NextResponse.json(cached.value, {
+  if (cached !== undefined) {
+    return NextResponse.json(cached, {
       headers: {
         ...rateLimitHeaders(rate),
         "X-CODIP-Cache": "hit",
@@ -93,10 +97,7 @@ export async function GET(request: NextRequest) {
   }
 
   const responseBody = { success: true, lat, lon, ...parsed };
-  elevationCache.set(cacheKey, {
-    expiresAt: Date.now() + ELEVATION_CACHE_TTL_MS,
-    value: responseBody,
-  });
+  elevationCache.set(cacheKey, responseBody);
 
   return NextResponse.json(responseBody, {
     headers: {

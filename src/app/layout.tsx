@@ -4,7 +4,11 @@ import { AppNavigation } from "@/components/AppNavigation";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Civil Open Data Intelligence Platform",
+  // 各ページの title は "%s | ..." に展開される (WCAG 2.4.2: 画面ごとに識別可能な title)
+  title: {
+    template: "%s | Civil Open Data Intelligence Platform",
+    default: "Civil Open Data Intelligence Platform",
+  },
   description: "土木建設オープンデータ統合分析基盤",
 };
 

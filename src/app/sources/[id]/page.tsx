@@ -12,6 +12,10 @@ import { CheckPanel } from "@/components/CheckPanel";
 import { DeleteSourceButton } from "@/components/DeleteSourceButton";
 import { sanitizeUrl } from "@/lib/url-safety";
 
+export const metadata = {
+  title: "データソース詳細",
+};
+
 export const dynamic = "force-dynamic";
 
 export default async function SourceDetailPage({ params }: { params: Promise<{ id: string }> }) {
