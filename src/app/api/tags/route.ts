@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminRequest } from "@/lib/admin-auth";
+import { recordAudit } from "@/lib/audit";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 import { tagCreateSchema } from "@/lib/validators";
 
@@ -37,5 +38,11 @@ export async function POST(request: NextRequest) {
     );
   }
   const tag = await prisma.tag.create({ data: parsed.data });
+  await recordAudit({
+    action: "タグ追加",
+    target: tag.name,
+    detail: "新規タグを登録",
+    level: "info",
+  });
   return NextResponse.json(tag, { status: 201 });
 }

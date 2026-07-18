@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminRequest } from "@/lib/admin-auth";
+import { recordAudit } from "@/lib/audit";
 import { sanitizeUrl } from "@/lib/http-client";
 import { redactOperationalText } from "@/lib/operational-dto";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
@@ -60,6 +61,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
       },
     }),
   ]);
+
+  await recordAudit({
+    action: "接続確認実行",
+    target: source.name,
+    detail: result.success ? "疎通確認 成功" : "疎通確認 失敗",
+    level: result.success ? "success" : "danger",
+  });
 
   return NextResponse.json({
     success: result.success,

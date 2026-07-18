@@ -122,6 +122,42 @@ const openApiDocument = {
         },
       },
     },
+    "/api/admin/settings": {
+      get: {
+        tags: ["admin"],
+        summary: "接続確認の動作設定を取得",
+        responses: {
+          "200": { description: "タイムアウト・リダイレクト上限・プレビュー保存上限・要確認期間を返す" },
+          "429": { description: "レート制限超過" },
+        },
+      },
+      put: {
+        tags: ["admin"],
+        summary: "接続確認の動作設定を変更",
+        security: [{ adminToken: [] }],
+        responses: {
+          "200": { description: "保存成功。変更は監査ログへ記録される" },
+          "400": { description: "設定キーまたは値が選択肢外" },
+          "401": { description: "管理認証エラー" },
+          "429": { description: "レート制限超過" },
+          "503": { description: "管理ガード未設定" },
+        },
+      },
+    },
+    "/api/admin/audit-events": {
+      post: {
+        tags: ["admin"],
+        summary: "クライアント操作の監査イベントを記録",
+        security: [{ adminToken: [] }],
+        responses: {
+          "200": { description: "記録成功。内容はサーバー側のイベント種別写像で固定される" },
+          "400": { description: "不明なイベント種別" },
+          "401": { description: "管理認証エラー" },
+          "429": { description: "レート制限超過" },
+          "503": { description: "管理ガード未設定" },
+        },
+      },
+    },
     "/api/tags": {
       get: {
         tags: ["catalog"],
