@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminRequest } from "@/lib/admin-auth";
+import { recordAudit } from "@/lib/audit";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
+import { getOperationSettings } from "@/lib/settings";
 import { computeTotalScore, deriveQualityScores } from "@/lib/quality";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -27,6 +29,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     prisma.fetchLog.count({ where: { dataSourceId: id, success: false } }),
   ]);
 
+  const { staleDays } = await getOperationSettings();
   const scores = deriveQualityScores({
     organizationType: source.provider.organizationType,
     lastCheckedAt: source.lastCheckedAt,
@@ -36,6 +39,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     commercialUse: source.commercialUse,
     dataFormat: source.dataFormat,
     category: source.category,
+    staleDays,
   });
   const totalScore = computeTotalScore(scores);
 
@@ -48,6 +52,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
       data: { qualityScore: totalScore },
     }),
   ]);
+
+  await recordAudit({
+    action: "品質スコア再計算",
+    target: source.name,
+    detail: `スコア: ${totalScore}`,
+    level: "info",
+  });
 
   return NextResponse.json({ ...check, totalScore });
 }

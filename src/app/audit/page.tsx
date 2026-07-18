@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
 import { isAdminHeaders } from "@/lib/admin-auth";
-import { ERROR_TYPE_MESSAGES } from "@/lib/constants";
+import { AUDIT_LEVELS, isAuditLevel } from "@/lib/audit";
 import { AuditLogPanel } from "@/components/AuditLogPanel";
 
 export const dynamic = "force-dynamic";
@@ -9,66 +9,6 @@ export const dynamic = "force-dynamic";
 export const metadata = {
   title: "監査ログ",
 };
-
-// デザイン正本 (AUDIT_LEVELS) と同一の配色・ラベル
-const AUDIT_LEVELS = {
-  info: { fg: "var(--blue)", bg: "var(--blue-bg)", label: "情報" },
-  success: { fg: "var(--green)", bg: "var(--green-bg)", label: "成功" },
-  warning: { fg: "var(--amber)", bg: "var(--amber-bg)", label: "警告" },
-  danger: { fg: "var(--red)", bg: "var(--red-bg)", label: "危険" },
-} as const;
-
-type AuditLevel = keyof typeof AUDIT_LEVELS;
-
-type AuditEvent = {
-  id: string;
-  occurredAt: Date;
-  actor: string;
-  action: string;
-  target: string;
-  detail: string;
-  level: AuditLevel;
-};
-
-type SourceLog = {
-  id: string;
-  executedAt: Date;
-  executionType: string;
-  success: boolean;
-  errorType: string | null;
-  dataSource?: { name: string } | null;
-};
-
-// 取得ログ (接続確認 / サンプル取得) を監査イベント形式へ写像する。
-// 操作系イベント (登録・更新・削除・設定変更) は AuditLog モデル導入後に拡張予定。
-function toAuditEvent(log: SourceLog): AuditEvent {
-  const target = log.dataSource?.name ?? "-";
-  const errorDetail = log.errorType
-    ? (ERROR_TYPE_MESSAGES[log.errorType] ?? log.errorType)
-    : "詳細不明のエラー";
-
-  if (log.executionType === "sample") {
-    return {
-      id: log.id,
-      occurredAt: log.executedAt,
-      actor: "システム",
-      action: "サンプル取得実行",
-      target,
-      detail: log.success ? "サンプルデータを取得" : errorDetail,
-      level: log.success ? "success" : "danger",
-    };
-  }
-
-  return {
-    id: log.id,
-    occurredAt: log.executedAt,
-    actor: "システム",
-    action: log.success ? "接続確認実行" : "接続失敗検知",
-    target,
-    detail: log.success ? "疎通確認 成功" : errorDetail,
-    level: log.success ? "success" : "danger",
-  };
-}
 
 function fmtDateTime(d: Date): string {
   return new Date(d).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
@@ -89,19 +29,19 @@ export default async function AuditPage() {
     );
   }
 
-  const logs = await prisma.fetchLog.findMany({
-    include: { dataSource: { select: { name: true } } },
-    orderBy: { executedAt: "desc" },
+  // 操作・イベントの証跡 (audit_logs)。取得ログ由来の過去イベントは
+  // migration で backfill 済みのため、この1テーブルが監査証跡の正本となる
+  const events = await prisma.auditLog.findMany({
+    orderBy: { occurredAt: "desc" },
     take: 500,
   });
-  const events = logs.map(toAuditEvent);
   const exportRows = events.map((e) => [
     fmtDateTime(e.occurredAt),
     e.actor,
     e.action,
     e.target,
     e.detail,
-    AUDIT_LEVELS[e.level].label,
+    (isAuditLevel(e.level) ? AUDIT_LEVELS[e.level] : AUDIT_LEVELS.info).label,
   ]);
 
   return (
@@ -130,7 +70,7 @@ export default async function AuditPage() {
             </thead>
             <tbody>
               {events.map((e) => {
-                const c = AUDIT_LEVELS[e.level];
+                const c = isAuditLevel(e.level) ? AUDIT_LEVELS[e.level] : AUDIT_LEVELS.info;
                 return (
                   <tr key={e.id} className="hover:bg-[var(--hover)]">
                     <th scope="row" className="dc-td whitespace-nowrap text-left font-normal tabular-nums">
@@ -152,11 +92,6 @@ export default async function AuditPage() {
           </table>
         )}
       </div>
-
-      <p className="text-[11.5px] leading-relaxed text-[var(--muted)]">
-        ℹ️ 現在は取得ログ（接続確認・サンプル取得）から生成した証跡を表示しています。
-        操作系イベント（登録・更新・削除・設定変更）の証跡は AuditLog モデル導入後に拡張予定です。
-      </p>
     </div>
   );
 }

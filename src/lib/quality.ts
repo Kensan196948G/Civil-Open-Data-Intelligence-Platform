@@ -39,13 +39,15 @@ export type QualityInput = {
   commercialUse: string;
   dataFormat: string;
   category: string;
+  /** 要確認となる未確認期間 (日)。動作設定 staleDays。未指定時は既定値 */
+  staleDays?: number;
 };
 
 /** データソースの現況から品質サブスコアを決定的に算出する */
 export function deriveQualityScores(input: QualityInput, now: Date = new Date()): QualityScores {
   return {
     officialSourceScore: officialScore(input.organizationType),
-    freshnessScore: freshnessScore(input.lastCheckedAt, now),
+    freshnessScore: freshnessScore(input.lastCheckedAt, now, input.staleDays ?? STALE_CHECK_DAYS),
     accessibilityScore: accessibilityScore(input.successCount, input.failureCount),
     licenseClarityScore: licenseScore(input.licenseName, input.commercialUse),
     formatUsabilityScore: formatScore(input.dataFormat),
@@ -68,12 +70,12 @@ function officialScore(organizationType: string): number {
   }
 }
 
-function freshnessScore(lastCheckedAt: Date | null, now: Date): number {
+function freshnessScore(lastCheckedAt: Date | null, now: Date, staleDays: number): number {
   if (!lastCheckedAt) return 3;
   const days = (now.getTime() - lastCheckedAt.getTime()) / (1000 * 60 * 60 * 24);
   if (days <= 7) return 15;
   if (days <= 30) return 12;
-  if (days <= STALE_CHECK_DAYS) return 8;
+  if (days <= staleDays) return 8;
   return 3;
 }
 

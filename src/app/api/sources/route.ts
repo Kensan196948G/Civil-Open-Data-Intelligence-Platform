@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireAdminRequest } from "@/lib/admin-auth";
+import { recordAudit } from "@/lib/audit";
 import { dataSourceCreateSchema } from "@/lib/validators";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 import { safeSourceDto } from "@/lib/source-dto";
@@ -162,6 +163,13 @@ export async function POST(request: NextRequest) {
     }
     throw error;
   }
+
+  await recordAudit({
+    action: "データソース登録",
+    target: created.name,
+    detail: "新規登録",
+    level: "info",
+  });
 
   return NextResponse.json(safeSourceDto(created, { includeSensitive: true }), { status: 201 });
 }

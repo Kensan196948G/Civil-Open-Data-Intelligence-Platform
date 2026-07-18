@@ -1,5 +1,7 @@
 "use client";
 
+import { notifyAuditEvent } from "@/lib/audit-events-client";
+
 // 監査ログのエクスポート (CSV / HTML / PDF=印刷) を担うクライアント部品。
 // 表本体は server component 側でレンダリングし、ここには整形済みの行データのみ渡す。
 const AUDIT_EXPORT_HEADER = ["日時", "実行者", "操作", "対象", "詳細", "レベル"] as const;
@@ -58,10 +60,12 @@ export function AuditLogPanel({ rows }: { rows: string[][] }) {
     const csv = all.map((r) => r.map(csvCell).join(",")).join("\r\n");
     // 先頭に UTF-8 BOM を付与し Excel での文字化けを防ぐ
     downloadBlob("﻿" + csv, "audit-log.csv", "text/csv;charset=utf-8;");
+    notifyAuditEvent("audit_export_csv");
   };
 
   const exportHtml = (): void => {
     downloadBlob(auditHtmlDoc(rows), "audit-log.html", "text/html;charset=utf-8;");
+    notifyAuditEvent("audit_export_html");
   };
 
   // PDF は Blob URL を新規タブで開き、読み込み完了時に印刷ダイアログを起動する。
@@ -79,6 +83,7 @@ export function AuditLogPanel({ rows }: { rows: string[][] }) {
       return;
     }
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    notifyAuditEvent("audit_export_pdf");
   };
 
   return (

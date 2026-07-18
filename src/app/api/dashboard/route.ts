@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { isAdminHeaders } from "@/lib/admin-auth";
-import { STALE_CHECK_DAYS } from "@/lib/constants";
+import { getOperationSettings } from "@/lib/settings";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 import { safeFetchLogDto } from "@/lib/operational-dto";
 import { safeSourceDto } from "@/lib/source-dto";
@@ -11,7 +11,8 @@ export async function GET(request: NextRequest) {
   if (!rate.allowed) return rateLimitResponse(rate);
 
   const includeLogs = isAdminHeaders(request.headers);
-  const staleBefore = new Date(Date.now() - STALE_CHECK_DAYS * 24 * 60 * 60 * 1000);
+  const { staleDays } = await getOperationSettings();
+  const staleBefore = new Date(Date.now() - staleDays * 24 * 60 * 60 * 1000);
 
   const [
     total,

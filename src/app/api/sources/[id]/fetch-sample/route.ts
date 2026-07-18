@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminRequest } from "@/lib/admin-auth";
-import { PREVIEW_MAX_BYTES } from "@/lib/constants";
+import { ERROR_TYPE_MESSAGES } from "@/lib/constants";
+import { recordAudit } from "@/lib/audit";
+import { getOperationSettings } from "@/lib/settings";
 import { sanitizeUrl } from "@/lib/http-client";
 import { redactOperationalText } from "@/lib/operational-dto";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
@@ -37,6 +39,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   const detectedFormat = result.detectedFormat ?? null;
   const now = new Date();
+  // 対話型トランザクション内から別接続のクエリを待たないよう、設定は事前に取得する
+  const { previewKb } = await getOperationSettings();
+  const previewMaxBytes = previewKb * 1024;
   const { log, sampleId } = await prisma.$transaction(async (tx) => {
     const log = await tx.fetchLog.create({
       data: {
@@ -57,7 +62,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     let sampleId: string | null = null;
     if (result.success && !source.requiresApiKey) {
-      const preview = redactOperationalText(result.previewText ?? "", PREVIEW_MAX_BYTES);
+      const preview = redactOperationalText(result.previewText ?? "", previewMaxBytes);
       const sample = await tx.sampleResponse.create({
         data: {
           dataSourceId: source.id,
@@ -78,6 +83,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
     });
 
     return { log, sampleId };
+  });
+
+  await recordAudit({
+    action: "サンプル取得実行",
+    target: source.name,
+    detail: result.success
+      ? "サンプルデータを取得"
+      : (ERROR_TYPE_MESSAGES[result.errorType ?? "unknown"] ?? "詳細不明のエラー"),
+    level: result.success ? "success" : "danger",
   });
 
   return NextResponse.json({

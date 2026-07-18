@@ -12,6 +12,7 @@ import {
   rejectCrossOriginBrowserRequest,
   safeTokenEqual,
 } from "@/lib/admin-auth";
+import { recordAudit } from "@/lib/audit";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 
 function sessionCookieOptions(request: NextRequest) {
@@ -55,11 +56,24 @@ export async function POST(request: NextRequest) {
   }
 
   if (!token || !safeTokenEqual(token, configuredToken)) {
+    await recordAudit({
+      action: "ログイン失敗",
+      target: "-",
+      detail: "管理操作トークンの検証に失敗",
+      level: "warning",
+    });
     return NextResponse.json(
       { error: "unauthorized", message: "管理操作トークンが正しくありません" },
       { status: 401 },
     );
   }
+
+  await recordAudit({
+    action: "ログイン",
+    target: "-",
+    detail: "管理セッションを開始",
+    level: "success",
+  });
 
   const response = NextResponse.json({ authenticated: true });
   response.cookies.set(
@@ -73,6 +87,17 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const csrfResponse = rejectCrossOriginBrowserRequest(request);
   if (csrfResponse) return csrfResponse;
+
+  // 有効な管理セッションからの呼び出しのみ記録する
+  // (偽造・期限切れCookieによる監査ログの水増し防止 / CodeRabbit指摘)
+  if (hasAdminSessionCookie(request) && isAdminHeaders(request.headers)) {
+    await recordAudit({
+      action: "ログアウト",
+      target: "-",
+      detail: "管理セッションを終了",
+      level: "info",
+    });
+  }
 
   const response = NextResponse.json({ authenticated: false });
   response.cookies.set(ADMIN_SESSION_COOKIE, "", {

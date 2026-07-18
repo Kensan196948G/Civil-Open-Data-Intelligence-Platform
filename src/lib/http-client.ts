@@ -1,11 +1,7 @@
 import dns from "node:dns";
 import { Agent, fetch as guardedFetch } from "undici";
-import {
-  FETCH_TIMEOUT_MS,
-  MAX_REDIRECTS,
-  PREVIEW_MAX_BYTES,
-  READ_LIMIT_BYTES,
-} from "@/lib/constants";
+import { READ_LIMIT_BYTES } from "@/lib/constants";
+import { getOperationSettings } from "@/lib/settings";
 import { sanitizeUrl } from "@/lib/url-safety";
 import { isPrivateIp, validateUrl } from "@/lib/url-guard";
 
@@ -97,29 +93,40 @@ function findErrorMessage(error: unknown): string {
   return message;
 }
 
+export type FetchGuardSettings = {
+  timeoutSec: number;
+  redirectLimit: number;
+  previewKb: number;
+};
+
 /**
  * 登録済みデータソースURLへの疎通確認・サンプル取得。
- * - 30秒タイムアウト
- * - リダイレクトは各ホップで静的検証しつつ最大3回まで追従
+ * - タイムアウト・リダイレクト上限・プレビュー保存上限は動作設定
+ *   (app_settings、未設定時は constants の既定値) に従う
+ * - リダイレクトは各ホップで静的検証しつつ上限回数まで追従
  * - 接続時DNSピン留めで rebinding を防止
  * - レスポンスは上限バイトまでで読み込みを打ち切る
  * - APIキー等の秘密情報はログ・結果に含めない
  */
 export async function fetchWithGuard(
   targetUrl: string,
-  options: { method?: "GET" | "HEAD"; readBody?: boolean } = {},
+  options: { method?: "GET" | "HEAD"; readBody?: boolean; settings?: FetchGuardSettings } = {},
 ): Promise<FetchResult> {
   const method = options.method ?? "GET";
   const readBody = options.readBody ?? true;
+  const { timeoutSec, redirectLimit, previewKb } =
+    options.settings ?? (await getOperationSettings());
+  const timeoutMs = timeoutSec * 1000;
+  const previewMaxBytes = previewKb * 1024;
   const startedAt = Date.now();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     let currentUrl = targetUrl;
     let response: Awaited<ReturnType<typeof guardedFetch>> | null = null;
 
-    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    for (let hop = 0; hop <= redirectLimit; hop++) {
       const guard = validateUrl(currentUrl);
       if (!guard.ok) {
         return {
@@ -144,12 +151,12 @@ export async function fetchWithGuard(
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get("location");
         if (!location) break;
-        if (hop === MAX_REDIRECTS) {
+        if (hop === redirectLimit) {
           return {
             success: false,
             statusCode: response.status,
             errorType: "network",
-            errorMessage: `リダイレクト回数が上限(${MAX_REDIRECTS}回)を超えました`,
+            errorMessage: `リダイレクト回数が上限(${redirectLimit}回)を超えました`,
             responseTimeMs: Date.now() - startedAt,
           };
         }
@@ -181,13 +188,13 @@ export async function fetchWithGuard(
         const { done, value } = await reader.read();
         if (done) break;
         bytesRead += value.byteLength;
-        if (previewBytes < PREVIEW_MAX_BYTES) {
+        if (previewBytes < previewMaxBytes) {
           chunks.push(value);
           previewBytes += value.byteLength;
         }
       }
       await reader.cancel().catch(() => {});
-      const previewBuf = concatBytes(chunks, PREVIEW_MAX_BYTES);
+      const previewBuf = concatBytes(chunks, previewMaxBytes);
       previewText = new TextDecoder("utf-8", { fatal: false }).decode(previewBuf);
     }
 
@@ -240,7 +247,7 @@ export async function fetchWithGuard(
       return {
         success: false,
         errorType: "timeout",
-        errorMessage: `Request timed out after ${FETCH_TIMEOUT_MS}ms`,
+        errorMessage: `Request timed out after ${timeoutMs}ms`,
         responseTimeMs,
       };
     }

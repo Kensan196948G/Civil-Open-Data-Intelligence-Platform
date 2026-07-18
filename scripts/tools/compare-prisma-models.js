@@ -14,6 +14,8 @@ const requiredModels = [
   "SampleResponse",
   "QualityCheck",
   "RelatedUseCase",
+  "AuditLog",
+  "AppSetting",
 ];
 
 // フィールド名だけでなく正規化済みシグネチャ(型・リレーション定義)も一致させ、
