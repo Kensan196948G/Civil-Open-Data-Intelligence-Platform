@@ -156,6 +156,57 @@ flowchart TD
 
 ---
 
+## ✅ リリース準備状況 (2026-07-18 再検証)
+
+`branch agent/release-readiness-postgis-ci` (PR #17 Draft, commit `1f1d570`) を 2026-07-18 に再検証した結果。すべての単体ゲートがgreen、PostgreSQL/PostGIS Docker previewの起動とruntime smokeも成功しました。GitHub Actions CI も同一 commit に対して全 job green です。
+
+| 区分 | コマンド | 結果 |
+| --- | --- | --- |
+| 静的解析 | `npm run lint` | 🟢 0 errors |
+| 型検査 | `npx tsc --noEmit` | 🟢 0 errors |
+| 単体テスト | `npm run test` | 🟢 222 passed / 21 files |
+| 契約チェック | `release:check-{v1-contract,doc-api-contract,openapi-coverage,docker-contract,cloudflare-contract,github-actions-contract}` | 🟢 all OK (19 API routes covered) |
+| 本番ビルド | `npm run build` | 🟢 success (27 routes) |
+| リリースゲート | `npm run release:gate` | 🟢 OK |
+| SQLite duplicate公式URL | `db:check-duplicates` | 🟢 no duplicates |
+| 標準レコード方針 | `db:check-standard-record-policy` (PostgreSQL) | 🟢 standard_records=1 |
+| Prisma model parity | `db:compare-schemas` | 🟢 OK |
+| PostgreSQL schema検証 | `db:pg:validate` | 🟢 schema valid |
+| PostgreSQL drift | `db:pg:check-drift` (PostGIS docker上) | 🟢 OK (GiST index ignoredは仕様) |
+| PostGIS DDL | `db:pg:check-postgis-ddl` | 🟢 OK |
+| env検証 (local) | `validate-env --mode local` | 🟢 OK (警告のみ) |
+| env検証 (preview) | `validate-env --mode preview` | 🟢 OK |
+| Docker PostGIS preview | `docker compose -f docker-compose.postgresql-preview.yml up --build` | 🟢 healthy (port 3102) |
+| `release:smoke` (PostGIS環境) | `npm run release:smoke -- --base-url http://127.0.0.1:3102 --expect-standard-records --expect-seed-standard-record` | 🟢 80 checks passed |
+| 秘密情報混入確認 | `grep -E "password|api[_-]?key|secret|token" --include="*.ts"` | 🟢 ソース内の機密値ゼロ (URL safety regex, label, placeholder のみ) |
+| TODO/FIXME | `grep -E "TODO|FIXME|XXX|HACK"` src/ scripts/ docs/ | 🟢 検出0件 |
+| E2E (ローカル) | `npm run test:e2e` | ⚪ Chromium `SIGTRAP` で18件失敗。CI `e2e` ジョブは `pass` 実績。本制約は §既知制約 に既載 |
+
+### 🏗️ 本番インフラの状態
+
+2026-07-18 時点で **Cloudflare / Neon の実リソースは未作成**です (Worker `codip` 不在、Hyperdrive config 0 件、CODIP の Neon project 不在)。CODIP はまだ一度もデプロイされていません。本番化には以下が順に必要で、**いずれも人間の承認・実行が前提**です。
+
+| # | 作業 | 承認が必要な理由 |
+| --- | --- | --- |
+| 1 | Neon project / branch の作成 | 課金発生・リソース作成 |
+| 2 | `wrangler hyperdrive create` と `wrangler.jsonc` の id 置換 | 課金発生・リソース作成 |
+| 3 | `wrangler secret put` による秘密情報登録 | Secrets の登録 |
+| 4 | Issue #18 の解消 | Workers 上で外部URL取得とDB接続が動作しないため |
+| 5 | `infra/cloudflare/` の `terraform apply` | 本番アクセス制御の変更 |
+| 6 | `wrangler deploy --env production` | 本番デプロイ |
+
+### ⚠️ 残課題
+
+- **Codex review (通常・対抗)**: `disable-model-invocation` により自律 CTO から起動不可。人間実行待ち ([Issue #19](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/19))
+- **Cloudflare Workers ランタイム互換**: [Issue #18](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/18)。Cloudflare 公式ドキュメントで確認したとおり、`nodejs_compat` の `node:dns` は `lookup` / `lookupService` / `resolve` が "Not implemented" を throw する。CODIP の SSRF ガードは例外を捕捉して拒否側へ倒れる (fail-closed) ため脆弱性化はしないが、Workers 上では外部URL取得が機能しない。修正経路は `dns.promises.resolve4` / `resolve6` への置換
+- **main の branch protection 未設定**: 「CI 未通過 merge 禁止」「main 直 push 禁止」が技術的に強制されていない。PR #17 merge 前の設定を推奨
+- **PR #17 Draft → Ready**: Codex レビュー結果待ち。main への merge は人間判断待ち。**merge すると `docker-supply-chain` job が GHCR へイメージを push する** (リポジトリが private のためイメージも既定 private)
+
+🔒 **本番リリース・本番デプロイは未実施**。リリース直前の完成状態まで整え、承認待ちで停止しています。
+切り戻し手順は [`docs/runbooks/rollback.md`](docs/runbooks/rollback.md) を参照してください。
+
+---
+
 ## 🔐 セキュリティ方針
 
 | 項目 | 方針 |

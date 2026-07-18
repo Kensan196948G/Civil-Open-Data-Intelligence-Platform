@@ -176,6 +176,93 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | PR #17 本文 | CodeRabbit全体レビュー結果と独立レビュー結果(silent-failure-hunter / code-reviewer)を追記し、`gh api ... -X PATCH`で更新済み |
 | PR状態 | draft継続。Codexレビュー(通常・対抗)が人間未実行のため、CTO判断でreadyへの遷移は保留 |
 
+### 2026-07-17 自律 CTO 再検証
+
+PR #17 branch (`agent/release-readiness-postgis-ci`) を自律 CTO が再検証した。Docker PostGIS preview (`docker-compose.postgresql-preview.yml`) を新規ビルド・起動し、SQLite preview と PostgreSQL/PostGIS 環境の両方で全ゲートを再走させた結果、ローカルで取りうる検証は全 green。
+
+| 項目 | 記録 |
+| --- | --- |
+| branch | `agent/release-readiness-postgis-ci` (PR #17 Draft 継続中) |
+| HEAD commit | `1f1d570` |
+| lint / type / unit | 0 / 0 / 222 pass |
+| contract checks (6種) | all OK (19 API routes covered) |
+| `release:gate` | OK |
+| `npm run build` | success (27 routes) |
+| Docker PostGIS preview | `civil-open-data-intelligence-platform-{codip,postgres}-1` healthy。`http://127.0.0.1:3102` で standard_records 1 行を投入・seed |
+| `db:pg:check-drift` | OK (`standard_records` GiST index のみ無視は仕様、 `db:pg:check-postgis-ddl` で別途検証) |
+| `db:pg:check-postgis-ddl` | OK |
+| `db:check-standard-record-policy` (PostgreSQL) | OK: standard_records=1 |
+| `validate-env --mode preview` | OK |
+| `release:smoke --base-url http://127.0.0.1:3102 --expect-standard-records --expect-seed-standard-record` | OK 80 checks (v1 records/point/layers/layers-features/freshness payload + admin guard + CSRF + 悪性URL 6種拒否) |
+| ソース内 機密値 grep (`password|api[_-]?key|secret|token`) | ヒット 0件 (label/regex/placeholder のみ) |
+| ソース内 TODO/FIXME/XXX/HACK | 0件 |
+| ローカル E2E (`npm run test:e2e`) | 18 failed (Chromium `SIGTRAP` 起動直後強制終了)。§5「現時点の既知制約」に既載のローカル Chromium 制約の再現。CI `e2e` ジョブは `pass` 実績で、本制約と矛盾しない。追加対応不要 |
+
+| 残課題 | 状態 |
+| --- | --- |
+| Codex review (通常・対抗) | 未実施。Issue #19 で人間依頼中、PR は Draft 維持 |
+| Issue #18 Workers 互換性 (`dns.lookup`, `driverAdapters`) | 未実装。ローカル/Docker preview 運用では影響なし、Workers 本番切替時の前提条件として P1 維持 |
+| PR #17 merge | 人間判断待ち (Codex レビュー結果 + main 承認) |
+| Cloudflare/Neon staging smoke 実環境証跡 | 未実施 (staging/production deploy 時に記録欄 §6 を使用) |
+
+### 2026-07-18 自律 CTO 再検証 + インフラ実態調査 (本セッション)
+
+前セッション (2026-07-17) の証跡が未 commit のまま残っていたため、**主張をそのまま信用せず全ゲートを再実行**して再現性を確認したうえで commit した。加えて、これまで文書上の前提でしかなかった Cloudflare / Neon の**実リソース存在確認**を初めて実施した。
+
+#### 再検証結果 (全て再現・commit `1f1d570` に対して実行)
+
+| 項目 | 結果 |
+| --- | --- |
+| `npm run lint` | PASS (0 errors) |
+| `npx tsc --noEmit` | PASS (0 errors) |
+| `npm run test` | PASS (222/222, 21 files) |
+| `npm run build` | PASS (27 routes) |
+| `npm run release:gate` | PASS |
+| 契約チェック 6 種 + `db:compare-schemas` | PASS (all OK) |
+| `db:pg:validate` / `check-postgis-ddl` / `check-drift` / `check-standard-record-policy` | PASS (稼働中 PostGIS コンテナへ実接続) |
+| `release:smoke --base-url http://127.0.0.1:3102 --expect-standard-records --expect-seed-standard-record` | PASS (80 checks) |
+| CI (GitHub Actions) | PASS。`head_sha = 1f1d570` が現 HEAD と一致することを確認済み |
+
+#### 新規発見と対応
+
+| # | 発見 | 重要度 | 対応 |
+| --- | --- | --- | --- |
+| 1 | **実行可能な rollback 手順が存在しなかった**。`docs/13` に rollback の記載がゼロ、runbook 2 本にも事象→方針の表のみでコマンドがなく、リリースゲート「rollback 手順が文書化済み」を実質的に満たしていなかった | High | `docs/runbooks/rollback.md` を新規作成 (判断フロー / Workers / GHCR / Neon PITR / Prisma / SQLite / 検証 / 記録欄)。`docs/13` §4.1・§5 から接続 |
+| 2 | **Cloudflare / Neon の実リソースが未作成**。Worker `codip` 不在 (`workers_list` は別プロジェクトのみ)、Hyperdrive config 0 件、CODIP の Neon project 不在 | 情報 (Blocker ではない) | 「未デプロイ」が正常状態。ただし本番化は Neon project 作成・Hyperdrive 作成 (課金発生・人間承認必須) から始まる旨を §本番化の前提 に明記 |
+| 3 | **main に branch protection が未設定** (`gh api .../branches/main/protection` → 404)。「CI 未通過 merge 禁止」「main 直 push 禁止」が運用規律のみで技術的強制がない | Medium | Issue 起票。PR #17 merge 前の設定を推奨 |
+| 4 | **PR #17 の merge は GHCR へのイメージ push を伴う**。`.github/workflows/ci.yml:448` の `docker-supply-chain` が `push && refs/heads/main` で発火 | 情報 | 承認者への申し送り事項として明記 (リポジトリが private のためイメージも既定 private) |
+| 5 | Issue #18 の fail-closed 評価を **Cloudflare 公式ドキュメントで一次裏付け**。`node:dns` は `nodejs_compat` で利用可能だが `lookup` / `lookupService` / `resolve` は "Not implemented" を throw する | 情報 | `docs/13` §2 の既存評価 (fail-closed) が正しいことを確認。修正経路も `resolve4`/`resolve6` 置換で確定 |
+| 6 | `npm run db:pg:validate` 等は `localhost:5432` 前提だが、`docker-compose.postgresql-preview.yml` は postgres のポートを公開していないため、チェックリスト記載のコマンドがローカルでそのまま通らない | Low | 下記「PostgreSQL チェックの実行方法」に回避手順を記載 |
+| 7 | Neon の history window は同組織の既存プロジェクトで **24 時間**。障害検知が翌日にずれると PITR で戻せない | Medium | `docs/13` §5 と rollback.md §4.3 に警告を記載。本番 Neon project 作成時に要判断 |
+
+#### PostgreSQL チェックの実行方法 (発見 6 の回避手順)
+
+`docker-compose.postgresql-preview.yml` は postgres のホストポートを公開しないため、
+コンテナ IP を指定して `DATABASE_URL` を上書きする。
+
+```bash
+PGIP=$(docker inspect civil-open-data-intelligence-platform-postgres-1 \
+  --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
+export DATABASE_URL="postgresql://codip:codip@$PGIP:5432/codip?schema=public"
+
+node scripts/tools/check-postgis-standard-record-ddl.js
+node scripts/tools/check-postgresql-migration-drift.js
+node scripts/tools/check-standard-record-policy.js
+```
+
+#### 本番化の前提 (実リソース未作成のため)
+
+Cloudflare / Neon への実デプロイは、以下の**人間承認必須**の作業から始まる。CTO は判断材料の提示までとし実行しない。
+
+| # | 作業 | 承認が必要な理由 |
+| --- | --- | --- |
+| 1 | Neon project / branch の作成 | 課金発生・リソース作成 |
+| 2 | `wrangler hyperdrive create` と `wrangler.jsonc` の id 置換 | 課金発生・リソース作成 |
+| 3 | `wrangler secret put` による秘密情報登録 | Secrets の登録 |
+| 4 | Issue #18 の解消 (`dns.lookup` → `resolve4`/`resolve6`、`driverAdapters` 導入) | Workers 上で外部 URL 取得と DB 接続が動作しないため、本番切替の前提条件 |
+| 5 | `infra/cloudflare/` の `terraform apply` (Access 保護) | 本番アクセス制御の変更 |
+| 6 | `wrangler deploy --env production` | 本番デプロイ |
+
 ### 実ターゲットリリース時の記録欄
 
 | 項目 | 記録 |

@@ -188,17 +188,37 @@ Prisma schemaはSQLite用 `prisma/schema.prisma` とPostgreSQL用 `prisma/postgr
 | 公開API停止 | 取得ログを確認し、台帳ステータスを要確認にする |
 | URL変更 | 公式ページを確認し、台帳を更新する |
 | ライセンス変更 | 利用条件を再確認し、再配布を停止する |
-| DB障害 | バックアップから復旧する |
+| DB障害 | バックアップから復旧する (手順は `docs/runbooks/rollback.md` §4/§6) |
 | 地図表示障害 | 背景タイル、GeoJSON、ブラウザエラーを切り分ける |
+| リリース起因の障害 | `docs/runbooks/rollback.md` §1 の判断フローで切り戻し種別を確定させる |
+
+### 4.1 ロールバック
+
+切り戻しの**実行可能な手順**は `docs/runbooks/rollback.md` を正本とする。本節は入口のみを示す。
+
+| 対象 | 手段 | 参照 |
+| --- | --- | --- |
+| Cloudflare Workers | `wrangler rollback` (直近100バージョン、binding削除時は不可) | rollback.md §2 |
+| Docker / GHCR | digest 固定で旧イメージへ差し戻し | rollback.md §3 |
+| Neon PostgreSQL | Instant restore (PITR)。**上書きであってマージではない** | rollback.md §4 |
+| Prisma migration | down migration は存在しない。forward fix で対応 | rollback.md §5 |
+| SQLite preview | `sqlite3 .backup` から復旧。旧 WAL/SHM の削除が必須 | rollback.md §6 |
+
+> 🚨 アプリケーションのロールバックは DB をロールバックしない。破壊的 migration を含むリリースを
+> 戻す場合は、コードと DB の両方を戻す必要がある。判断フローは rollback.md §1 を参照。
 
 ## 5. バックアップ
 
 | 対象 | 方針 |
 | --- | --- |
-| 台帳DB | 定期バックアップ |
+| 台帳DB | 定期バックアップ。SQLite は `sh scripts/db/sqlite-backup.sh` (`backups/sqlite/` へ出力)、Neon は history window 内の PITR |
 | 原本ファイル | オブジェクト保存のバージョニング |
 | マイグレーション | Gitで管理 |
 | ドキュメント | Gitで管理 |
+
+> ⚠️ Neon の history window は既定で短い (同組織の既存プロジェクトは 24 時間)。
+> 検知が遅れると PITR で戻せないため、本番の Neon project 作成時に history window を確認し、
+> 必要に応じて `pg_dump` の定期バックアップを併用すること。
 
 ## 6. ログ保持期限
 
