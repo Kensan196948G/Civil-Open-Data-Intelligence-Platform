@@ -351,6 +351,19 @@ Cloudflare / Neon への実デプロイは、以下の**人間承認必須**の�
 検証: lint 0 / `tsc --noEmit` 0 / vitest **230/230** pass / production build 成功 / `release:gate` OK / 契約チェック OK。
 両指摘は修正前に scratchpad の再現スクリプトで実証し、修正後はテストで回帰化した。
 
+#### 2026-07-18 CodeRabbit 追レビュー (Codex 修正 commit 差分限定) と TOCTOU 対応
+
+Codex 指摘修正 (`51bdda5`) は CodeRabbit 未レビューのコード変更を含むため、merge 判断前に
+`coderabbit review --agent -t committed --base 301bf5b` で差分限定レビューを実施した。
+
+| 項目 | 記録 |
+| --- | --- |
+| 指摘 | major 1 件 (Critical 0): マージ後検査と保存が非アトミックで、フィールドが互いに素な並行部分更新の合成が不変条件を破る TOCTOU |
+| 検証 | 論理的に正当と確認 (A: `officialUrl→http` と B: `requiresApiKey→true` が個別に検査を通過し、合成結果 `true+http` が違反) |
+| 対応 | `$transaction` 内で UPDATE の実行結果行 (行ロックにより並行 commit 済み値を含む) を再検査し、違反時は rollback + 409 conflict。事前のマージ後検査 (400) は分かりやすさのため維持する二段構え |
+| 修正 commit | `059fcc7`。TOCTOU 再現テストを追加 (vitest 231/231 pass) |
+| 再チェック | 修正差分への `coderabbit review -t uncommitted` → **findings 0** |
+
 ### 実ターゲットリリース時の記録欄
 
 | 項目 | 記録 |
