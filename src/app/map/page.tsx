@@ -1,7 +1,7 @@
 import { MapPanel } from "@/components/MapPanel";
 
 export const metadata = {
-  title: "地図表示 | Civil Open Data Intelligence Platform",
+  title: "地図表示",
 };
 
 export default function MapPage() {

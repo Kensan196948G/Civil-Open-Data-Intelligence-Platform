@@ -7,6 +7,10 @@ import { CATEGORIES, DATA_FORMATS, SOURCE_STATUSES, categoryLabel } from "@/lib/
 import { StatusBadge } from "@/components/StatusBadge";
 import { QualityScoreBadge, TrustLevelBadge } from "@/components/QualityScoreBadge";
 
+export const metadata = {
+  title: "データソース一覧",
+};
+
 export const dynamic = "force-dynamic";
 
 type SearchParams = Promise<{

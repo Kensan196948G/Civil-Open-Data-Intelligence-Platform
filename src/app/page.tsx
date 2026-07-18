@@ -7,6 +7,12 @@ import { safeFetchLogDto } from "@/lib/operational-dto";
 import { SummaryCard } from "@/components/SummaryCard";
 import { StatusBadge } from "@/components/StatusBadge";
 
+export const metadata = {
+  // 注意: title.template はそれを定義したセグメントの「子」にのみ適用されるため、
+  // root layout と同一セグメントの本ページはフル表記が必要
+  title: "ダッシュボード | Civil Open Data Intelligence Platform",
+};
+
 export const dynamic = "force-dynamic";
 
 const ERROR_TYPE_MESSAGES: Record<string, string> = {

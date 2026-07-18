@@ -4,6 +4,10 @@ import { prisma } from "@/lib/db";
 import { isAdminHeaders } from "@/lib/admin-auth";
 import { TagForm } from "@/components/TagForm";
 
+export const metadata = {
+  title: "タグ管理",
+};
+
 export const dynamic = "force-dynamic";
 
 export default async function TagsPage() {

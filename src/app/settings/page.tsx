@@ -10,7 +10,7 @@ export default function SettingsPage() {
 
       <div className="dc-card px-[18px] py-[17px]">
         <h2 className="mb-2.5 text-[14px] font-semibold text-[var(--ink)]">🔧 接続確認の動作設定</h2>
-        <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)]">
+        <div className="overflow-x-auto rounded-[var(--radius)] border border-[var(--line)]">
           <table className="w-full border-collapse text-left">
             <tbody>
               <tr>

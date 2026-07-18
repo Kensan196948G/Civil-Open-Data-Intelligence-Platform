@@ -4,6 +4,10 @@ import { prisma } from "@/lib/db";
 import { isAdminHeaders } from "@/lib/admin-auth";
 import { SourceForm } from "@/components/SourceForm";
 
+export const metadata = {
+  title: "データソース新規登録",
+};
+
 export const dynamic = "force-dynamic";
 
 export default async function NewSourcePage() {
