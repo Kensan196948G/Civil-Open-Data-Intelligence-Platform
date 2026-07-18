@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminRequest } from "@/lib/admin-auth";
-import { recordAudit } from "@/lib/audit";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 import {
   OPERATION_SETTING_DEFS,
@@ -47,15 +46,8 @@ export async function PUT(request: NextRequest) {
     );
   }
 
-  const { previous, next } = await setOperationSetting(key, value);
-  if (previous !== next) {
-    await recordAudit({
-      action: "設定変更",
-      target: def.label,
-      detail: `${previous}${def.unit} → ${next}${def.unit}`,
-      level: "info",
-    });
-  }
+  // 監査イベント (設定変更) は setOperationSetting が同一トランザクションで記録する
+  await setOperationSetting(key, value);
 
   return NextResponse.json({ settings: await getOperationSettings() });
 }

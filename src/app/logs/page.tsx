@@ -10,10 +10,13 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
-type SearchParams = Promise<{ success?: string }>;
+type SearchParams = Promise<{ success?: string | string[] }>;
 
 export default async function LogsPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
+  // 重複クエリ (string[]) や不正値は「すべて」扱いに正規化し、
+  // 絞り込み条件とセレクト表示へ同一値を渡す
+  const successFilter = sp.success === "true" || sp.success === "false" ? sp.success : "";
   const canViewLogs = isAdminHeaders(await headers());
 
   if (!canViewLogs) {
@@ -30,8 +33,8 @@ export default async function LogsPage({ searchParams }: { searchParams: SearchP
 
   const logs = await prisma.fetchLog.findMany({
     where: {
-      ...(sp.success === "true" ? { success: true } : {}),
-      ...(sp.success === "false" ? { success: false } : {}),
+      ...(successFilter === "true" ? { success: true } : {}),
+      ...(successFilter === "false" ? { success: false } : {}),
     },
     include: { dataSource: { select: { id: true, name: true } } },
     orderBy: { executedAt: "desc" },
@@ -42,7 +45,7 @@ export default async function LogsPage({ searchParams }: { searchParams: SearchP
     <div className="flex flex-col gap-3.5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="m-0 text-[1.4rem] font-semibold">🧾 取得ログ一覧</h1>
-        <LogsFilterSelect value={sp.success ?? ""} />
+        <LogsFilterSelect value={successFilter} />
       </div>
       <div className="dc-card px-[18px] py-[17px]">
         <p className="mb-2.5 text-[11.5px] text-[var(--muted)]">📊 直近 {logs.length} 件を表示</p>

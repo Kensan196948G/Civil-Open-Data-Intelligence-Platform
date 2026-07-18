@@ -30,6 +30,8 @@ export type AuditEventInput = {
 /**
  * 監査イベントを1件記録する。記録失敗は主処理を失敗させない
  * (可用性優先。失敗自体はサーバーログへ残す)。
+ * 主操作との同一トランザクション化 / outbox 方式による記録保証は Issue #46 で扱う
+ * (設定変更のみ setOperationSetting が同一トランザクションで記録済み)。
  */
 export async function recordAudit(event: AuditEventInput): Promise<void> {
   try {

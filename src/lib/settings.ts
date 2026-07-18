@@ -103,23 +103,46 @@ export async function getOperationSettings(): Promise<OperationSettings> {
     }
     settingsCache.set(CACHE_KEY, settings);
   } catch (error) {
+    // 障害中も既定値を短時間キャッシュし、呼び出しごとのDB再試行とログ増幅を防ぐ
     console.error("[settings] failed to load app_settings; using defaults", error);
+    settingsCache.set(CACHE_KEY, settings);
   }
   return settings;
 }
 
-/** 設定を保存し、変更前後の値を返す (監査記録用) */
+/**
+ * 設定を保存し、変更前後の値を返す。
+ * 値が変わる場合は「設定変更」監査イベントを同一トランザクションで記録し、
+ * 設定だけ変更されて証跡が欠落する状態を防ぐ (CodeRabbit指摘)。
+ */
 export async function setOperationSetting(
   key: OperationSettingKey,
   value: number,
 ): Promise<{ previous: number; next: number }> {
   const current = await getOperationSettings();
   const previous = current[key];
-  await prisma.appSetting.upsert({
+  const def = OPERATION_SETTING_DEFS[key];
+  const upsert = prisma.appSetting.upsert({
     where: { key },
     update: { value: String(value) },
     create: { key, value: String(value) },
   });
+  if (previous !== value) {
+    await prisma.$transaction([
+      upsert,
+      prisma.auditLog.create({
+        data: {
+          actor: "管理者",
+          action: "設定変更",
+          target: def.label,
+          detail: `${previous}${def.unit} → ${value}${def.unit}`,
+          level: "info",
+        },
+      }),
+    ]);
+  } else {
+    await upsert;
+  }
   invalidateOperationSettingsCache();
   return { previous, next: value };
 }

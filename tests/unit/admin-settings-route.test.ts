@@ -18,6 +18,7 @@ vi.mock("@/lib/db", () => ({
     dataSource: {
       findUnique: dataSourceFindUniqueMock,
     },
+    $transaction: vi.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
   },
 }));
 

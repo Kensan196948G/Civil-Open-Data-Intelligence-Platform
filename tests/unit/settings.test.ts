@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const findManyMock = vi.hoisted(() => vi.fn());
 const upsertMock = vi.hoisted(() => vi.fn());
+const auditCreateMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/db", () => ({
   prisma: {
@@ -9,6 +10,10 @@ vi.mock("@/lib/db", () => ({
       findMany: findManyMock,
       upsert: upsertMock,
     },
+    auditLog: {
+      create: auditCreateMock,
+    },
+    $transaction: vi.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
   },
 }));
 
@@ -33,6 +38,7 @@ describe("operation settings", () => {
     invalidateOperationSettingsCache();
     findManyMock.mockReset();
     upsertMock.mockReset();
+    auditCreateMock.mockReset().mockResolvedValue({});
   });
 
   it("uses the same defaults as src/lib/constants", () => {
@@ -95,7 +101,7 @@ describe("operation settings", () => {
     expect(findManyMock).toHaveBeenCalledTimes(2);
   });
 
-  it("persists a change and reports previous/next values for auditing", async () => {
+  it("persists a change with a 設定変更 audit event in the same transaction", async () => {
     findManyMock.mockResolvedValue([]);
     upsertMock.mockResolvedValue({ key: "timeoutSec", value: "60" });
 
@@ -106,5 +112,23 @@ describe("operation settings", () => {
       update: { value: "60" },
       create: { key: "timeoutSec", value: "60" },
     });
+    expect(auditCreateMock).toHaveBeenCalledWith({
+      data: {
+        actor: "管理者",
+        action: "設定変更",
+        target: "タイムアウト",
+        detail: "30秒 → 60秒",
+        level: "info",
+      },
+    });
+  });
+
+  it("skips the audit event when the value is unchanged", async () => {
+    findManyMock.mockResolvedValue([{ key: "timeoutSec", value: "60" }]);
+    upsertMock.mockResolvedValue({ key: "timeoutSec", value: "60" });
+
+    const result = await setOperationSetting("timeoutSec", 60);
+    expect(result).toEqual({ previous: 60, next: 60 });
+    expect(auditCreateMock).not.toHaveBeenCalled();
   });
 });

@@ -39,6 +39,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   const detectedFormat = result.detectedFormat ?? null;
   const now = new Date();
+  // 対話型トランザクション内から別接続のクエリを待たないよう、設定は事前に取得する
+  const { previewKb } = await getOperationSettings();
+  const previewMaxBytes = previewKb * 1024;
   const { log, sampleId } = await prisma.$transaction(async (tx) => {
     const log = await tx.fetchLog.create({
       data: {
@@ -59,8 +62,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     let sampleId: string | null = null;
     if (result.success && !source.requiresApiKey) {
-      const { previewKb } = await getOperationSettings();
-      const preview = redactOperationalText(result.previewText ?? "", previewKb * 1024);
+      const preview = redactOperationalText(result.previewText ?? "", previewMaxBytes);
       const sample = await tx.sampleResponse.create({
         data: {
           dataSourceId: source.id,
