@@ -5,6 +5,10 @@ import { prisma } from "@/lib/db";
 import { isAdminHeaders } from "@/lib/admin-auth";
 import { SourceForm } from "@/components/SourceForm";
 
+export const metadata = {
+  title: "データソース編集",
+};
+
 export const dynamic = "force-dynamic";
 
 export default async function EditSourcePage({ params }: { params: Promise<{ id: string }> }) {
