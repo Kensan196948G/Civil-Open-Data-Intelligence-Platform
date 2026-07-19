@@ -49,11 +49,11 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 
 | 項目 | 記録 |
 | --- | --- |
-| PR | main最新。PR #59 runtime status monitoring merge後 |
-| commit SHA | `8d89ab0469b15002cc762665b274f8505d65a49b` |
-| commit message | `ops: add runtime status latency evidence` |
-| CI run | `29695839586` success |
-| CodeQL run | `29695839579` success |
+| PR | main最新。PR #61 reproducible typecheck gate merge後 |
+| commit SHA | `26e275b187a9203f32e8e84187338b182fc993a1` |
+| commit message | `ci: make typecheck gate reproducible` |
+| CI run | `29696916248` success |
+| CodeQL run | `29696916256` success |
 | verify | pass |
 | e2e | pass |
 | postgresql-compat | pass。PostGIS migration、seed、`/api/v1` standard_records smokeを確認 |
@@ -61,7 +61,7 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | docker-image-security | pass。Trivy High/Critical CVE checkを確認 |
 | production-target-env | skipped。PRでは実ターゲットSecretsを読まず、`workflow_dispatch` 実行時に記録 |
 | docker-supply-chain | pass。main push後にGHCR image push、SBOM attestation、`mode=max` provenanceを確認 |
-| CodeRabbit | PR #59 success。オープンPRなし |
+| CodeRabbit | PR #61 success。PR #60は証跡更新として再検証中 |
 | post-release runtime status | `civilopendata.mirai-dx-platform.com` はDNS未解決。共有previewは `/` 66ms、`/api/health` 6ms、`/api/ready` 10ms `status=ready; db=ok`、`/api/openapi` 4ms |
 | ローカルread-only smoke | 共有preview / CI previewで継続確認。`release:post-release-status` はSecretなしでDB readyと応答時間を記録 |
 | ローカルDocker | Docker daemon未接続のためローカル実行不可。CI `docker-preview` を証跡に採用 |

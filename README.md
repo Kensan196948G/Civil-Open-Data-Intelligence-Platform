@@ -140,10 +140,10 @@ flowchart TD
 
 | 区分 | 状態 | 証跡 |
 | --- | --- | --- |
-| branch | 🟢 main | release hardening + runtime status monitoring |
-| commit | 🟢 `8d89ab0` | `ops: add runtime status latency evidence` |
-| CI run | 🟢 success | `29695839586` |
-| CodeQL run | 🟢 success | `29695839579` |
+| branch | 🟢 main | release hardening + reproducible typecheck gate |
+| commit | 🟢 `26e275b` | `ci: make typecheck gate reproducible` |
+| CI run | 🟢 success | `29696916248` |
+| CodeQL run | 🟢 success | `29696916256` |
 | verify | 🟢 pass | lint、型、単体、契約、build、smoke |
 | e2e | 🟢 pass | Playwright CI browser |
 | postgresql-compat | 🟢 pass | PostGIS migration、seed、`/api/v1` standard_records smoke |
@@ -152,7 +152,7 @@ flowchart TD
 | production-target-env | ⚪ skipped | `workflow_dispatch` で実staging/production Secretsを読む手動ゲート |
 | docker-supply-chain | 🟢 pass | GHCR image push、SBOM attestation、`mode=max` provenance |
 | runtime status | 🟢 pass | `release:post-release-status` でproduction DNS未解決、共有preview `/api/ready` `status=ready; db=ok`、全probe 5000ms未満 |
-| CodeRabbit | 🟢 pass | PR #59 success。オープンPRなし |
+| CodeRabbit | 🟢 pass | PR #61 success。PR #60は証跡更新として再検証中 |
 
 ⚠️ `production-target-env` はmain greenだけでは完了しません。Cloudflare/Neon実ターゲット検証は、staging/production移行時に承認済みSecrets/Variablesを読み込んで別途記録します。
 
