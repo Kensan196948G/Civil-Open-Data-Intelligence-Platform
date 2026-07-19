@@ -22,7 +22,7 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | env検証 | `npm run release:validate-env:preview` | 共有プレビュー必須設定が妥当 |
 | production env形状検証 | `npm run release:gate` 内の合成production env | PostgreSQL/PostGIS前提、外部DBのSSL指定、本番管理トークン強度、SQLite/未対応DB URL/起動時migration禁止の検査ロジックを確認 |
 | production実ターゲットenv検証 | 実デプロイ環境のSecrets/Variablesを読み込んで `CODIP_BASE_URL=https://civilopendata.mirai-dx-platform.com npm run release:validate-env:production-target` | `CODIP_DEPLOY_TARGET`、実HTTPS `CODIP_BASE_URL`、Cloudflare Hyperdrive、Neon branch、migration direct URL、外部PostgreSQL SSL、管理トークンまたはProxy認証設定、起動時migration禁止が実値で妥当 |
-| production実ターゲット証跡 | 実デプロイ環境のSecrets/Variablesを読み込んで `npm run release:production-evidence -- --strict` | Secret値を出力せず、Cloudflare/Neon本番Evidence入力、監視、バックアップ・リストア、wrangler本番route、未充足項目をMarkdownで記録 |
+| production実ターゲット証跡 | 実デプロイ環境のSecrets/Variablesを読み込んで `npm run release:production-evidence -- --strict` | Secret値を出力せず、Cloudflare/Neon本番Evidence入力、監視、バックアップ・リストア、wrangler本番route、Custom Domain、`workers_dev=false`、Observability、Hyperdrive ID解決状態、未充足項目をMarkdownで記録 |
 | 監視・アラート証跡 | `release:production-evidence -- --strict` 内の Monitoring Evidence | 通知先、Cloudflare alert policy、Workers Logs / Traces、Neon monitoring、read-only smoke監視、rollback ownerが記録済み |
 | バックアップ・リストア証跡 | `release:production-evidence -- --strict` 内の Backup / Restore Evidence | Neon PITR履歴ウィンドウ、restore rehearsalまたはrollback drill、復旧確認担当が記録済み |
 | Cloudflare placeholder検査 | `npm run release:check-production-placeholders -- --env production` | production Hyperdrive ID、Workers Custom Domain、`workers_dev=false`、`CODIP_BASE_URL` に未解決placeholderや本番URL不一致がない |

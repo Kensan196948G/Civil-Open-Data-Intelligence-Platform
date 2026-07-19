@@ -113,7 +113,7 @@ Secrets/Variablesの実値を読み込んだ端末では、次のread-only証跡
 npm run release:production-evidence -- --strict
 ```
 
-`--strict` は実ターゲットに必要なEvidence入力が欠けている場合に失敗する。失敗時はDNS/Secrets/Deployを進めず、不足項目を本runbook §6 Evidenceへ記録する。
+`--strict` は実ターゲットに必要なEvidence入力、Wrangler本番route、Custom Domain、`workers_dev=false`、Observability、Hyperdrive ID解決状態が欠けている場合に失敗する。失敗時はDNS/Secrets/Deployを進めず、不足項目を本runbook §6 Evidenceへ記録する。
 
 Cloudflare deploy前には、対象environmentの `wrangler.jsonc` に未解決placeholderが残っていないことも確認する。
 

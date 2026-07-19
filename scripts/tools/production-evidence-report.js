@@ -94,33 +94,35 @@ function secretUrlState(value) {
 
 function inspectWrangler(root) {
   const wranglerPath = path.join(root, "wrangler.jsonc");
-  const result = [];
+  const result = {
+    rows: [],
+    checks: [],
+  };
   if (!fs.existsSync(wranglerPath)) {
-    result.push(["wrangler.jsonc", "⚠️ missing"]);
+    result.rows.push(["wrangler.jsonc", "⚠️ missing"]);
+    result.checks.push(["Wrangler config exists", false]);
     return result;
   }
 
   const wrangler = fs.readFileSync(wranglerPath, "utf8");
-  result.push([
-    "production route",
-    wrangler.includes(PRODUCTION_HOSTNAME) ? `✅ ${PRODUCTION_HOSTNAME}` : "⚠️ production host missing",
-  ]);
-  result.push([
-    "custom_domain",
-    wrangler.includes('"custom_domain": true') ? "✅ true" : "⚠️ not true",
-  ]);
-  result.push([
-    "workers_dev",
-    wrangler.includes('"workers_dev": false') ? "✅ false" : "⚠️ not false",
-  ]);
-  result.push([
-    "observability",
-    wrangler.includes('"observability"') && wrangler.includes('"enabled": true') ? "✅ enabled" : "⚠️ not enabled",
-  ]);
-  result.push([
-    "hyperdrive id",
-    /placeholder|replace/i.test(wrangler) ? "⚠️ placeholder present" : "✅ no obvious placeholder",
-  ]);
+  const checks = [
+    ["production route", "Wrangler production route configured", wrangler.includes(PRODUCTION_HOSTNAME), PRODUCTION_HOSTNAME, "production host missing"],
+    ["custom_domain", "Wrangler custom domain enabled", wrangler.includes('"custom_domain": true'), "true", "not true"],
+    ["workers_dev", "Wrangler workers_dev disabled", wrangler.includes('"workers_dev": false'), "false", "not false"],
+    [
+      "observability",
+      "Wrangler observability enabled",
+      wrangler.includes('"observability"') && wrangler.includes('"enabled": true'),
+      "enabled",
+      "not enabled",
+    ],
+    ["hyperdrive id", "Wrangler Hyperdrive id resolved", !/placeholder|replace/i.test(wrangler), "no obvious placeholder", "placeholder present"],
+  ];
+
+  for (const [rowLabel, checkLabel, ok, okText, warningText] of checks) {
+    result.rows.push([rowLabel, ok ? `✅ ${okText}` : `⚠️ ${warningText}`]);
+    result.checks.push([checkLabel, ok]);
+  }
   return result;
 }
 
@@ -137,7 +139,7 @@ function buildReport(env = process.env, root = process.cwd()) {
 
   const monitoringRows = MONITORING_ENV_KEYS.map((key) => [key, evidenceState(env[key])]);
   const backupRestoreRows = BACKUP_RESTORE_ENV_KEYS.map((key) => [key, evidenceState(env[key])]);
-  const wranglerRows = inspectWrangler(root);
+  const wranglerEvidence = inspectWrangler(root);
 
   const readinessChecks = [
     ["Production URL fixed", env.CODIP_BASE_URL === PRODUCTION_URL],
@@ -156,6 +158,7 @@ function buildReport(env = process.env, root = process.cwd()) {
     ["Smoke monitoring schedule recorded", evidenceState(env.CODIP_SMOKE_MONITORING_SCHEDULE).startsWith("✅")],
     ["Rollback owner recorded", evidenceState(env.CODIP_ROLLBACK_OWNER).startsWith("✅")],
     ["Backup/restore evidence recorded", evidenceState(env.CODIP_BACKUP_RESTORE_EVIDENCE).startsWith("✅")],
+    ...wranglerEvidence.checks,
   ];
 
   const ready = readinessChecks.every(([, ok]) => ok);
@@ -188,7 +191,7 @@ function buildReport(env = process.env, root = process.cwd()) {
     "",
     "| Check | State |",
     "| --- | --- |",
-    ...wranglerRows.map(([key, state]) => `| ${key} | ${state} |`),
+    ...wranglerEvidence.rows.map(([key, state]) => `| ${key} | ${state} |`),
     "",
     "## Readiness Checks",
     "",

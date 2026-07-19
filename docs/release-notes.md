@@ -9,7 +9,7 @@
 | Workers互換 | `assertSafeUrl()` のDNS事前検証を `resolve4` / `resolve6` へ変更。接続時DNSピン留めを保証できないCloudflare Workers runtimeでは外部URL取得を `unsupported_runtime` で安全停止 |
 | Data | `standardRecordsAvailable()` を60秒TTL + single-flight化し、運用ロールバックと並行アクセス時の不整合を抑制 |
 | Audit | データソース登録・更新・削除、タグ追加・削除、接続確認、サンプル取得、品質再計算は主操作と `audit_logs` 記録を同一transaction化。クライアント起点監査イベントは記録失敗時に503を返す |
-| Production evidence | `npm run release:production-evidence -- --strict` を追加。Cloudflare/Neon実ターゲット、監視・アラート、バックアップ・リストアのEvidence入力をSecret値なしMarkdownで出力し、未充足時は失敗する |
+| Production evidence | `npm run release:production-evidence -- --strict` を追加。Cloudflare/Neon実ターゲット、Wrangler本番構成、監視・アラート、バックアップ・リストアのEvidence入力をSecret値なしMarkdownで出力し、未充足時は失敗する |
 | Cloudflare deploy gate | `npm run release:check-production-placeholders -- --env production` を追加。production Hyperdrive ID等の未解決placeholderが残る状態で本番検証を進めない |
 | Cloudflare artifact gate | `npm run release:check-cloudflare-build-artifact` を追加。`cf:build` 後にOpenNextのWorker entrypointと静的assetsが存在することをdeploy前に確認する |
 | Windows scripts | `DATABASE_URL=...` 形式のnpm scriptsをWindows互換ラッパーへ変更。`npm run build` がWindows/UNC環境でも実行可能になった |
