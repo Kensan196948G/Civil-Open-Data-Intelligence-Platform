@@ -39,6 +39,7 @@ const BACKUP_RESTORE_ENV_KEYS = [
 
 const PLACEHOLDER_PATTERNS = [
   /example/i,
+  /replace/i,
   /change[-_]?this/i,
   /placeholder/i,
   /dummy/i,
@@ -46,6 +47,12 @@ const PLACEHOLDER_PATTERNS = [
   /production-admin-token/i,
   /preview-admin-token/i,
 ];
+
+function stripJsonComments(input) {
+  return input
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+}
 
 function parseUrl(value) {
   try {
@@ -104,19 +111,37 @@ function inspectWrangler(root) {
     return result;
   }
 
-  const wrangler = fs.readFileSync(wranglerPath, "utf8");
+  let wrangler;
+  try {
+    wrangler = JSON.parse(stripJsonComments(fs.readFileSync(wranglerPath, "utf8")));
+  } catch {
+    result.rows.push(["wrangler.jsonc", "⚠️ invalid JSONC"]);
+    result.checks.push(["Wrangler config parseable", false]);
+    return result;
+  }
+  const productionEnv = wrangler.env?.production;
+  const productionRoute = productionEnv?.routes?.find((route) => route?.pattern === PRODUCTION_HOSTNAME);
+  const productionHyperdrive = Array.isArray(productionEnv?.hyperdrive) ? productionEnv.hyperdrive : [];
+  const hyperdriveId = productionHyperdrive.find((binding) => binding?.binding === "HYPERDRIVE")?.id ?? productionHyperdrive[0]?.id ?? "";
   const checks = [
-    ["production route", "Wrangler production route configured", wrangler.includes(PRODUCTION_HOSTNAME), PRODUCTION_HOSTNAME, "production host missing"],
-    ["custom_domain", "Wrangler custom domain enabled", wrangler.includes('"custom_domain": true'), "true", "not true"],
-    ["workers_dev", "Wrangler workers_dev disabled", wrangler.includes('"workers_dev": false'), "false", "not false"],
+    ["production env", "Wrangler production env configured", Boolean(productionEnv), "configured", "missing"],
+    ["production route", "Wrangler production route configured", Boolean(productionRoute), PRODUCTION_HOSTNAME, "production host missing"],
+    ["custom_domain", "Wrangler custom domain enabled", productionRoute?.custom_domain === true, "true", "not true"],
+    ["workers_dev", "Wrangler workers_dev disabled", productionEnv?.workers_dev === false, "false", "not false"],
     [
       "observability",
       "Wrangler observability enabled",
-      wrangler.includes('"observability"') && wrangler.includes('"enabled": true'),
+      wrangler.observability?.enabled === true,
       "enabled",
       "not enabled",
     ],
-    ["hyperdrive id", "Wrangler Hyperdrive id resolved", !/placeholder|replace/i.test(wrangler), "no obvious placeholder", "placeholder present"],
+    [
+      "hyperdrive id",
+      "Wrangler production Hyperdrive id resolved",
+      Boolean(hyperdriveId) && !hasPlaceholder(hyperdriveId),
+      "no obvious placeholder",
+      "missing or placeholder present",
+    ],
   ];
 
   for (const [rowLabel, checkLabel, ok, okText, warningText] of checks) {

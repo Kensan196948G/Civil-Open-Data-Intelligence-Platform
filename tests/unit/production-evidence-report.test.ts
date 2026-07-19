@@ -35,7 +35,15 @@ function writeWrangler(root: string, hyperdriveId: string) {
     path.join(root, "wrangler.jsonc"),
     `{
       "observability": { "enabled": true },
+      "hyperdrive": [
+        { "binding": "HYPERDRIVE", "id": "REPLACE_WITH_WRANGLER_HYPERDRIVE_CREATE_OUTPUT" }
+      ],
       "env": {
+        "preview": {
+          "hyperdrive": [
+            { "binding": "HYPERDRIVE", "id": "REPLACE_WITH_STAGING_HYPERDRIVE_ID" }
+          ]
+        },
         "production": {
           "workers_dev": false,
           "routes": [
@@ -81,7 +89,7 @@ describe("production-evidence-report", () => {
     expect(result.stdout).toContain("Backup / Restore Evidence");
     expect(result.stdout).toContain("CODIP_BACKUP_RESTORE_EVIDENCE");
     expect(result.stdout).toContain("set (recorded)");
-    expect(result.stdout).toContain("Wrangler Hyperdrive id resolved | ✅");
+    expect(result.stdout).toContain("Wrangler production Hyperdrive id resolved | ✅");
     expect(result.stdout).not.toContain("super-secret-runtime-pass");
     expect(result.stdout).not.toContain("super-secret-migration-pass");
     expect(result.stdout).not.toContain("real-admin-token-that-must-not-print");
@@ -117,7 +125,7 @@ describe("production-evidence-report", () => {
 
     expect(result.status).toBe(1);
     expect(result.stdout).toContain("Overall: ⚠️ evidence inputs incomplete");
-    expect(result.stdout).toContain("hyperdrive id | ⚠️ placeholder present");
-    expect(result.stdout).toContain("Wrangler Hyperdrive id resolved | ⚠️");
+    expect(result.stdout).toContain("hyperdrive id | ⚠️ missing or placeholder present");
+    expect(result.stdout).toContain("Wrangler production Hyperdrive id resolved | ⚠️");
   });
 });
