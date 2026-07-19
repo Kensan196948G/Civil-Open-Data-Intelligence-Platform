@@ -6,7 +6,7 @@ Production Access application の対象FQDNは `civilopendata.mirai-dx-platform.
 
 ## 前提
 
-- Terraform >= 1.8
+- Terraform >= 1.9
 - Cloudflare Terraform provider v5 (`cloudflare/cloudflare ~> 5.0`)
 - `CLOUDFLARE_API_TOKEN` 環境変数 (Access: Apps and Policies Write 権限)
 
