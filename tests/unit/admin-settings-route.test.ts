@@ -147,4 +147,14 @@ describe("admin settings / audit-events routes", () => {
     expect(response.status).toBe(400);
     expect(auditLogCreateMock).not.toHaveBeenCalled();
   });
+
+  it("returns 503 when a client audit event cannot be recorded", async () => {
+    auditLogCreateMock.mockRejectedValueOnce(new Error("db unavailable"));
+
+    const response = await auditEventsPOST(auditEventRequest({ kind: "audit_export_csv" }));
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error).toBe("audit_record_failed");
+  });
 });

@@ -8,7 +8,7 @@
 | Security | `CODIP_DISABLE_TOKEN_AUTH` を追加し、Cloudflare Access等のproxy auth配下で直接token経路を閉じられるようにした |
 | Workers互換 | `assertSafeUrl()` のDNS事前検証を `resolve4` / `resolve6` へ変更。接続時DNSピン留めを保証できないCloudflare Workers runtimeでは外部URL取得を `unsupported_runtime` で安全停止 |
 | Data | `standardRecordsAvailable()` を60秒TTL + single-flight化し、運用ロールバックと並行アクセス時の不整合を抑制 |
-| Audit | データソース登録・更新・削除、タグ追加・削除は主操作と `audit_logs` 記録を同一transaction化し、証跡欠落時に主操作だけが成功する経路を縮小 |
+| Audit | データソース登録・更新・削除、タグ追加・削除、接続確認、サンプル取得、品質再計算は主操作と `audit_logs` 記録を同一transaction化。クライアント起点監査イベントは記録失敗時に503を返す |
 | Docs | README、運用設計、監視runbook、リリースノートを更新 |
 | CI/契約 | Windows/UNCでOpenAPI route coverageが全APIをmissing扱いするパス正規化不具合を修正 |
 | Cloudflare | production FQDNを `civilopendata.mirai-dx-platform.com` に固定し、Workers Custom Domain、Access Terraform例、Cloudflare/Neon Runbook、契約チェックへ反映 |
@@ -34,5 +34,5 @@
 | --- | --- | --- |
 | P1 | Issue #18 の残り: 実Hyperdrive/Neon証跡、外部URL取得の専用egress設計 | Prisma Hyperdrive driver adapter側は `@prisma/adapter-pg` で実装済み。Cloudflare Workersでは接続時DNSピン留め不可のため外部URL取得を安全停止 |
 | P1 | Cloudflare/Neon実リソース未確定 | 人間承認後に Worker、Hyperdrive、Access、Secrets、Neon branch を作成し証跡化 |
-| P2 | Issue #46 監査記録の原子性 | データソース登録・更新・削除、タグ追加・削除は同一transaction化済み。残りはクライアント起点イベント、接続確認、サンプル取得、品質再計算の同一transaction/outbox方式適用 |
+| P2 | Issue #46 監査記録の原子性 | 主要な台帳・タグ・接続確認・サンプル取得・品質再計算は同一transaction化済み。クライアント起点イベントは記録失敗を503化済み。残りは将来の長時間外部処理増加時にoutbox方式を採用するかの設計判断 |
 | P2 | De-dockerization #35 | CI/branch protection/docsを確認し、Docker依存ゲートを段階的に置換 |

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminRequest } from "@/lib/admin-auth";
-import { recordAudit } from "@/lib/audit";
+import { auditLogCreateData } from "@/lib/audit";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 import { getOperationSettings } from "@/lib/settings";
 import { computeTotalScore, deriveQualityScores } from "@/lib/quality";
@@ -43,21 +43,23 @@ export async function POST(request: NextRequest, context: RouteContext) {
   });
   const totalScore = computeTotalScore(scores);
 
-  const [check] = await prisma.$transaction([
-    prisma.qualityCheck.create({
+  const check = await prisma.$transaction(async (tx) => {
+    const check = await tx.qualityCheck.create({
       data: { dataSourceId: id, ...scores, totalScore },
-    }),
-    prisma.dataSource.update({
+    });
+    await tx.dataSource.update({
       where: { id },
       data: { qualityScore: totalScore },
-    }),
-  ]);
-
-  await recordAudit({
-    action: "品質スコア再計算",
-    target: source.name,
-    detail: `スコア: ${totalScore}`,
-    level: "info",
+    });
+    await tx.auditLog.create({
+      data: auditLogCreateData({
+        action: "品質スコア再計算",
+        target: source.name,
+        detail: `スコア: ${totalScore}`,
+        level: "info",
+      }),
+    });
+    return check;
   });
 
   return NextResponse.json({ ...check, totalScore });

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminRequest } from "@/lib/admin-auth";
 import { ERROR_TYPE_MESSAGES } from "@/lib/constants";
-import { recordAudit } from "@/lib/audit";
+import { auditLogCreateData } from "@/lib/audit";
 import { getOperationSettings } from "@/lib/settings";
 import { sanitizeUrl } from "@/lib/http-client";
 import { redactOperationalText } from "@/lib/operational-dto";
@@ -81,17 +81,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
         status: result.success ? "active" : "unstable",
       },
     });
+    await tx.auditLog.create({
+      data: auditLogCreateData({
+        action: "サンプル取得実行",
+        target: source.name,
+        detail: result.success
+          ? "サンプルデータを取得"
+          : (ERROR_TYPE_MESSAGES[result.errorType ?? "unknown"] ?? "詳細不明のエラー"),
+        level: result.success ? "success" : "danger",
+      }),
+    });
 
     return { log, sampleId };
-  });
-
-  await recordAudit({
-    action: "サンプル取得実行",
-    target: source.name,
-    detail: result.success
-      ? "サンプルデータを取得"
-      : (ERROR_TYPE_MESSAGES[result.errorType ?? "unknown"] ?? "詳細不明のエラー"),
-    level: result.success ? "success" : "danger",
   });
 
   return NextResponse.json({

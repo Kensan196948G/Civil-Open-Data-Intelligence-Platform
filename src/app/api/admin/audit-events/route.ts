@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminRequest } from "@/lib/admin-auth";
-import { recordAudit, type AuditEventInput } from "@/lib/audit";
+import { auditLogCreateData, type AuditEventInput } from "@/lib/audit";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 
 /**
@@ -54,6 +54,16 @@ export async function POST(request: NextRequest) {
     target = source?.name ?? "-";
   }
 
-  await recordAudit({ action: def.action, target, detail: def.detail, level: def.level });
+  try {
+    await prisma.auditLog.create({
+      data: auditLogCreateData({ action: def.action, target, detail: def.detail, level: def.level }),
+    });
+  } catch (error) {
+    console.error("[audit-events] failed to record client audit event", error);
+    return NextResponse.json(
+      { error: "audit_record_failed", message: "監査イベントを記録できませんでした" },
+      { status: 503 },
+    );
+  }
   return NextResponse.json({ ok: true });
 }
