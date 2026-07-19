@@ -31,12 +31,20 @@ test.describe("アクセシビリティ基本回帰", () => {
     await expect(page.getByRole("status").filter({ hasText: /JSON の構文が正しくありません/ })).toBeVisible();
   });
 
-  test("未認証時は管理操作UIを表示しない", async ({ page }) => {
+  test("未認証時は管理操作を実行できない", async ({ page }) => {
     await page.goto("/sources");
     await expect(page.getByRole("link", { name: /新規登録/ })).not.toBeVisible();
 
+    // タグ追加フォームはデザイン正本どおり常時表示するが、
+    // 未認証時は操作不可 (disabled) + 管理セッション案内を出す
     await page.goto("/tags");
-    await expect(page.getByLabel(/タグ名/)).not.toBeVisible();
+    await expect(page.getByRole("heading", { name: /タグ追加/ })).toBeVisible();
+    await expect(page.getByLabel(/タグ名/)).toBeDisabled();
+    for (const swatch of await page.getByRole("button", { name: /^色 #/ }).all()) {
+      await expect(swatch).toBeDisabled();
+    }
+    await expect(page.getByRole("button", { name: /追加/ })).toBeDisabled();
+    await expect(page.getByText(/タグの追加には管理セッションが必要です/)).toBeVisible();
     await expect(page.getByRole("heading", { name: /登録済みタグ/ })).toBeVisible();
   });
 });
