@@ -170,6 +170,12 @@ jobs:
       - name: Validate real production target env
         run: npm run release:validate-env:production-target
 
+      - name: Record production target evidence
+        run: npm run release:production-evidence -- --strict
+
+      - name: Reject unresolved Cloudflare placeholders
+        run: npm run release:check-production-placeholders -- --env "$CODIP_DEPLOY_TARGET"
+
       - name: Verify target PostGIS DDL
         run: npm run db:pg:check-postgis-ddl
 

@@ -113,6 +113,14 @@ npm run release:production-evidence -- --strict
 
 `--strict` は実ターゲットに必要なEvidence入力が欠けている場合に失敗する。失敗時はDNS/Secrets/Deployを進めず、不足項目を本runbook §6 Evidenceへ記録する。
 
+Cloudflare deploy前には、対象environmentの `wrangler.jsonc` に未解決placeholderが残っていないことも確認する。
+
+```bash
+npm run release:check-production-placeholders -- --env production
+```
+
+`REPLACE_WITH_PRODUCTION_HYPERDRIVE_ID` 等が残っている場合は失敗する。Hyperdrive IDの置換は `wrangler hyperdrive create` の払い出し結果を確認してから行う。
+
 合格条件:
 
 | 確認 | 合格条件 |

@@ -29,6 +29,7 @@
     "release:check-openapi-coverage": "node scripts/tools/check-openapi-route-coverage.js",
     "release:check-docker-contract": "node scripts/tools/check-docker-release-contract.js",
     "release:check-cloudflare-contract": "node scripts/tools/check-cloudflare-neon-contract.js",
+    "release:check-production-placeholders": "node scripts/tools/check-production-placeholders.js",
     "release:check-github-actions-contract": "node scripts/tools/check-github-actions-contract.js",
     "db:pg:check-postgis-ddl": "node scripts/tools/check-postgis-standard-record-ddl.js",
     "db:generate": "node scripts/tools/with-env.js DATABASE_URL=file:./dev.db -- prisma generate && npm run db:pg:generate",
