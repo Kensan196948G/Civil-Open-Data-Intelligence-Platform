@@ -115,6 +115,7 @@ flowchart TD
 | DB | SQLite preview / PostgreSQL schema | Neon PostgreSQL + PostGIS |
 | 認証 | 管理トークン / HttpOnly Cookie | Cloudflare Access + proxy secret |
 | CI | GitHub Actions | SHA固定Actions、CodeQL、Trivy、SBOM/provenance |
+| 本番URL | 共有preview `http://192.168.0.185:3100/` | `https://civilopendata.mirai-dx-platform.com` |
 
 ---
 
@@ -166,7 +167,7 @@ flowchart TD
 | API | `/api/health` 200、`/api/ready` 200、`/api/dashboard` 200、`/api/sources` 200、`/api/openapi` 200 |
 | 管理保護 | `/api/fetch-logs` は未認証401、`/api/admin/audit-events` のGETは405 |
 | DB | `/api/ready` 200でアプリからDB接続を確認。共有previewは正本Neonではなくローカル/preview DB |
-| Cloudflare/Neon | `wrangler.jsonc` と `infra/cloudflare/` は準備済み。Hyperdrive IDはplaceholderで、DNS/Access/Secret/Neon実リソースは人間承認後に確定 |
+| Cloudflare/Neon | production targetは `civilopendata.mirai-dx-platform.com`。`wrangler.jsonc` と `infra/cloudflare/` は準備済み。Hyperdrive IDはplaceholderで、DNS/Access/Secret/Neon実リソースは人間承認後に確定 |
 
 ### 🔧 2026-07-19 安定化改善
 
@@ -206,6 +207,8 @@ flowchart TD
 ### 🏗️ 本番インフラの状態
 
 2026-07-18 時点で **Cloudflare / Neon の実リソースは未作成**です (Worker `codip` 不在、Hyperdrive config 0 件、CODIP の Neon project 不在)。CODIP はまだ一度もデプロイされていません。本番化には以下が順に必要で、**いずれも人間の承認・実行が前提**です。
+
+2026-07-19 にCloudflare本番サブドメインを `civilopendata.mirai-dx-platform.com` として確定しました。`wrangler.jsonc` には Workers Custom Domain (`routes[].custom_domain=true`) と production `workers_dev=false` を設定済みですが、Cloudflare側のCustom Domain/DNS/Access/Secrets/Hyperdrive/Neon実リソース作成は未実行です。
 
 | # | 作業 | 承認が必要な理由 |
 | --- | --- | --- |

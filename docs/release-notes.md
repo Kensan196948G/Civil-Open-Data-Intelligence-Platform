@@ -10,6 +10,7 @@
 | Data | `standardRecordsAvailable()` を60秒TTL + single-flight化し、運用ロールバックと並行アクセス時の不整合を抑制 |
 | Docs | README、運用設計、監視runbook、リリースノートを更新 |
 | CI/契約 | Windows/UNCでOpenAPI route coverageが全APIをmissing扱いするパス正規化不具合を修正 |
+| Cloudflare | production FQDNを `civilopendata.mirai-dx-platform.com` に固定し、Workers Custom Domain、Access Terraform例、Cloudflare/Neon Runbook、契約チェックへ反映 |
 
 ### 確認URL
 
@@ -23,6 +24,7 @@
 | `/api/openapi` | 200 |
 | `/api/fetch-logs` | 401。未認証で保護 |
 | `/api/admin/audit-events` | 405。GET不可 |
+| `https://civilopendata.mirai-dx-platform.com` | 未実行。Cloudflare Custom Domain / DNS / Access / Hyperdrive / Secrets / Neon実リソース作成は人間承認待ち |
 
 ### 残課題
 

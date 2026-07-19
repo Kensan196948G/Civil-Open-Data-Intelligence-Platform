@@ -3,8 +3,8 @@
 # 認証用の CLOUDFLARE_API_TOKEN はこのファイルに書かず、環境変数で渡すこと。
 
 cloudflare_account_id = "REPLACE_WITH_ACCOUNT_ID"
-environment            = "preview"
-application_domain     = "REPLACE_WITH_WORKERS_DEV_OR_CUSTOM_DOMAIN"
+environment            = "production"
+application_domain     = "civilopendata.mirai-dx-platform.com"
 session_duration        = "24h"
 allowed_emails          = []
-allowed_email_domains   = ["example.com"]
+allowed_email_domains   = ["REPLACE_WITH_ALLOWED_EMAIL_DOMAIN"]

@@ -7,16 +7,16 @@
 | Local | 開発 | Next.js, SQLite |
 | 現行共有Preview | 関係者検証 | Node.jsコンテナ、SQLiteまたはPostgreSQL/PostGIS compose、Cloudflare Access相当の前段保護 |
 | 将来Staging | Cloudflare/Neon検証 | Cloudflare Workers (`@opennextjs/cloudflare`)、Access、Neon PostgreSQL/PostGIS staging branch |
-| Production目標 | 本番 | Cloudflare Workers (`@opennextjs/cloudflare`)、Access、Neon PostgreSQL/PostGIS、Cloudflare Cron Triggers |
+| Production目標 | 本番 | Cloudflare Workers (`@opennextjs/cloudflare`)、Access、Neon PostgreSQL/PostGIS、Cloudflare Cron Triggers、`https://civilopendata.mirai-dx-platform.com` |
 
 ## 2. デプロイ方針
 
-MVPではローカル、CI、Docker previewで品質を確認する。2026-07-19 時点の共有previewは `http://192.168.0.185:3100/` で稼働し、`/api/health`、`/api/ready`、`/api/dashboard`、`/api/sources`、`/api/openapi` のread-only smokeは成功している。Cloudflare WorkersとNeon/PostGISは本番目標構成であり、`wrangler.jsonc`、`open-next.config.ts`、`infra/cloudflare/` (Terraformテンプレート) は導入済みで、`npm run cf:build` / `cf:preview` / `cf:deploy` / `cf:typegen` から実行できる。アプリケーションコード側では、SSRF事前DNS検証をWorkers互換の `resolve4` / `resolve6` へ更新し、PostgreSQL Prisma Clientに `@prisma/adapter-pg` を導入した。Prisma 6.19系ではdriver adapterにpreview flagは不要であり、deprecated warningを避けるため `previewFeatures = ["driverAdapters"]` は設定しない。Workers実行時は `CODIP_HYPERDRIVE_BINDING` (既定 `HYPERDRIVE`) のCloudflare Hyperdrive bindingから `connectionString` を取得できる場合にそれを優先し、Node.js/Docker/CIでは `DATABASE_URL` を使う。
+MVPではローカル、CI、Docker previewで品質を確認する。2026-07-19 時点の共有previewは `http://192.168.0.185:3100/` で稼働し、`/api/health`、`/api/ready`、`/api/dashboard`、`/api/sources`、`/api/openapi` のread-only smokeは成功している。Cloudflare WorkersとNeon/PostGISは本番目標構成であり、production FQDNは `civilopendata.mirai-dx-platform.com` とする。`wrangler.jsonc`、`open-next.config.ts`、`infra/cloudflare/` (Terraformテンプレート) は導入済みで、`npm run cf:build` / `cf:preview` / `cf:deploy` / `cf:typegen` から実行できる。アプリケーションコード側では、SSRF事前DNS検証をWorkers互換の `resolve4` / `resolve6` へ更新し、PostgreSQL Prisma Clientに `@prisma/adapter-pg` を導入した。Prisma 6.19系ではdriver adapterにpreview flagは不要であり、deprecated warningを避けるため `previewFeatures = ["driverAdapters"]` は設定しない。Workers実行時は `CODIP_HYPERDRIVE_BINDING` (既定 `HYPERDRIVE`) のCloudflare Hyperdrive bindingから `connectionString` を取得できる場合にそれを優先し、Node.js/Docker/CIでは `DATABASE_URL` を使う。
 
 ただし以下は未解決のアプリケーションコード/実リソース側の制約であり、Workers本番切替前に解消または証跡化が必須:
 
 - `src/lib/url-guard.ts` の事前DNS検証は `resolve4` / `resolve6` へ変更済み。接続時ピン留め側の `src/lib/http-client.ts` は引き続き `dns.lookup()` 依存のため、Workers上では外部URL取得機能がfail-closedする可能性がある
-- `wrangler.jsonc` の Hyperdrive ID は placeholder であり、Cloudflare Worker / Hyperdrive / Access / Custom Domain / Neon project の実リソース作成とSecret登録は人間承認後に行う
+- `wrangler.jsonc` の production custom domain は `civilopendata.mirai-dx-platform.com` に固定済み。production `workers_dev=false` により本番の `*.workers.dev` 直公開経路は使わない。ただし Hyperdrive ID は placeholder であり、Cloudflare Worker / Hyperdrive / Access / Custom Domain / Neon project の実リソース作成とSecret登録は人間承認後に行う
 
 Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、Cloudflareが現在推奨するNext.jsデプロイ経路が `@opennextjs/cloudflare` アダプタ経由のWorkersであり、レガシーの `@cloudflare/next-on-pages` ではないため。取得処理は将来Cloudflare Cron TriggersとWorkersへ分離する。
 
@@ -52,7 +52,7 @@ Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、C
 
 | ファイル | 内容 |
 | --- | --- |
-| `wrangler.jsonc` | Workers実行構成。`env.preview`/`env.production` named environment、Hyperdrive binding宣言 (idはプレースホルダー、`wrangler hyperdrive create` の払い出し値へ人間が置換) |
+| `wrangler.jsonc` | Workers実行構成。`env.preview`/`env.production` named environment、production custom domain `civilopendata.mirai-dx-platform.com`、Hyperdrive binding宣言 (idはプレースホルダー、`wrangler hyperdrive create` の払い出し値へ人間が置換) |
 | `open-next.config.ts` | `@opennextjs/cloudflare` の最小ビルド設定 |
 | `infra/cloudflare/` | Cloudflare Access保護のTerraformテンプレート (v5 provider、`cloudflare_zero_trust_access_application`/`_policy`)。適用 (`terraform apply`) は人間が実行 |
 

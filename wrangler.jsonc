@@ -2,6 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   // CODIP: Cloudflare Workers 実行構成 (Next.js on Workers via @opennextjs/cloudflare)
   // 実デプロイの前提: docs/13-deployment-and-operations.md §2, docs/runbooks/cloudflare-neon-staging.md を参照。
+  // Production custom domain: civilopendata.mirai-dx-platform.com
   // 既知の未解決制約 (実デプロイ前に必須): 実Cloudflare/Neonリソース、Secrets、DNS/Accessは人間承認後に確定する。
   "name": "codip",
   "main": ".open-next/worker.js",
@@ -46,9 +47,17 @@
       ]
     },
     "production": {
+      "workers_dev": false,
+      "routes": [
+        {
+          "pattern": "civilopendata.mirai-dx-platform.com",
+          "custom_domain": true
+        }
+      ],
       "vars": {
         "CODIP_ENV_MODE": "production",
         "CODIP_DEPLOY_TARGET": "production",
+        "CODIP_BASE_URL": "https://civilopendata.mirai-dx-platform.com",
         "CODIP_TRUST_PROXY_AUTH": "true",
         "CODIP_TRUST_PROXY_HEADERS": "true"
       },

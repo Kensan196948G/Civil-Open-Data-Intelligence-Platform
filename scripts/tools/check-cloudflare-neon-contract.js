@@ -10,6 +10,8 @@ const runbook = fs.existsSync(runbookPath) ? fs.readFileSync(runbookPath, "utf8"
 const docs13 = fs.readFileSync(path.join(root, "docs/13-deployment-and-operations.md"), "utf8");
 const docs16 = fs.readFileSync(path.join(root, "docs/16-release-readiness-checklist.md"), "utf8");
 const packageJson = fs.readFileSync(path.join(root, "package.json"), "utf8");
+const wrangler = fs.readFileSync(path.join(root, "wrangler.jsonc"), "utf8");
+const accessVars = fs.readFileSync(path.join(root, "infra/cloudflare/terraform.tfvars.example"), "utf8");
 const dbLoader = fs.readFileSync(path.join(root, "src/lib/db.ts"), "utf8");
 const pgSchema = fs.readFileSync(path.join(root, "prisma/postgresql/schema.prisma"), "utf8");
 
@@ -24,8 +26,14 @@ requireText(".env.example", envExample, "CODIP_DEPLOY_TARGET");
 requireText(".env.example", envExample, "CODIP_HYPERDRIVE_BINDING");
 requireText(".env.example", envExample, "CODIP_NEON_BRANCH");
 requireText(".env.example", envExample, "CODIP_MIGRATION_DATABASE_URL");
+requireText(".env.example", envExample, "civilopendata.mirai-dx-platform.com");
+requireText("wrangler.jsonc", wrangler, "civilopendata.mirai-dx-platform.com");
+requireText("wrangler.jsonc", wrangler, "\"custom_domain\": true");
+requireText("wrangler.jsonc", wrangler, "\"workers_dev\": false");
+requireText("infra/cloudflare terraform vars", accessVars, "application_domain     = \"civilopendata.mirai-dx-platform.com\"");
 
 for (const token of [
+  "civilopendata.mirai-dx-platform.com",
   "Cloudflare Hyperdrive",
   "CODIP_HYPERDRIVE_BINDING",
   "CODIP_MIGRATION_DATABASE_URL",
