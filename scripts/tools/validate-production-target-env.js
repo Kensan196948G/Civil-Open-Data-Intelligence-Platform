@@ -12,6 +12,7 @@ const PLACEHOLDER_PATTERNS = [
   /production-admin-token/i,
   /preview-admin-token/i,
 ];
+const PRODUCTION_BASE_HOSTNAME = "civilopendata.mirai-dx-platform.com";
 
 function fail(errors, message) {
   errors.push(message);
@@ -95,6 +96,8 @@ function main() {
     fail(errors, "CODIP_BASE_URL must be the real https:// target URL");
   } else if (["localhost", "127.0.0.1", "::1", "example.com"].includes(parsedBaseUrl.hostname)) {
     fail(errors, `CODIP_BASE_URL must not point to ${parsedBaseUrl.hostname}`);
+  } else if (deployTarget === "production" && parsedBaseUrl.hostname !== PRODUCTION_BASE_HOSTNAME) {
+    fail(errors, `Production CODIP_BASE_URL must be https://${PRODUCTION_BASE_HOSTNAME}`);
   }
   if (baseUrl && hasPlaceholder(baseUrl)) {
     fail(errors, "CODIP_BASE_URL contains a placeholder value");

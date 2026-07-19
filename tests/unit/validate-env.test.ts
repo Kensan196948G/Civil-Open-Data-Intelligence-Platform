@@ -203,4 +203,38 @@ describe("validate-env release contract", () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("[production-target-env] OK (staging)");
   });
+
+  it("rejects a production target environment with the wrong production hostname", () => {
+    const result = runValidateProductionTargetEnv({
+      CODIP_DEPLOY_TARGET: "production",
+      DATABASE_URL: "postgresql://codip:secret@ep-codip-neon.aws.neon.tech/codip?schema=public&sslmode=require",
+      CODIP_MIGRATION_DATABASE_URL:
+        "postgresql://codip:secret@ep-codip-neon-direct.aws.neon.tech/codip?schema=public&sslmode=verify-full",
+      CODIP_BASE_URL: "https://codip-staging.mirai-dx-platform.com",
+      CODIP_HYPERDRIVE_BINDING: "CODIP_HYPERDRIVE",
+      CODIP_NEON_BRANCH: "codip-production-20260719",
+      CODIP_ADMIN_TOKEN: "realistic-random-target-token-123456",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "Production CODIP_BASE_URL must be https://civilopendata.mirai-dx-platform.com",
+    );
+  });
+
+  it("accepts the fixed Cloudflare production hostname for production target validation", () => {
+    const result = runValidateProductionTargetEnv({
+      CODIP_DEPLOY_TARGET: "production",
+      DATABASE_URL: "postgresql://codip:secret@ep-codip-neon.aws.neon.tech/codip?schema=public&sslmode=require",
+      CODIP_MIGRATION_DATABASE_URL:
+        "postgresql://codip:secret@ep-codip-neon-direct.aws.neon.tech/codip?schema=public&sslmode=verify-full",
+      CODIP_BASE_URL: "https://civilopendata.mirai-dx-platform.com",
+      CODIP_HYPERDRIVE_BINDING: "CODIP_HYPERDRIVE",
+      CODIP_NEON_BRANCH: "codip-production-20260719",
+      CODIP_ADMIN_TOKEN: "realistic-random-target-token-123456",
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("[production-target-env] OK (production)");
+  });
 });

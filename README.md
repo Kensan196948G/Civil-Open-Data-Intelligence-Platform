@@ -301,7 +301,7 @@ DATABASE_URL='file:./dev.db' npm run dev
 | `npm run release:check-docker-contract` | Dockerfile、`.dockerignore`、image scan、SBOM/provenance契約 |
 | `npm run release:check-cloudflare-contract` | Cloudflare/Neon staging runbook契約 |
 | `npm run release:check-github-actions-contract` | actionlint、危険trigger、Action SHA固定契約 |
-| `npm run release:validate-env:production-target` | 実Cloudflare/Neon targetのSecrets/Variables検証 |
+| `npm run release:validate-env:production-target` | 実Cloudflare/Neon targetのSecrets/Variables検証。productionでは `https://civilopendata.mirai-dx-platform.com` 固定 |
 | `npm run db:pg:check-postgis-ddl` | PostGIS DDL確認 |
 | `npm run db:pg:check-drift` | PostgreSQL schema drift確認 |
 | `npm run db:prune -- --dry-run` | 運用ログ保持期間の削除候補確認 |
