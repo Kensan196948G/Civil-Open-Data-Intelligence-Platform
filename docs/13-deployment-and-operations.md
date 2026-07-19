@@ -36,7 +36,7 @@ Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、C
 | `CODIP_FETCH_LOG_RETENTION_DAYS` | Optional | 取得ログ保持日数。既定90日 |
 | `CODIP_SAMPLE_RETENTION_DAYS` | Optional | サンプルレスポンス保持日数。既定30日 |
 | `CODIP_ADMIN_TOKEN` | Preview/Production | 管理操作APIの保護トークン。32文字以上の十分ランダムな値 |
-| `CODIP_DISABLE_TOKEN_AUTH` | Proxy auth時 | `true` の場合、直接トークンヘッダーとトークンによる新規管理セッション開始を無効化する。preview/productionでは有効なproxy auth guardが必須 |
+| `CODIP_DISABLE_TOKEN_AUTH` | Proxy auth時 | `true` の場合、直接トークンヘッダーと、tokenから導出される署名済み管理セッションCookieの両方を無効化する。preview/productionでは有効なproxy auth guardが必須 |
 | `CODIP_ALLOW_INSECURE_ADMIN` | Local only | ローカル開発でのみ管理操作を無認証許可する明示フラグ |
 | `CODIP_TRUST_PROXY_AUTH` | Optional | Cloudflare Access等の認証済みプロキシを信頼する場合のみ `true` |
 | `CODIP_TRUST_PROXY_HEADERS` | Optional | 信頼済みプロキシ配下でのみ、レート制限にForwarded系IPヘッダーを使う |
