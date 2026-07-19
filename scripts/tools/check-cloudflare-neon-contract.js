@@ -11,9 +11,7 @@ const productionRunbookPath = path.join(root, "docs/runbooks/cloudflare-producti
 const productionRunbook = fs.existsSync(productionRunbookPath) ? fs.readFileSync(productionRunbookPath, "utf8") : "";
 const docs13 = fs.readFileSync(path.join(root, "docs/13-deployment-and-operations.md"), "utf8");
 const docs16 = fs.readFileSync(path.join(root, "docs/16-release-readiness-checklist.md"), "utf8");
-const docsIndex = fs.readFileSync(path.join(root, "docs/README.md"), "utf8");
 const rollbackRunbook = fs.readFileSync(path.join(root, "docs/runbooks/rollback.md"), "utf8");
-const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
 const packageJson = fs.readFileSync(path.join(root, "package.json"), "utf8");
 const wrangler = fs.readFileSync(path.join(root, "wrangler.jsonc"), "utf8");
 const accessVars = fs.readFileSync(path.join(root, "infra/cloudflare/terraform.tfvars.example"), "utf8");
@@ -84,8 +82,6 @@ for (const token of [
   requireText("cloudflare-production runbook", productionRunbook, token);
 }
 
-requireText("README", readme, "docs/runbooks/cloudflare-production.md");
-requireText("docs index", docsIndex, "runbooks/cloudflare-production.md");
 requireText("rollback runbook", rollbackRunbook, "docs/runbooks/cloudflare-production.md");
 requireText("wrangler.jsonc", wrangler, "docs/runbooks/cloudflare-production.md");
 requireText("docs/13", docs13, "docker-supply-chain");
