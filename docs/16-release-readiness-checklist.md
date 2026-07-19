@@ -44,27 +44,27 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 
 ## 1.1 リリース証跡
 
-### 2026-07-13 Draft PR #17 記録済みgreen baseline
+### 2026-07-19 main 最新green baseline
 
 | 項目 | 記録 |
 | --- | --- |
-| PR | #17 `agent/release-readiness-postgis-ci` |
-| commit SHA | `e2c007f4772235b77f9228805714d8aee4f8404d` |
-| commit message | `align docker smoke admin token` |
-| CI run | `29232542066` success |
-| CodeQL run | `29232541952` success |
+| PR | main最新。PR #52 dependency maintenance merge後 |
+| commit SHA | `1d66e4831dd0a24a22335c80f93f2aecaa5a41e3` |
+| commit message | `build(deps): bump app dependencies` |
+| CI run | `29693346265` success |
+| CodeQL run | `29693346235` success |
 | verify | pass |
 | e2e | pass |
 | postgresql-compat | pass。PostGIS migration、seed、`/api/v1` standard_records smokeを確認 |
 | docker-preview | pass。preview-runner migration/seed、production runner smokeを確認 |
 | docker-image-security | pass。Trivy High/Critical CVE checkを確認 |
 | production-target-env | skipped。PRでは実ターゲットSecretsを読まず、`workflow_dispatch` 実行時に記録 |
-| docker-supply-chain | skipped。PRではpushせず、`main` push後にGHCR tag/digest/SBOM/provenanceを記録 |
-| CodeRabbit | Draft PRのためreview skipped。Ready化後または `@coderabbitai review` で実レビュー |
+| docker-supply-chain | pass。main push後にGHCR image push、SBOM attestation、`mode=max` provenanceを確認 |
+| CodeRabbit | PR #52 / #56 は success。オープンPRなし |
 | ローカルread-only smoke | `http://127.0.0.1:3104` に対して63 checks成功 |
 | ローカルDocker | Docker daemon未接続のためローカル実行不可。CI `docker-preview` を証跡に採用 |
 
-最新のPR headに対するCI状態はGitHub PR checksを正とする。実ターゲットstaging/production release時は、下の記録欄へ対象環境のSecrets/Variables、GHCR digest、SBOM/provenance、read-only smoke結果を追記する。
+最新mainに対するCI状態はGitHub Actionsを正とする。実ターゲットstaging/production release時は、下の記録欄へ対象環境のSecrets/Variables、GHCR digest、SBOM/provenance、read-only smoke結果を追記する。
 
 ### 2026-07-13 Issue #15 テストカバレッジ補完 + ローカルrelease:gate green
 
@@ -189,7 +189,7 @@ PR #17 branch (`agent/release-readiness-postgis-ci`) を自律 CTO が再検証�
 
 | 項目 | 記録 |
 | --- | --- |
-| branch | `agent/release-readiness-postgis-ci` (PR #17 Draft 継続中) |
+| branch | `agent/release-readiness-postgis-ci` (当時のPR #17 Draft) |
 | HEAD commit | `1f1d570` |
 | lint / type / unit | 0 / 0 / 222 pass |
 | contract checks (6種) | all OK (19 API routes covered) |
@@ -207,9 +207,9 @@ PR #17 branch (`agent/release-readiness-postgis-ci`) を自律 CTO が再検証�
 
 | 残課題 | 状態 |
 | --- | --- |
-| Codex review (通常・対抗) | 未実施。Issue #19 で人間依頼中、PR は Draft 維持 |
+| Codex review (通常・対抗) | 後続セッションで実施・裁定済み。現在のreview状態はmain最新証跡とPR #52 / #56のCodeRabbit successを正とする |
 | Issue #18 Workers 互換性 (`dns.lookup`, `driverAdapters`) | 部分解消。SSRF事前DNS検証は `resolve4` / `resolve6` へ更新済み、PostgreSQL Prisma Clientは `@prisma/adapter-pg` へ更新済み。Prisma 6.19系ではdriver adapterのpreview flagは不要。Cloudflare Workersでは接続時DNSピン留めを同等保証できないため外部URL取得を `unsupported_runtime` で安全停止。残りは実Cloudflare/Neonリソース証跡と専用egress設計 |
-| PR #17 merge | 人間判断待ち (Codex レビュー結果 + main 承認) |
+| PR #17 merge | 履歴事項。現在はmainへ統合済みで、最新main CI/CodeQLを正とする |
 | Cloudflare/Neon staging smoke 実環境証跡 | 未実施 (staging/production deploy 時に記録欄 §6 を使用) |
 
 ### 2026-07-18 自律 CTO 再検証 + インフラ実態調査 (本セッション)
@@ -236,8 +236,8 @@ PR #17 branch (`agent/release-readiness-postgis-ci`) を自律 CTO が再検証�
 | --- | --- | --- | --- |
 | 1 | **実行可能な rollback 手順が存在しなかった**。`docs/13` に rollback の記載がゼロ、runbook 2 本にも事象→方針の表のみでコマンドがなく、リリースゲート「rollback 手順が文書化済み」を実質的に満たしていなかった | High | `docs/runbooks/rollback.md` を新規作成 (判断フロー / Workers / GHCR / Neon PITR / Prisma / SQLite / 検証 / 記録欄)。`docs/13` §4.1・§5 から接続 |
 | 2 | **Cloudflare / Neon の実リソースが未作成**。Worker `codip` 不在 (`workers_list` は別プロジェクトのみ)、Hyperdrive config 0 件、CODIP の Neon project 不在 | 情報 (Blocker ではない) | 「未デプロイ」が正常状態。ただし本番化は Neon project 作成・Hyperdrive 作成 (課金発生・人間承認必須) から始まる旨を §本番化の前提 に明記 |
-| 3 | **main に branch protection が未設定** (`gh api .../branches/main/protection` → 404)。「CI 未通過 merge 禁止」「main 直 push 禁止」が運用規律のみで技術的強制がない | Medium | Issue 起票。PR #17 merge 前の設定を推奨 |
-| 4 | **PR #17 の merge は GHCR へのイメージ push を伴う**。`.github/workflows/ci.yml:448` の `docker-supply-chain` が `push && refs/heads/main` で発火 | 情報 | 承認者への申し送り事項として明記 (リポジトリが private のためイメージも既定 private) |
+| 3 | **main branch protection** は2026-07-19T15:41Z (2026-07-20 JST) 時点で有効。required checksは `verify` / `e2e` / `postgresql-compat` / `docker-preview` / `docker-image-security` / `analyze`、strict=true、admin enforcement=true | 解消済み | required review数やCode Ownersの要否は運用成熟度に合わせて継続判断 |
+| 4 | main merge は GHCR への image push を伴う。`.github/workflows/ci.yml` の `docker-supply-chain` が `push && refs/heads/main` で発火し、SBOM/provenanceを付与する | 情報 | PR #52 / #56 merge後のmain CIで成功確認済み。リポジトリがprivateのためイメージも既定private |
 | 5 | Issue #18 の fail-closed 評価を **Cloudflare 公式ドキュメントで一次裏付け**。`node:dns` は `nodejs_compat` で利用可能だが `lookup` / `lookupService` / `resolve` は "Not implemented" を throw する | 情報 | `docs/13` §2 の既存評価 (fail-closed) が正しいことを確認。修正経路も `resolve4`/`resolve6` 置換で確定 |
 | 6 | `npm run db:pg:validate` 等は `localhost:5432` 前提だが、`docker-compose.postgresql-preview.yml` は postgres のポートを公開していないため、チェックリスト記載のコマンドがローカルでそのまま通らない | Low | 下記「PostgreSQL チェックの実行方法」に回避手順を記載 |
 | 7 | Neon の history window は同組織の既存プロジェクトで **24 時間**。障害検知が翌日にずれると PITR で戻せない | Medium | `docs/13` §5 と rollback.md §4.3 に警告を記載。本番 Neon project 作成時に要判断 |
