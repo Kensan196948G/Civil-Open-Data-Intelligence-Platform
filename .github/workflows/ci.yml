@@ -33,7 +33,7 @@ jobs:
       CODIP_ADMIN_TOKEN: "ci-release-admin-token-123456789012"
       CODIP_ACCEPT_SQLITE_PREVIEW: "true"
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           fetch-depth: 0
 
@@ -166,7 +166,7 @@ jobs:
       CODIP_ROLLBACK_OWNER: ${{ vars.CODIP_ROLLBACK_OWNER }}
       CODIP_BACKUP_RESTORE_EVIDENCE: ${{ vars.CODIP_BACKUP_RESTORE_EVIDENCE }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -211,7 +211,7 @@ jobs:
       DATABASE_URL: "file:./dev.db"
       CODIP_ALLOW_INSECURE_ADMIN: "true"
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -261,7 +261,7 @@ jobs:
     env:
       DATABASE_URL: "postgresql://codip:codip@localhost:5432/codip?schema=public"
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -345,7 +345,7 @@ jobs:
       CODIP_ADMIN_TOKEN: "ci-docker-preview-admin-token-123456"
       CODIP_SEED_ON_START: "true"
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
       - name: Validate Docker Compose preview config
         run: docker compose -f docker-compose.preview.yml config --quiet
@@ -449,7 +449,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
       - name: Build production runner image for scan
         run: docker build --target runner -t codip-production-scan .
@@ -476,7 +476,7 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
       - name: Resolve image name
         id: image
