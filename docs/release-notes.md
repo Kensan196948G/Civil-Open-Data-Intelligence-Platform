@@ -9,6 +9,7 @@
 | Workers互換 | `assertSafeUrl()` のDNS事前検証を `resolve4` / `resolve6` へ変更。接続時DNSピン留めを保証できないCloudflare Workers runtimeでは外部URL取得を `unsupported_runtime` で安全停止 |
 | Data | `standardRecordsAvailable()` を60秒TTL + single-flight化し、運用ロールバックと並行アクセス時の不整合を抑制 |
 | Audit | データソース登録・更新・削除、タグ追加・削除、接続確認、サンプル取得、品質再計算は主操作と `audit_logs` 記録を同一transaction化。クライアント起点監査イベントは記録失敗時に503を返す |
+| Audit contract | ADR 0002として監査ログ記録保証を文書化し、短時間mutationは同一transaction、クライアント起点イベントは同期POST + 503、長時間/非同期処理は将来outbox移行という判断を固定。`release:check-audit-contract` を追加 |
 | Production evidence | `npm run release:production-evidence -- --strict` を追加。Cloudflare/Neon実ターゲット、Wrangler本番構成、監視・アラート、バックアップ・リストアのEvidence入力をSecret値なしMarkdownで出力し、未充足時は失敗する |
 | Access evidence | `CODIP_CLOUDFLARE_ACCESS_EVIDENCE` をproduction evidence必須項目に追加し、Cloudflare Access application/policy/allowlist/proxy secret設定済み証跡なしではstrict gateを通さない |
 | GitHub Actions production evidence | `production-target-env` 手動jobに `CODIP_CLOUDFLARE_ACCESS_EVIDENCE` を渡し、Access証跡を実Cloudflare/Neon target検証で欠落させないようにした |

@@ -74,6 +74,7 @@ jobs:
           npm run release:check-doc-api-contract
           npm run release:check-openapi-coverage
           npm run release:check-docker-contract
+          npm run release:check-audit-contract
           npm run release:check-cloudflare-contract
           npm run release:check-github-actions-contract
 

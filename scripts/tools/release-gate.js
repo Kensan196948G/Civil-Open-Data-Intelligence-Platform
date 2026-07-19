@@ -30,6 +30,7 @@ function main() {
   run("docs and API contract", "npm", ["run", "release:check-doc-api-contract"]);
   run("openapi route coverage", "npm", ["run", "release:check-openapi-coverage"]);
   run("docker release contract", "npm", ["run", "release:check-docker-contract"]);
+  run("audit log guarantee contract", "npm", ["run", "release:check-audit-contract"]);
   run("cloudflare neon contract", "npm", ["run", "release:check-cloudflare-contract"]);
   run("github actions contract", "npm", ["run", "release:check-github-actions-contract"]);
   run("operational prune dry-run", "npm", ["run", "db:prune", "--", "--dry-run"], {

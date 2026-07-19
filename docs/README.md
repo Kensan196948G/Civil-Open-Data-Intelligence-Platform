@@ -47,3 +47,4 @@ Civil Open Data Intelligence Platform（CODIP）は、土木建設関連の公�
 | ファイル | 判断内容 |
 | --- | --- |
 | [adr/0001-repository-and-product-scope.md](adr/0001-repository-and-product-scope.md) | Global Civil API CatalogをCODIPの台帳モジュールとして吸収する判断 |
+| [adr/0002-audit-log-guarantee.md](adr/0002-audit-log-guarantee.md) | 監査ログ記録保証を同一transaction / 同期API / 将来outbox条件に分ける判断 |

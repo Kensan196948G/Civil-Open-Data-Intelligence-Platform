@@ -28,6 +28,7 @@
     "release:check-doc-api-contract": "node scripts/tools/check-doc-api-contract.js",
     "release:check-openapi-coverage": "node scripts/tools/check-openapi-route-coverage.js",
     "release:check-docker-contract": "node scripts/tools/check-docker-release-contract.js",
+    "release:check-audit-contract": "node scripts/tools/check-audit-contract.js",
     "release:check-cloudflare-contract": "node scripts/tools/check-cloudflare-neon-contract.js",
     "release:check-cloudflare-build-artifact": "node scripts/tools/check-cloudflare-build-artifact.js",
     "release:check-production-placeholders": "node scripts/tools/check-production-placeholders.js",

@@ -197,6 +197,18 @@ Cloudflare Workers本番では、データソース接続確認・サンプル�
 
 アプリ内制限は単一プロセスのメモリで管理するため、複数インスタンス本番ではCloudflare側の制限を正とする。
 
+## 3.2 監査ログ記録保証
+
+監査ログの保証方式は [ADR 0002](adr/0002-audit-log-guarantee.md) を正本とする。
+データソース登録・更新・削除、タグ追加・削除、接続確認、サンプル取得、品質再計算、設定変更は、主操作のDB永続化と `audit_logs` 作成を同一transactionへ含める。
+接続確認とサンプル取得では、外部fetchはtransaction外で完了させ、DB保存と監査記録だけを短いtransactionで束ねる。
+
+クライアント起点イベント (監査ログエクスポート、APIキー操作) は `/api/admin/audit-events` へ同期POSTし、監査INSERT失敗時は 503 `audit_record_failed` を返す。
+ただし、ブラウザ内のファイル出力やAPIキー入力自体はサーバー側で巻き戻せないため、503が出た場合は運用ログとIssueで追跡する。
+管理セッション開始・終了の監査は、可用性優先でベストエフォート `recordAudit()` とし、ログイン/ログアウト自体は監査書き込み失敗で止めない。
+
+非同期ジョブ、Cron、Queue、batch ingestなど長時間処理が主操作になる場合は、同一transactionではなくoutbox + retry + alertへ移行する。
+
 ## 4. 障害対応
 
 | 事象 | 初動 |
