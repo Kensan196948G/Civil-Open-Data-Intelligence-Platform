@@ -29,6 +29,22 @@
 | Smoke | `release:smoke --read-only` が本番URLに対して成功 |
 | Rollback | 直前Worker version、Neon復旧手段、担当者、判断時刻を記録済み |
 
+## 1.1 New subdomain / Custom Domain gate
+
+`civilopendata` は `mirai-dx-platform.com` 配下の新規サブドメインとして扱う。Cloudflare公式docsでは、Workers Custom DomainはアクティブなCloudflare zoneとWorkerが前提で、同じhostnameに既存CNAMEがある場合は作成できない。従って、初回接続前に次を確認する。
+
+| Check | 合格条件 |
+| --- | --- |
+| Zone ownership | Cloudflare zone `mirai-dx-platform.com` が対象accountでactive |
+| Hostname conflict | `civilopendata.mirai-dx-platform.com` に既存CNAME / Worker route / Pages custom domain / Access application の衝突がない |
+| Local DNS before change | `Resolve-DnsName civilopendata.mirai-dx-platform.com` が未解決、または未接続状態として記録済み |
+| Worker route | `wrangler.jsonc` production env が `routes[].pattern=civilopendata.mirai-dx-platform.com`、`custom_domain=true`、`workers_dev=false` |
+| Custom Domain action | 承認済み作業者が Cloudflare Dashboard / Wrangler / 承認済みCI/CD のいずれかでWorker Custom Domainを追加する |
+| DNS after action | Cloudflareが作成・要求したDNS recordと証明書/validation statusをEvidenceへ記録 |
+| Access boundary | Custom Domain有効化後、管理系導線がCloudflare Access + `CODIP_TRUST_PROXY_SECRET` + allowlistで保護されている |
+
+このゲートが未充足の場合は、DNS recordを手動で追加しない。候補は `civilopendata.mirai-dx-platform.com` として本Runbookに記録し、実変更は承認済みCloudflare操作へ移す。
+
 ## 2. Required checks
 
 ```bash
@@ -41,6 +57,8 @@ npm run release:check-production-placeholders -- --env production
 npm run cf:build
 npm run release:check-cloudflare-build-artifact
 ```
+
+`release:production-evidence -- --strict` は、Secrets値を出さずにEvidence入力の有無と `wrangler.jsonc` のproduction静的構成を検査するゲートである。Cloudflare API / Neon APIへ接続してCustom Domain、Access application、Hyperdrive config、Neon projectの実在を自動確認するものではない。strictが通っても、§1.1 と §5 のCloudflare Dashboard / Wrangler / Neon Consoleでの実リソース証跡を別途記録する。
 
 WindowsのUNC共有から実行する場合は、npmのカレントディレクトリ問題を避けるため次の形を使う。
 
@@ -76,6 +94,8 @@ npm run release:smoke -- --read-only --base-url "https://civilopendata.mirai-dx-
 | Cloudflare Worker version |  |
 | Custom Domain status |  |
 | DNS status |  |
+| Hostname conflict check |  |
+| Cloudflare zone status |  |
 | Access application / policy evidence |  |
 | Hyperdrive binding name / ID evidence |  |
 | Neon project / branch evidence |  |

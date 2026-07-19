@@ -15,6 +15,8 @@ CODIPをCloudflare + Neon/PostGISへ出す前のstaging確認手順である。�
 
 Cloudflare公式docsでは、Workers Custom Domainは `wrangler.jsonc` の `routes` に `pattern` と `custom_domain=true` を設定し、`wrangler deploy` でWorkerへ接続する構成である。CODIPでは本番URLを `civilopendata.mirai-dx-platform.com` に固定し、production `workers_dev=false` で `*.workers.dev` 直公開経路を閉じる。Custom Domain、DNSレコード、Access application、Hyperdrive、Secretsの作成・更新は本番影響を持つため、人間承認済みのCI/CDまたはCloudflare操作手順でのみ実行する。
 
+`civilopendata` は新規サブドメインである。stagingからproductionへ昇格する前に、Cloudflare zone `mirai-dx-platform.com` がactiveであること、同hostnameに既存CNAME / Pages custom domain / Worker route / Access applicationの衝突がないこと、未接続時のDNS未解決状態を証跡化する。衝突または未承認の既存recordを検出した場合は、DNS変更やCustom Domain追加を停止し、`docs/runbooks/cloudflare-production.md` §1.1 のNew subdomain / Custom Domain gateへ戻す。
+
 ## 1. 接続方針
 
 | 用途 | 接続先 | 方針 |
@@ -35,10 +37,9 @@ npm run cf:typegen
 npm run cf:build
 npm run release:check-cloudflare-build-artifact
 npm run cf:preview   # ローカルでWorkersランタイムを模したプレビュー確認
-npm run cf:deploy:production  # 実target env + evidence strict + placeholder + build + artifact + deploy --env production (人間が実行)
 ```
 
-`npm run cf:deploy` はproduction手順では使わない。`wrangler.jsonc` の `env.preview` / `env.production` named environmentを使う場合は `--env preview` / `--env production` を各コマンドに付与する。productionでは `https://civilopendata.mirai-dx-platform.com` を `CODIP_BASE_URL` とし、`routes[].custom_domain=true` で同FQDNをWorker Custom Domainへ割り当てる。Hyperdrive binding IDは `wrangler hyperdrive create <name> --connection-string="$CODIP_MIGRATION_DATABASE_URL"` で払い出し、`wrangler.jsonc` のプレースホルダーを置き換える。`cf:deploy:production` は `release:validate-env:production-target` と `release:production-evidence -- --strict` も必ず実行するため、実Cloudflare/Neon/Access/監視/backup evidenceが揃わない状態ではdeployへ進まない。秘密情報は `wrangler secret put <name> [--env preview|production]` で登録し、`wrangler.jsonc` にはコミットしない。
+`npm run cf:deploy` はproduction手順では使わない。`wrangler.jsonc` の `env.preview` / `env.production` named environmentを使う場合は `--env preview` / `--env production` を各コマンドに付与する。productionでは `https://civilopendata.mirai-dx-platform.com` を `CODIP_BASE_URL` とし、`routes[].custom_domain=true` で同FQDNをWorker Custom Domainへ割り当てる。Hyperdrive binding IDは `wrangler hyperdrive create <name> --connection-string="$CODIP_MIGRATION_DATABASE_URL"` で払い出し、`wrangler.jsonc` のプレースホルダーを置き換える。production deployは本runbookのBuild & Deploy確認だけでは実行せず、[cloudflare-production.md](cloudflare-production.md) の停止条件、実target env、Evidence、placeholder、build artifactを満たした後に承認済み作業者が `npm run cf:deploy:production` で実行する。秘密情報は `wrangler secret put <name> [--env preview|production]` で登録し、`wrangler.jsonc` にはコミットしない。
 
 Workers runtimeでは `src/lib/db.ts` がOpenNextのCloudflare contextから `CODIP_HYPERDRIVE_BINDING` 名のbindingを読み、bindingの `connectionString` を `@prisma/adapter-pg` へ渡す。bindingが取得できないNode.js/Docker/CIでは `DATABASE_URL` を使うため、共有previewとCI smokeは従来どおり動作する。
 
@@ -117,6 +118,8 @@ npm run release:production-evidence -- --strict
 
 `--strict` は実ターゲットに必要なEvidence入力、Wrangler production envのroute、Custom Domain、`workers_dev=false`、Observability、production Hyperdrive ID解決状態が欠けている場合に失敗する。失敗時はDNS/Secrets/Deployを進めず、不足項目を本runbook §6 Evidenceへ記録する。staging/preview側のplaceholderは、staging検証時に `release:check-production-placeholders -- --env staging` で別途確認する。
 
+ただし `release:production-evidence -- --strict` はCloudflare/Neon APIの実在照会ではなく、Evidence入力と `wrangler.jsonc` の静的構成を検査する。strict通過後も、Cloudflare Dashboard / Wrangler / Neon ConsoleでCustom Domain、Access、Hyperdrive、Neon branchの実リソース証跡を§6へ転記する。
+
 Cloudflare deploy前には、対象environmentの `wrangler.jsonc` に未解決placeholderが残っていないことも確認する。
 
 ```bash
@@ -183,6 +186,7 @@ npm run release:smoke -- --read-only --base-url "https://civilopendata.mirai-dx-
 | `db:pg:check-postgis-ddl` 結果 |  |
 | `release:validate-env:production-target` 結果 |  |
 | `release:production-evidence -- --strict` 結果 |  |
+| DNS / Custom Domain conflict check |  |
 | Cloudflare alert / logs 証跡 |  |
 | Neon monitoring 証跡 |  |
 | backup / restore 証跡 |  |

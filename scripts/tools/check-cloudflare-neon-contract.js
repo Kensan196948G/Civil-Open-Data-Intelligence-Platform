@@ -15,6 +15,7 @@ const rollbackRunbook = fs.readFileSync(path.join(root, "docs/runbooks/rollback.
 const packageJson = fs.readFileSync(path.join(root, "package.json"), "utf8");
 const wrangler = fs.readFileSync(path.join(root, "wrangler.jsonc"), "utf8");
 const accessVars = fs.readFileSync(path.join(root, "infra/cloudflare/terraform.tfvars.example"), "utf8");
+const accessReadme = fs.readFileSync(path.join(root, "infra/cloudflare/README.md"), "utf8");
 const dbLoader = fs.readFileSync(path.join(root, "src/lib/db.ts"), "utf8");
 const pgSchema = fs.readFileSync(path.join(root, "prisma/postgresql/schema.prisma"), "utf8");
 
@@ -40,6 +41,7 @@ requireText("wrangler.jsonc", wrangler, "\"workers_dev\": false");
 requireText("wrangler.jsonc", wrangler, "\"observability\"");
 requireText("wrangler.jsonc", wrangler, "\"enabled\": true");
 requireText("infra/cloudflare terraform vars", accessVars, "application_domain     = \"civilopendata.mirai-dx-platform.com\"");
+requireText("infra/cloudflare README", accessReadme, "Terraform >= 1.9");
 
 for (const token of [
   "civilopendata.mirai-dx-platform.com",
@@ -61,6 +63,8 @@ for (const token of [
   "GHCR image digest",
   "rollback owner",
   "backup / restore",
+  "Cloudflare/Neon APIの実在照会ではなく",
+  "cloudflare-production.md",
 ]) {
   requireText("cloudflare-neon-staging runbook", runbook, token);
 }
@@ -74,6 +78,10 @@ for (const token of [
   "release:check-production-placeholders -- --env production",
   "npm run cf:deploy:production",
   "release:smoke -- --read-only",
+  "New subdomain / Custom Domain gate",
+  "Hostname conflict",
+  "Cloudflare zone status",
+  "Cloudflare API / Neon APIへ接続してCustom Domain",
   "Cloudflare logs / alert policy evidence",
   "Neon monitoring evidence",
   "Backup / restore evidence",
