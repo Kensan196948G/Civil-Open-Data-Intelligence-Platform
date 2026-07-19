@@ -52,19 +52,19 @@ flowchart TD
 ### 2.1 現在の状態を確認する
 
 ```bash
-npx wrangler deployments status --name codip
-npx wrangler deployments list --name codip
-npx wrangler versions list --name codip
+npx wrangler deployments status --name codip --env production
+npx wrangler deployments list --name codip --env production
+npx wrangler versions list --name codip --env production
 ```
 
 ### 2.2 直前バージョンへ戻す
 
 ```bash
 # 直前のバージョンへ戻す (VERSION_ID 省略時は「最新の1つ前」が対象)
-npx wrangler rollback --name codip --message "incident: <Issue番号> による切り戻し"
+npx wrangler rollback --name codip --env production --message "incident: <Issue番号> による切り戻し"
 
 # 特定バージョンを指定して戻す
-npx wrangler rollback <VERSION_ID> --name codip --message "incident: <Issue番号> による切り戻し"
+npx wrangler rollback <VERSION_ID> --name codip --env production --message "incident: <Issue番号> による切り戻し"
 ```
 
 `--message` を指定すると対話確認プロンプトが省略される。無人実行以外では省略して確認画面を読むこと。

@@ -31,6 +31,7 @@
 
 | 変数 | 記録する証跡 |
 | --- | --- |
+| `CODIP_CLOUDFLARE_ACCESS_EVIDENCE` | Access application domain、policy名、allowlist summary、proxy secret設定済み証跡 |
 | `CODIP_MONITORING_CONTACTS` | 通知経路またはon-callグループ名 |
 | `CODIP_CLOUDFLARE_ALERT_POLICY` | Cloudflare alert policy名、閾値概要、通知テスト時刻 |
 | `CODIP_CLOUDFLARE_LOGS_EVIDENCE` | Workers Logs / Traces の確認クエリ、error count、対象deploy id |
@@ -43,7 +44,7 @@
 npm run release:production-evidence -- --strict
 ```
 
-`--strict` は上記監視証跡とバックアップ・リストア証跡が未記録の場合も失敗する。Cloudflare Workers Observabilityは `wrangler.jsonc` の `observability.enabled=true` を維持し、Workers Logs / Traces / alert policy の実確認結果をEvidenceへ転記する。NeonはPITR履歴ウィンドウ、restore rehearsalまたはrollback drillの結果、復旧確認担当を `CODIP_BACKUP_RESTORE_EVIDENCE` として記録する。
+`--strict` はAccess証跡、上記監視証跡、バックアップ・リストア証跡が未記録の場合も失敗する。Cloudflare Workers Observabilityは `wrangler.jsonc` の `observability.enabled=true` を維持し、Workers Logs / Traces / alert policy の実確認結果をEvidenceへ転記する。NeonはPITR履歴ウィンドウ、restore rehearsalまたはrollback drillの結果、復旧確認担当を `CODIP_BACKUP_RESTORE_EVIDENCE` として記録する。
 
 ## 2. 共有preview確認
 

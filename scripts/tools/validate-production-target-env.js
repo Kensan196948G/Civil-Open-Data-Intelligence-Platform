@@ -111,8 +111,27 @@ function main() {
 
   const adminToken = env.CODIP_ADMIN_TOKEN?.trim() ?? "";
   const proxySecret = env.CODIP_TRUST_PROXY_SECRET?.trim() ?? "";
+  const disableTokenAuth = env.CODIP_DISABLE_TOKEN_AUTH?.trim().toLowerCase() ?? "";
+  const trustProxyAuth = env.CODIP_TRUST_PROXY_AUTH?.trim().toLowerCase() ?? "";
+  const adminEmails = env.CODIP_ADMIN_EMAILS?.trim() ?? "";
+  const adminDomains = env.CODIP_ADMIN_EMAIL_DOMAINS?.trim() ?? "";
   if (adminToken && hasPlaceholder(adminToken)) fail(errors, "CODIP_ADMIN_TOKEN contains a placeholder value");
   if (proxySecret && hasPlaceholder(proxySecret)) fail(errors, "CODIP_TRUST_PROXY_SECRET contains a placeholder value");
+
+  if (deployTarget === "production") {
+    if (disableTokenAuth !== "true") {
+      fail(errors, "Production target requires CODIP_DISABLE_TOKEN_AUTH=true");
+    }
+    if (trustProxyAuth !== "true") {
+      fail(errors, "Production target requires CODIP_TRUST_PROXY_AUTH=true");
+    }
+    if (!proxySecret) {
+      fail(errors, "Production target requires CODIP_TRUST_PROXY_SECRET");
+    }
+    if (!adminEmails && !adminDomains) {
+      fail(errors, "Production target requires CODIP_ADMIN_EMAILS or CODIP_ADMIN_EMAIL_DOMAINS");
+    }
+  }
 
   for (const key of [
     "CODIP_ALLOW_INSECURE_ADMIN",

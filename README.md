@@ -311,6 +311,7 @@ cmd /c "pushd \\192.168.0.185\kensan\Projects\Mirai-DX-Project\Civil-Open-Data-I
 | `npm run release:production-evidence -- --strict` | 実Cloudflare/Neon target、Wrangler本番構成、監視・アラート、バックアップ・リストアの証跡MarkdownをSecret値なしで出力し、未充足Evidenceを検知 |
 | `npm run release:check-production-placeholders -- --env production` | 実デプロイ前にproduction Hyperdrive ID等の未解決placeholderを拒否 |
 | `npm run release:check-cloudflare-build-artifact` | `npm run cf:build` 後に `.open-next/worker.js` と `.open-next/assets` が揃っていることを確認 |
+| `npm run cf:deploy:production` | production placeholder検査、Cloudflare build、OpenNext deployを `--env production` 固定で実行。人間承認済みCI/CD経路または明示操作のみ |
 | `npm run db:pg:check-postgis-ddl` | PostGIS DDL確認 |
 | `npm run db:pg:check-drift` | PostgreSQL schema drift確認 |
 | `npm run db:prune -- --dry-run` | 運用ログ保持期間の削除候補確認 |

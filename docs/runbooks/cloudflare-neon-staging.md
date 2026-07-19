@@ -35,10 +35,10 @@ npm run cf:typegen
 npm run cf:build
 npm run release:check-cloudflare-build-artifact
 npm run cf:preview   # ローカルでWorkersランタイムを模したプレビュー確認
-npm run cf:deploy    # 実際のCloudflareアカウントへdeploy (人間が実行)
+npm run cf:deploy:production  # production placeholder検査 + build + deploy --env production (人間が実行)
 ```
 
-`wrangler.jsonc` の `env.preview` / `env.production` named environmentを使う場合は `--env preview` / `--env production` を各コマンドに付与する。productionでは `https://civilopendata.mirai-dx-platform.com` を `CODIP_BASE_URL` とし、`routes[].custom_domain=true` で同FQDNをWorker Custom Domainへ割り当てる。Hyperdrive binding IDは `wrangler hyperdrive create <name> --connection-string="$CODIP_MIGRATION_DATABASE_URL"` で払い出し、`wrangler.jsonc` のプレースホルダーを置き換えてから `cf:deploy` する。秘密情報は `wrangler secret put <name> [--env preview|production]` で登録し、`wrangler.jsonc` にはコミットしない。
+`npm run cf:deploy` はproduction手順では使わない。`wrangler.jsonc` の `env.preview` / `env.production` named environmentを使う場合は `--env preview` / `--env production` を各コマンドに付与する。productionでは `https://civilopendata.mirai-dx-platform.com` を `CODIP_BASE_URL` とし、`routes[].custom_domain=true` で同FQDNをWorker Custom Domainへ割り当てる。Hyperdrive binding IDは `wrangler hyperdrive create <name> --connection-string="$CODIP_MIGRATION_DATABASE_URL"` で払い出し、`wrangler.jsonc` のプレースホルダーを置き換えてから `cf:deploy:production` する。秘密情報は `wrangler secret put <name> [--env preview|production]` で登録し、`wrangler.jsonc` にはコミットしない。
 
 Workers runtimeでは `src/lib/db.ts` がOpenNextのCloudflare contextから `CODIP_HYPERDRIVE_BINDING` 名のbindingを読み、bindingの `connectionString` を `@prisma/adapter-pg` へ渡す。bindingが取得できないNode.js/Docker/CIでは `DATABASE_URL` を使うため、共有previewとCI smokeは従来どおり動作する。
 
@@ -109,7 +109,7 @@ npm run release:validate-env:production-target
 `DATABASE_URL`、`CODIP_MIGRATION_DATABASE_URL`、`CODIP_HYPERDRIVE_BINDING`、`CODIP_NEON_BRANCH`、管理トークンまたはProxy認証設定は、対象環境の実値を使う。`example.com`、localhost、CI用token、placeholder値が混入している場合は失敗させる。
 
 Secrets/Variablesの実値を読み込んだ端末では、次のread-only証跡レポートも取得する。接続文字列、管理トークン、proxy secretは値を出さず、set/unsetとSSL条件だけを記録する。
-監視・アラート証跡 (`CODIP_MONITORING_CONTACTS`, `CODIP_CLOUDFLARE_ALERT_POLICY`, `CODIP_CLOUDFLARE_LOGS_EVIDENCE`, `CODIP_NEON_MONITORING_EVIDENCE`, `CODIP_SMOKE_MONITORING_SCHEDULE`, `CODIP_ROLLBACK_OWNER`) と backup / restore 証跡 (`CODIP_BACKUP_RESTORE_EVIDENCE`) は値を表示せず、設定済みかだけを記録する。
+Access証跡 (`CODIP_CLOUDFLARE_ACCESS_EVIDENCE`)、監視・アラート証跡 (`CODIP_MONITORING_CONTACTS`, `CODIP_CLOUDFLARE_ALERT_POLICY`, `CODIP_CLOUDFLARE_LOGS_EVIDENCE`, `CODIP_NEON_MONITORING_EVIDENCE`, `CODIP_SMOKE_MONITORING_SCHEDULE`, `CODIP_ROLLBACK_OWNER`) と backup / restore 証跡 (`CODIP_BACKUP_RESTORE_EVIDENCE`) は値を表示せず、設定済みかだけを記録する。
 
 ```bash
 npm run release:production-evidence -- --strict

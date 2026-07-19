@@ -48,7 +48,8 @@
     "cf:typegen": "node node_modules/wrangler/bin/wrangler.js types",
     "cf:build": "node node_modules/@opennextjs/cloudflare/dist/cli/index.js build",
     "cf:preview": "node node_modules/@opennextjs/cloudflare/dist/cli/index.js preview",
-    "cf:deploy": "node node_modules/@opennextjs/cloudflare/dist/cli/index.js deploy"
+    "cf:deploy": "node node_modules/@opennextjs/cloudflare/dist/cli/index.js deploy",
+    "cf:deploy:production": "npm run release:check-production-placeholders -- --env production && npm run cf:build && node node_modules/@opennextjs/cloudflare/dist/cli/index.js deploy --env production"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

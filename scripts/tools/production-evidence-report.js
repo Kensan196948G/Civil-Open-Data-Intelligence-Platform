@@ -25,6 +25,7 @@ const PUBLIC_ENV_KEYS = [
 ];
 
 const MONITORING_ENV_KEYS = [
+  "CODIP_CLOUDFLARE_ACCESS_EVIDENCE",
   "CODIP_MONITORING_CONTACTS",
   "CODIP_CLOUDFLARE_ALERT_POLICY",
   "CODIP_CLOUDFLARE_LOGS_EVIDENCE",
@@ -176,6 +177,7 @@ function buildReport(env = process.env, root = process.cwd()) {
       "Migration DB URL set",
       Boolean(env.CODIP_MIGRATION_DATABASE_URL?.trim()) && secretUrlState(env.CODIP_MIGRATION_DATABASE_URL).startsWith("✅"),
     ],
+    ["Cloudflare Access evidence recorded", evidenceState(env.CODIP_CLOUDFLARE_ACCESS_EVIDENCE).startsWith("✅")],
     ["Monitoring contacts recorded", evidenceState(env.CODIP_MONITORING_CONTACTS).startsWith("✅")],
     ["Cloudflare alert policy recorded", evidenceState(env.CODIP_CLOUDFLARE_ALERT_POLICY).startsWith("✅")],
     ["Cloudflare logs evidence recorded", evidenceState(env.CODIP_CLOUDFLARE_LOGS_EVIDENCE).startsWith("✅")],
@@ -229,7 +231,7 @@ function buildReport(env = process.env, root = process.cwd()) {
     "| Item | Evidence to paste into release notes |",
     "| --- | --- |",
     "| Cloudflare deploy | `wrangler deployments list --env production` result |",
-    "| Cloudflare Access | application domain, policy name, allowlist summary |",
+    "| Cloudflare Access | application domain, policy name, allowlist summary, proxy secret configured evidence |",
     "| Workers logs | error count / request sample / trace query timestamp |",
     "| Cloudflare alerts | alert policy name, threshold summary, notification test timestamp |",
     "| Hyperdrive | binding name and config id, with connection string omitted |",

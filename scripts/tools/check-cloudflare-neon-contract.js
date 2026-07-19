@@ -27,6 +27,7 @@ requireText(".env.example", envExample, "CODIP_HYPERDRIVE_BINDING");
 requireText(".env.example", envExample, "CODIP_NEON_BRANCH");
 requireText(".env.example", envExample, "CODIP_MIGRATION_DATABASE_URL");
 requireText(".env.example", envExample, "civilopendata.mirai-dx-platform.com");
+requireText(".env.example", envExample, "CODIP_CLOUDFLARE_ACCESS_EVIDENCE");
 requireText(".env.example", envExample, "CODIP_CLOUDFLARE_ALERT_POLICY");
 requireText(".env.example", envExample, "CODIP_NEON_MONITORING_EVIDENCE");
 requireText(".env.example", envExample, "CODIP_BACKUP_RESTORE_EVIDENCE");
@@ -50,6 +51,7 @@ for (const token of [
   "npm run db:pg:check-postgis-ddl",
   "npm run release:smoke",
   "npm run release:production-evidence",
+  "CODIP_CLOUDFLARE_ACCESS_EVIDENCE",
   "CODIP_CLOUDFLARE_ALERT_POLICY",
   "CODIP_NEON_MONITORING_EVIDENCE",
   "CODIP_BACKUP_RESTORE_EVIDENCE",
@@ -62,10 +64,12 @@ for (const token of [
 
 requireText("docs/13", docs13, "docker-supply-chain");
 requireText("docs/13", docs13, "release:validate-env:production-target");
+requireText("docs/13", docs13, "CODIP_CLOUDFLARE_ACCESS_EVIDENCE");
 requireText("docs/13", docs13, "SBOM");
 requireText("docs/13", docs13, "provenance");
 requireText("docs/16", docs16, "release:validate-env:production-target");
 requireText("docs/16", docs16, "release:production-evidence");
+requireText("docs/16", docs16, "Access証跡");
 requireText("docs/16", docs16, "監視・アラート証跡");
 requireText("docs/16", docs16, "バックアップ・リストア証跡");
 requireText("docs/16", docs16, "release:check-production-placeholders");
@@ -76,6 +80,8 @@ requireText("package.json", packageJson, "release:validate-env:production-target
 requireText("package.json", packageJson, "release:production-evidence");
 requireText("package.json", packageJson, "release:check-production-placeholders");
 requireText("package.json", packageJson, "release:check-cloudflare-build-artifact");
+requireText("package.json", packageJson, "cf:deploy:production");
+requireText("package.json", packageJson, "--env production");
 requireText("package.json", packageJson, "@prisma/adapter-pg");
 requireText("package.json", packageJson, "@opennextjs/cloudflare");
 requireText("postgresql schema", pgSchema, "provider        = \"prisma-client-js\"");
