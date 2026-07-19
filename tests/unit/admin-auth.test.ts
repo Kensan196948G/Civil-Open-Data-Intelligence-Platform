@@ -213,7 +213,7 @@ describe("requireAdminRequest", () => {
     });
   });
 
-  it("keeps signed session cookies valid when token auth is disabled", () => {
+  it("rejects signed session cookies when token auth is disabled", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("CODIP_ADMIN_TOKEN", "secret-token-12345678901234567890");
     vi.stubEnv("CODIP_DISABLE_TOKEN_AUTH", "true");
@@ -222,7 +222,10 @@ describe("requireAdminRequest", () => {
       request({ cookie: `${ADMIN_SESSION_COOKIE}=${adminSessionValue("secret-token-12345678901234567890")}` }),
     );
 
-    expect(response).toBeNull();
+    expect(response?.status).toBe(401);
+    await expect(response?.json()).resolves.toMatchObject({
+      error: "unauthorized",
+    });
   });
 
   it("rejects expired signed session cookie values", async () => {

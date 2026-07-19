@@ -283,11 +283,9 @@ function adminAuthSource(headers: HeaderReader): AdminAuthSource {
   }
 
   const configuredToken = configuredAdminToken();
-  if (configuredToken) {
-    if (!isTokenAuthDisabled()) {
-      const requestToken = headers.get(ADMIN_TOKEN_HEADER) ?? bearerToken(headers);
-      if (requestToken && safeEqual(requestToken, configuredToken)) return "token";
-    }
+  if (configuredToken && !isTokenAuthDisabled()) {
+    const requestToken = headers.get(ADMIN_TOKEN_HEADER) ?? bearerToken(headers);
+    if (requestToken && safeEqual(requestToken, configuredToken)) return "token";
     if (sessionCookieMatches(headers, configuredToken)) return "session";
   }
 
