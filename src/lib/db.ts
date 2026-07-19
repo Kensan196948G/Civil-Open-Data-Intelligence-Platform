@@ -16,15 +16,22 @@ const globalForPrisma = globalThis as unknown as {
 function getHyperdriveConnectionString(): string | null {
   const bindingName = (process.env.CODIP_HYPERDRIVE_BINDING ?? "HYPERDRIVE").trim() || "HYPERDRIVE";
 
+  let env: Record<string, unknown>;
   try {
-    const env = getCloudflareContext().env as Record<string, unknown>;
-    const binding = env[bindingName] as HyperdriveBinding | undefined;
-    return typeof binding?.connectionString === "string" && binding.connectionString.trim()
-      ? binding.connectionString
-      : null;
+    env = getCloudflareContext().env as Record<string, unknown>;
   } catch {
     return null;
   }
+
+  const binding = env[bindingName] as HyperdriveBinding | undefined;
+  if (typeof binding?.connectionString === "string" && binding.connectionString.trim()) {
+    return binding.connectionString;
+  }
+
+  console.error(
+    `[db] Cloudflare Hyperdrive binding "${bindingName}" is missing or has no connectionString; falling back to DATABASE_URL`,
+  );
+  return null;
 }
 
 function getPostgreSqlConnectionString(): string {
