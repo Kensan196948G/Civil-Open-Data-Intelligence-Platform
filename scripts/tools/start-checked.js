@@ -15,7 +15,7 @@ function run(command, args) {
 function main() {
   const mode = process.env.CODIP_ENV_MODE?.trim() || "production";
   run(process.execPath, [path.join(process.cwd(), "scripts/tools/validate-env.js"), "--mode", mode]);
-  run("next", ["start"]);
+  run("next", ["start", ...process.argv.slice(2)]);
 }
 
 main();
