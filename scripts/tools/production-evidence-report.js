@@ -33,6 +33,10 @@ const MONITORING_ENV_KEYS = [
   "CODIP_ROLLBACK_OWNER",
 ];
 
+const BACKUP_RESTORE_ENV_KEYS = [
+  "CODIP_BACKUP_RESTORE_EVIDENCE",
+];
+
 const PLACEHOLDER_PATTERNS = [
   /example/i,
   /change[-_]?this/i,
@@ -132,6 +136,7 @@ function buildReport(env = process.env, root = process.cwd()) {
   }
 
   const monitoringRows = MONITORING_ENV_KEYS.map((key) => [key, evidenceState(env[key])]);
+  const backupRestoreRows = BACKUP_RESTORE_ENV_KEYS.map((key) => [key, evidenceState(env[key])]);
   const wranglerRows = inspectWrangler(root);
 
   const readinessChecks = [
@@ -150,6 +155,7 @@ function buildReport(env = process.env, root = process.cwd()) {
     ["Neon monitoring evidence recorded", evidenceState(env.CODIP_NEON_MONITORING_EVIDENCE).startsWith("✅")],
     ["Smoke monitoring schedule recorded", evidenceState(env.CODIP_SMOKE_MONITORING_SCHEDULE).startsWith("✅")],
     ["Rollback owner recorded", evidenceState(env.CODIP_ROLLBACK_OWNER).startsWith("✅")],
+    ["Backup/restore evidence recorded", evidenceState(env.CODIP_BACKUP_RESTORE_EVIDENCE).startsWith("✅")],
   ];
 
   const ready = readinessChecks.every(([, ok]) => ok);
@@ -171,6 +177,12 @@ function buildReport(env = process.env, root = process.cwd()) {
     "| Key | State |",
     "| --- | --- |",
     ...monitoringRows.map(([key, state]) => `| \`${key}\` | ${state} |`),
+    "",
+    "## Backup / Restore Evidence",
+    "",
+    "| Key | State |",
+    "| --- | --- |",
+    ...backupRestoreRows.map(([key, state]) => `| \`${key}\` | ${state} |`),
     "",
     "## Wrangler Evidence",
     "",
@@ -194,6 +206,7 @@ function buildReport(env = process.env, root = process.cwd()) {
     "| Cloudflare alerts | alert policy name, threshold summary, notification test timestamp |",
     "| Hyperdrive | binding name and config id, with connection string omitted |",
     "| Neon | branch name, migration status, PostGIS capability, capacity / connection / slow query summary |",
+    "| Backup / restore | Neon PITR window, restore rehearsal or rollback drill result, and restore verification owner |",
     "| Monitoring smoke | schedule, last success timestamp, next owner |",
     "| Smoke | `npm run release:smoke -- --read-only --base-url https://civilopendata.mirai-dx-platform.com` result |",
     "",

@@ -39,6 +39,7 @@ describe("production-evidence-report", () => {
         CODIP_NEON_MONITORING_EVIDENCE: "neon branch metrics recorded",
         CODIP_SMOKE_MONITORING_SCHEDULE: "*/5 read-only smoke",
         CODIP_ROLLBACK_OWNER: "release-manager",
+        CODIP_BACKUP_RESTORE_EVIDENCE: "neon pitr restore rehearsal recorded",
       },
       ["--strict"],
     );
@@ -49,12 +50,15 @@ describe("production-evidence-report", () => {
     expect(result.stdout).toContain("set (redacted");
     expect(result.stdout).toContain("Monitoring Evidence");
     expect(result.stdout).toContain("CODIP_CLOUDFLARE_ALERT_POLICY");
+    expect(result.stdout).toContain("Backup / Restore Evidence");
+    expect(result.stdout).toContain("CODIP_BACKUP_RESTORE_EVIDENCE");
     expect(result.stdout).toContain("set (recorded)");
     expect(result.stdout).not.toContain("super-secret-runtime-pass");
     expect(result.stdout).not.toContain("super-secret-migration-pass");
     expect(result.stdout).not.toContain("real-admin-token-that-must-not-print");
     expect(result.stdout).not.toContain("real-proxy-secret-that-must-not-print");
     expect(result.stdout).not.toContain("workers logs query recorded");
+    expect(result.stdout).not.toContain("neon pitr restore rehearsal recorded");
   });
 
   it("fails strict mode when required Cloudflare or Neon evidence is missing", () => {
@@ -72,5 +76,6 @@ describe("production-evidence-report", () => {
     expect(result.stdout).toContain("Runtime DB URL set | ⚠️");
     expect(result.stdout).toContain("Cloudflare alert policy recorded | ⚠️");
     expect(result.stdout).toContain("Neon monitoring evidence recorded | ⚠️");
+    expect(result.stdout).toContain("Backup/restore evidence recorded | ⚠️");
   });
 });

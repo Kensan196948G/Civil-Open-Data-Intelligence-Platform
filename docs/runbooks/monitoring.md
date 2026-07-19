@@ -37,12 +37,13 @@
 | `CODIP_NEON_MONITORING_EVIDENCE` | Neon branch、容量、接続数、slow query、PITR window確認 |
 | `CODIP_SMOKE_MONITORING_SCHEDULE` | read-only smokeの実行頻度、直近成功時刻、失敗時担当 |
 | `CODIP_ROLLBACK_OWNER` | rollback判断者または当番ロール |
+| `CODIP_BACKUP_RESTORE_EVIDENCE` | Neon PITR window、restore rehearsalまたはrollback drill結果、復旧確認担当 |
 
 ```bash
 npm run release:production-evidence -- --strict
 ```
 
-`--strict` は上記監視証跡が未記録の場合も失敗する。Cloudflare Workers Observabilityは `wrangler.jsonc` の `observability.enabled=true` を維持し、Workers Logs / Traces / alert policy の実確認結果をEvidenceへ転記する。
+`--strict` は上記監視証跡とバックアップ・リストア証跡が未記録の場合も失敗する。Cloudflare Workers Observabilityは `wrangler.jsonc` の `observability.enabled=true` を維持し、Workers Logs / Traces / alert policy の実確認結果をEvidenceへ転記する。NeonはPITR履歴ウィンドウ、restore rehearsalまたはrollback drillの結果、復旧確認担当を `CODIP_BACKUP_RESTORE_EVIDENCE` として記録する。
 
 ## 2. 共有preview確認
 
@@ -68,6 +69,7 @@ Invoke-WebRequest -Uri "http://192.168.0.185:3100/api/admin/audit-events" -UseBa
 | Access | 対象サブドメイン、policy、admin allowlist、service token/proxy secret |
 | Hyperdrive | binding ID、Neon direct endpoint、TLS、connection pooling |
 | Neon | branch、migration status、PostGIS extension、容量、PITR window |
+| Backup / restore | Neon PITR履歴ウィンドウ、restore rehearsalまたはrollback drill、復旧確認担当 |
 | Smoke | `npm run release:smoke -- --read-only --base-url https://<target>` |
 
 ## 4. 初動

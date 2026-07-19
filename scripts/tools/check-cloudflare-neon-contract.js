@@ -29,6 +29,7 @@ requireText(".env.example", envExample, "CODIP_MIGRATION_DATABASE_URL");
 requireText(".env.example", envExample, "civilopendata.mirai-dx-platform.com");
 requireText(".env.example", envExample, "CODIP_CLOUDFLARE_ALERT_POLICY");
 requireText(".env.example", envExample, "CODIP_NEON_MONITORING_EVIDENCE");
+requireText(".env.example", envExample, "CODIP_BACKUP_RESTORE_EVIDENCE");
 requireText("wrangler.jsonc", wrangler, "civilopendata.mirai-dx-platform.com");
 requireText("wrangler.jsonc", wrangler, "\"custom_domain\": true");
 requireText("wrangler.jsonc", wrangler, "\"workers_dev\": false");
@@ -51,8 +52,10 @@ for (const token of [
   "npm run release:production-evidence",
   "CODIP_CLOUDFLARE_ALERT_POLICY",
   "CODIP_NEON_MONITORING_EVIDENCE",
+  "CODIP_BACKUP_RESTORE_EVIDENCE",
   "GHCR image digest",
   "rollback owner",
+  "backup / restore",
 ]) {
   requireText("cloudflare-neon-staging runbook", runbook, token);
 }
@@ -64,6 +67,7 @@ requireText("docs/13", docs13, "provenance");
 requireText("docs/16", docs16, "release:validate-env:production-target");
 requireText("docs/16", docs16, "release:production-evidence");
 requireText("docs/16", docs16, "監視・アラート証跡");
+requireText("docs/16", docs16, "バックアップ・リストア証跡");
 requireText("docs/16", docs16, "release:check-production-placeholders");
 requireText("docs/16", docs16, "release:check-cloudflare-build-artifact");
 requireText("docs/16", docs16, "image digest");

@@ -52,6 +52,7 @@ Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、C
 | `CODIP_NEON_MONITORING_EVIDENCE` | Staging/Production evidence | Neon branch、容量、接続数、slow query、PITR window確認証跡 |
 | `CODIP_SMOKE_MONITORING_SCHEDULE` | Staging/Production evidence | read-only smoke監視の実行頻度、直近成功時刻、失敗時担当 |
 | `CODIP_ROLLBACK_OWNER` | Staging/Production evidence | rollback判断者または当番ロール |
+| `CODIP_BACKUP_RESTORE_EVIDENCE` | Staging/Production evidence | Neon PITR履歴ウィンドウ、restore rehearsalまたはrollback drill、復旧確認担当の証跡 |
 | `ESTAT_APP_ID` | Optional | e-Stat API利用時のアプリケーションID |
 
 ## 2.1a Cloudflare Workers IaC構成
