@@ -13,7 +13,7 @@
 | Access evidence | `CODIP_CLOUDFLARE_ACCESS_EVIDENCE` をproduction evidence必須項目に追加し、Cloudflare Access application/policy/allowlist/proxy secret設定済み証跡なしではstrict gateを通さない |
 | Cloudflare deploy gate | `npm run release:check-production-placeholders -- --env production` を追加。production Hyperdrive ID等の未解決placeholderが残る状態で本番検証を進めない |
 | Cloudflare artifact gate | `npm run release:check-cloudflare-build-artifact` を追加。`cf:build` 後にOpenNextのWorker entrypointと静的assetsが存在することをdeploy前に確認する |
-| Cloudflare production deploy | `npm run cf:deploy:production` を追加し、production deploy時に placeholder検査、Cloudflare build、OpenNext deploy `--env production` を固定順序で実行する |
+| Cloudflare production deploy | `npm run cf:deploy:production` を追加し、production deploy時に実target env検証、production evidence strict、placeholder検査、Cloudflare build、artifact検査、OpenNext deploy `--env production` を固定順序で実行する |
 | Read-only smoke | `release:smoke --read-only` に v1 records/layers のinvalid queryと存在しないlayer/sourceの404確認を追加し、staging/productionでもDB非破壊で異常系を検証できるようにした |
 | Windows scripts | `DATABASE_URL=...` 形式のnpm scriptsをWindows互換ラッパーへ変更。`npm run build` がWindows/UNC環境でも実行可能になった |
 | Docs | README、運用設計、監視runbook、Cloudflare/Neon runbook、リリースノートを更新 |

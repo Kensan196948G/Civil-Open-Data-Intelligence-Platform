@@ -35,10 +35,10 @@ npm run cf:typegen
 npm run cf:build
 npm run release:check-cloudflare-build-artifact
 npm run cf:preview   # ローカルでWorkersランタイムを模したプレビュー確認
-npm run cf:deploy:production  # production placeholder検査 + build + deploy --env production (人間が実行)
+npm run cf:deploy:production  # 実target env + evidence strict + placeholder + build + artifact + deploy --env production (人間が実行)
 ```
 
-`npm run cf:deploy` はproduction手順では使わない。`wrangler.jsonc` の `env.preview` / `env.production` named environmentを使う場合は `--env preview` / `--env production` を各コマンドに付与する。productionでは `https://civilopendata.mirai-dx-platform.com` を `CODIP_BASE_URL` とし、`routes[].custom_domain=true` で同FQDNをWorker Custom Domainへ割り当てる。Hyperdrive binding IDは `wrangler hyperdrive create <name> --connection-string="$CODIP_MIGRATION_DATABASE_URL"` で払い出し、`wrangler.jsonc` のプレースホルダーを置き換えてから `cf:deploy:production` する。秘密情報は `wrangler secret put <name> [--env preview|production]` で登録し、`wrangler.jsonc` にはコミットしない。
+`npm run cf:deploy` はproduction手順では使わない。`wrangler.jsonc` の `env.preview` / `env.production` named environmentを使う場合は `--env preview` / `--env production` を各コマンドに付与する。productionでは `https://civilopendata.mirai-dx-platform.com` を `CODIP_BASE_URL` とし、`routes[].custom_domain=true` で同FQDNをWorker Custom Domainへ割り当てる。Hyperdrive binding IDは `wrangler hyperdrive create <name> --connection-string="$CODIP_MIGRATION_DATABASE_URL"` で払い出し、`wrangler.jsonc` のプレースホルダーを置き換える。`cf:deploy:production` は `release:validate-env:production-target` と `release:production-evidence -- --strict` も必ず実行するため、実Cloudflare/Neon/Access/監視/backup evidenceが揃わない状態ではdeployへ進まない。秘密情報は `wrangler secret put <name> [--env preview|production]` で登録し、`wrangler.jsonc` にはコミットしない。
 
 Workers runtimeでは `src/lib/db.ts` がOpenNextのCloudflare contextから `CODIP_HYPERDRIVE_BINDING` 名のbindingを読み、bindingの `connectionString` を `@prisma/adapter-pg` へ渡す。bindingが取得できないNode.js/Docker/CIでは `DATABASE_URL` を使うため、共有previewとCI smokeは従来どおり動作する。
 

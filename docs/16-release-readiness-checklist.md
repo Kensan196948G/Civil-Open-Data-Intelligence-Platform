@@ -28,7 +28,7 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | バックアップ・リストア証跡 | `release:production-evidence -- --strict` 内の Backup / Restore Evidence | Neon PITR履歴ウィンドウ、restore rehearsalまたはrollback drill、復旧確認担当が記録済み |
 | Cloudflare placeholder検査 | `npm run release:check-production-placeholders -- --env production` | production Hyperdrive ID、Workers Custom Domain、`workers_dev=false`、`CODIP_BASE_URL` に未解決placeholderや本番URL不一致がない |
 | Cloudflare build artifact検査 | `npm run cf:build && npm run release:check-cloudflare-build-artifact` | OpenNext for CloudflareのWorker entrypoint (`.open-next/worker.js`) と静的assets (`.open-next/assets`) がdeploy前に生成済み |
-| Cloudflare production deploy固定 | `npm run cf:deploy:production` | `release:check-production-placeholders -- --env production`、`cf:build`、OpenNext deploy `--env production` を同一コマンドで実行。人間承認済みCI/CD経路または明示操作のみ |
+| Cloudflare production deploy固定 | `npm run cf:deploy:production` | `release:validate-env:production-target`、`release:production-evidence -- --strict`、`release:check-production-placeholders -- --env production`、`cf:build`、`release:check-cloudflare-build-artifact`、OpenNext deploy `--env production` を同一コマンドで実行。人間承認済みCI/CD経路または明示操作のみ |
 | ログ保持dry-run | `npm run db:prune -- --dry-run` | 取得ログ・サンプル保持期間の削除候補を確認できる |
 | 本番ビルド | `npm run build` | 成功 |
 | リリースゲート | `npm run release:gate` | ブラウザ非依存ゲートが一括成功 |

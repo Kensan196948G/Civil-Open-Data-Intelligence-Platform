@@ -94,4 +94,24 @@ describe("tool scripts", () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("[cloudflare-build-artifact] OK");
   });
+
+  it("gates production Cloudflare deploy behind real target evidence and artifact checks", () => {
+    const packageJson = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"));
+    const command = packageJson.scripts["cf:deploy:production"];
+    const expectedOrder = [
+      "release:validate-env:production-target",
+      "release:production-evidence -- --strict",
+      "release:check-production-placeholders -- --env production",
+      "cf:build",
+      "release:check-cloudflare-build-artifact",
+      "deploy --env production",
+    ];
+
+    let previousIndex = -1;
+    for (const token of expectedOrder) {
+      const index = command.indexOf(token);
+      expect(index).toBeGreaterThan(previousIndex);
+      previousIndex = index;
+    }
+  });
 });

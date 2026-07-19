@@ -78,6 +78,7 @@ requireText("docs/16", docs16, "image digest");
 requireText("docs/16", docs16, "Neon branch");
 requireText("package.json", packageJson, "release:validate-env:production-target");
 requireText("package.json", packageJson, "release:production-evidence");
+requireText("package.json", packageJson, "release:production-evidence -- --strict");
 requireText("package.json", packageJson, "release:check-production-placeholders");
 requireText("package.json", packageJson, "release:check-cloudflare-build-artifact");
 requireText("package.json", packageJson, "cf:deploy:production");
