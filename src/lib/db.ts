@@ -19,7 +19,11 @@ function getHyperdriveConnectionString(): string | null {
   let env: Record<string, unknown>;
   try {
     env = getCloudflareContext().env as Record<string, unknown>;
-  } catch {
+  } catch (error) {
+    console.error(
+      `[db] failed to read Cloudflare context while resolving Hyperdrive binding "${bindingName}"; falling back to DATABASE_URL`,
+      error,
+    );
     return null;
   }
 
