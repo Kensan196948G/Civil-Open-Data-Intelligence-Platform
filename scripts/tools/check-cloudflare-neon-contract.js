@@ -122,6 +122,8 @@ requireText("package.json", packageJson, "@opennextjs/cloudflare");
 requireText("monitoring runbook", monitoringRunbook, "release:post-release-status");
 requireText("monitoring runbook", monitoringRunbook, "civilopendata.mirai-dx-platform.com");
 requireText("monitoring runbook", monitoringRunbook, "--strict-production");
+requireText("monitoring runbook", monitoringRunbook, "--max-response-ms");
+requireText("monitoring runbook", monitoringRunbook, "checks.database=ok");
 requireText("postgresql schema", pgSchema, "provider        = \"prisma-client-js\"");
 requireText("db loader", dbLoader, "PrismaPg");
 requireText("db loader", dbLoader, "getCloudflareContext");
