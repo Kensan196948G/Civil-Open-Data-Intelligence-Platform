@@ -1,5 +1,54 @@
-import { describe, expect, it } from "vitest";
-import { isPrivateIp, validateUrl } from "@/lib/url-guard";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const resolve4Mock = vi.hoisted(() => vi.fn());
+const resolve6Mock = vi.hoisted(() => vi.fn());
+
+vi.mock("node:dns/promises", () => ({
+  default: {
+    resolve4: resolve4Mock,
+    resolve6: resolve6Mock,
+  },
+  resolve4: resolve4Mock,
+  resolve6: resolve6Mock,
+}));
+
+import { assertSafeUrl, isPrivateIp, validateUrl } from "@/lib/url-guard";
+
+beforeEach(() => {
+  resolve4Mock.mockReset();
+  resolve6Mock.mockReset();
+});
+
+describe("assertSafeUrl", () => {
+  it("resolve4/resolve6 の公開IP解決結果を許可する", async () => {
+    resolve4Mock.mockResolvedValue(["8.8.8.8"]);
+    resolve6Mock.mockRejectedValue(Object.assign(new Error("no ipv6"), { code: "ENODATA" }));
+
+    await expect(assertSafeUrl("https://example.com/data.json")).resolves.toMatchObject({
+      ok: true,
+    });
+  });
+
+  it("DNS解決結果がprivate IPを含む場合は拒否する", async () => {
+    resolve4Mock.mockResolvedValue(["192.168.0.10"]);
+    resolve6Mock.mockResolvedValue(["2001:4860:4860::8888"]);
+
+    await expect(assertSafeUrl("https://example.com/data.json")).resolves.toMatchObject({
+      ok: false,
+      reason: "内部ネットワークへ解決されるホストは禁止されています",
+    });
+  });
+
+  it("A/AAAA の両方が解決できない場合はfail-closedする", async () => {
+    resolve4Mock.mockRejectedValue(Object.assign(new Error("no a"), { code: "ENODATA" }));
+    resolve6Mock.mockRejectedValue(Object.assign(new Error("no aaaa"), { code: "ENODATA" }));
+
+    await expect(assertSafeUrl("https://example.com/data.json")).resolves.toMatchObject({
+      ok: false,
+      reason: "ホスト名を解決できませんでした",
+    });
+  });
+});
 
 describe("isPrivateIp", () => {
   it.each([

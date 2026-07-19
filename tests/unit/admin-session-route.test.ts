@@ -6,6 +6,12 @@ import {
   ADMIN_SESSION_COOKIE_SECURE,
   adminSessionValue,
 } from "@/lib/admin-auth";
+const recordAuditMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/audit", () => ({
+  recordAudit: recordAuditMock,
+}));
+
 import {
   DELETE as sessionDELETE,
   GET as sessionGET,
@@ -30,10 +36,12 @@ function localRequest(init: ConstructorParameters<typeof NextRequest>[1] = {}) {
 describe("admin session route", () => {
   beforeEach(() => {
     resetRateLimitForTests();
+    recordAuditMock.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.clearAllMocks();
     resetRateLimitForTests();
   });
 
@@ -93,6 +101,23 @@ describe("admin session route", () => {
     );
 
     expect(response.status).toBe(401);
+  });
+
+  it("rejects token-based session starts when token auth is disabled", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("CODIP_ADMIN_TOKEN", "secret-token-12345678901234567890");
+    vi.stubEnv("CODIP_DISABLE_TOKEN_AUTH", "true");
+
+    const response = await sessionPOST(
+      request({
+        method: "POST",
+        body: JSON.stringify({ token: "secret-token-12345678901234567890" }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: "token_auth_disabled" });
   });
 
   it("rate limits repeated session start attempts", async () => {

@@ -51,6 +51,37 @@ describe("standardRecordsAvailable", () => {
     expect(queryRawMock).toHaveBeenCalledTimes(1);
   });
 
+  it("true になった結果はTTL後に再評価する", async () => {
+    vi.useFakeTimers();
+    try {
+      queryRawMock.mockResolvedValueOnce([{ count: 1 }]).mockResolvedValueOnce([{ count: 0 }]);
+
+      await expect(standardRecordsAvailable()).resolves.toBe(true);
+      vi.advanceTimersByTime(60_001);
+      await expect(standardRecordsAvailable()).resolves.toBe(false);
+
+      expect(queryRawMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("並行呼び出しはsingle-flightで1回だけ評価する", async () => {
+    let resolveQuery: (value: { count: number }[]) => void = () => {};
+    queryRawMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveQuery = resolve;
+      }),
+    );
+
+    const first = standardRecordsAvailable();
+    const second = standardRecordsAvailable();
+    resolveQuery([{ count: 1 }]);
+
+    await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
+    expect(queryRawMock).toHaveBeenCalledTimes(1);
+  });
+
   it("false→true に遷移した場合、直後の呼び出しから true を返す", async () => {
     queryRawMock.mockResolvedValueOnce([{ count: 0 }]);
     await expect(standardRecordsAvailable()).resolves.toBe(false);

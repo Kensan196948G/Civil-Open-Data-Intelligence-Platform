@@ -11,10 +11,11 @@
 
 ## 2. デプロイ方針
 
-MVPではローカル、CI、Docker previewで品質を確認する。Cloudflare WorkersとNeon/PostGISは本番目標構成であり、`wrangler.jsonc`、`open-next.config.ts`、`infra/cloudflare/` (Terraformテンプレート) は導入済みで、`npm run cf:build` / `cf:preview` / `cf:deploy` / `cf:typegen` から実行できる。ただし以下の2点は未解決のアプリケーションコード側の制約であり、Workers本番切替前に解消が必須 (詳細はIssue #18):
+MVPではローカル、CI、Docker previewで品質を確認する。2026-07-19 時点の共有previewは `http://192.168.0.185:3100/` で稼働し、`/api/health`、`/api/ready`、`/api/dashboard`、`/api/sources`、`/api/openapi` のread-only smokeは成功している。Cloudflare WorkersとNeon/PostGISは本番目標構成であり、`wrangler.jsonc`、`open-next.config.ts`、`infra/cloudflare/` (Terraformテンプレート) は導入済みで、`npm run cf:build` / `cf:preview` / `cf:deploy` / `cf:typegen` から実行できる。ただし以下は未解決のアプリケーションコード/実リソース側の制約であり、Workers本番切替前に解消が必須 (詳細はIssue #18):
 
-- `src/lib/url-guard.ts` / `src/lib/http-client.ts` のSSRFガード・DNSピン留めが `dns.lookup()` に依存しており、Workers `nodejs_compat` では未実装 (fail-closedのため脆弱性化はしないが、外部URL取得機能がWorkers上で動作しない)
+- `src/lib/url-guard.ts` の事前DNS検証は `resolve4` / `resolve6` へ変更済み。接続時ピン留め側の `src/lib/http-client.ts` は引き続き `dns.lookup()` 依存のため、Workers上では外部URL取得機能がfail-closedする可能性がある
 - `prisma/postgresql/schema.prisma` に `driverAdapters` preview featureが未設定のため、Prisma ClientがCloudflare Hyperdrive bindingを消費できない (`wrangler.jsonc` の `hyperdrive` bindingは宣言のみで現状は不活性)
+- `wrangler.jsonc` の Hyperdrive ID は placeholder であり、Cloudflare Worker / Hyperdrive / Access / Custom Domain / Neon project の実リソース作成とSecret登録は人間承認後に行う
 
 Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、Cloudflareが現在推奨するNext.jsデプロイ経路が `@opennextjs/cloudflare` アダプタ経由のWorkersであり、レガシーの `@cloudflare/next-on-pages` ではないため。取得処理は将来Cloudflare Cron TriggersとWorkersへ分離する。
 
@@ -34,6 +35,7 @@ Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、C
 | `CODIP_FETCH_LOG_RETENTION_DAYS` | Optional | 取得ログ保持日数。既定90日 |
 | `CODIP_SAMPLE_RETENTION_DAYS` | Optional | サンプルレスポンス保持日数。既定30日 |
 | `CODIP_ADMIN_TOKEN` | Preview/Production | 管理操作APIの保護トークン。32文字以上の十分ランダムな値 |
+| `CODIP_DISABLE_TOKEN_AUTH` | Proxy auth時 | `true` の場合、直接トークンヘッダーとトークンによる新規管理セッション開始を無効化する。preview/productionでは有効なproxy auth guardが必須 |
 | `CODIP_ALLOW_INSECURE_ADMIN` | Local only | ローカル開発でのみ管理操作を無認証許可する明示フラグ |
 | `CODIP_TRUST_PROXY_AUTH` | Optional | Cloudflare Access等の認証済みプロキシを信頼する場合のみ `true` |
 | `CODIP_TRUST_PROXY_HEADERS` | Optional | 信頼済みプロキシ配下でのみ、レート制限にForwarded系IPヘッダーを使う |
@@ -151,6 +153,8 @@ Prisma schemaはSQLite用 `prisma/schema.prisma` とPostgreSQL用 `prisma/postgr
 | `/api/openapi` | API契約の公開確認 | `200` 以外またはOpenAPIバージョン欠落 |
 
 デプロイ直後は、画面表示に加えて `/api/ready` を確認し、DB migrationと接続設定が正しく反映されていることを確認する。`release:smoke` は各HTTPリクエストにタイムアウトを設け、CI側の `curl` も `--connect-timeout` / `--max-time` を指定する。staging/production相当の実ターゲットへ向ける場合は `--read-only` を付け、管理トークン付きの書き込み系negative testは使い捨てCI/preview DBでのみ実行する。
+
+2026-07-19 の共有preview確認では、ブラウザトップ画面表示、コンソールerror/warn 0件、`/api/fetch-logs` 未認証401、`/api/admin/audit-events` GET 405 を確認した。これはread-only一般画面は公開、運用ログ・管理系は認証/許可メソッドで保護する現行方針と一致する。
 
 既存DBへ `officialUrl` 一意制約を適用する前に、必ず `npm run db:check-duplicates` を実行する。重複がある場合は、どちらを正本にするかを人が判断し、削除または統合してからmigrationを適用する。
 

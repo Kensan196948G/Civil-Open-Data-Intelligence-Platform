@@ -134,6 +134,42 @@ describe("validate-env release contract", () => {
     expect(result.stdout).toContain("[env] OK (production)");
   });
 
+  it("requires proxy authentication when token auth is disabled in production", () => {
+    const result = runValidateEnv("production", {
+      DATABASE_URL: "postgresql://codip:codip@example.com:5432/codip?schema=public&sslmode=require",
+      CODIP_ADMIN_TOKEN: "production-admin-token-1234567890",
+      CODIP_DISABLE_TOKEN_AUTH: "true",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("CODIP_DISABLE_TOKEN_AUTH=true requires a valid proxy authentication guard");
+  });
+
+  it("accepts disabled token auth when a proxy authentication guard is configured", () => {
+    const result = runValidateEnv("production", {
+      DATABASE_URL: "postgresql://codip:codip@example.com:5432/codip?schema=public&sslmode=require",
+      CODIP_ADMIN_TOKEN: "production-admin-token-1234567890",
+      CODIP_DISABLE_TOKEN_AUTH: "true",
+      CODIP_TRUST_PROXY_AUTH: "true",
+      CODIP_TRUST_PROXY_SECRET: "proxy-secret-token-123456789012345",
+      CODIP_ADMIN_EMAIL_DOMAINS: "example.com",
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("[env] OK (production)");
+  });
+
+  it("rejects invalid token auth disable flag values", () => {
+    const result = runValidateEnv("production", {
+      DATABASE_URL: "postgresql://codip:codip@example.com:5432/codip?schema=public&sslmode=require",
+      CODIP_ADMIN_TOKEN: "production-admin-token-1234567890",
+      CODIP_DISABLE_TOKEN_AUTH: "yes",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("CODIP_DISABLE_TOKEN_AUTH must be true or false");
+  });
+
   it("rejects synthetic production values for real target validation", () => {
     const result = runValidateProductionTargetEnv({
       CODIP_DEPLOY_TARGET: "production",

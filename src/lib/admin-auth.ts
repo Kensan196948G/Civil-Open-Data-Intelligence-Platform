@@ -37,6 +37,10 @@ function rawCsvValues(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
+export function isTokenAuthDisabled(): boolean {
+  return (process.env.CODIP_DISABLE_TOKEN_AUTH ?? "").trim().toLowerCase() === "true";
+}
+
 function bearerToken(headers: HeaderReader): string | null {
   const authorization = headers.get("authorization");
   if (!authorization) return null;
@@ -280,8 +284,10 @@ function adminAuthSource(headers: HeaderReader): AdminAuthSource {
 
   const configuredToken = configuredAdminToken();
   if (configuredToken) {
-    const requestToken = headers.get(ADMIN_TOKEN_HEADER) ?? bearerToken(headers);
-    if (requestToken && safeEqual(requestToken, configuredToken)) return "token";
+    if (!isTokenAuthDisabled()) {
+      const requestToken = headers.get(ADMIN_TOKEN_HEADER) ?? bearerToken(headers);
+      if (requestToken && safeEqual(requestToken, configuredToken)) return "token";
+    }
     if (sessionCookieMatches(headers, configuredToken)) return "session";
   }
 

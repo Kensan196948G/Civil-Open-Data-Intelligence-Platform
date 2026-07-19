@@ -10,7 +10,7 @@
 
 **CODIP** は、国土交通省、国土地理院、気象庁、自治体、道路、河川、防災、都市計画、インフラ、環境などに分散している公開データを、土木建設業務で再利用しやすい形に整理するための共通データ基盤です。
 
-現行MVPは **データソース台帳、取得確認、取得ログ、地図プレビュー、品質状態、後続API、PostgreSQL/PostGIS標準レコード読取経路** を中心に実装しています。ローカルSQLiteは台帳中心の軽量preview、CI/PostGIS previewは検証用 `standard_records` を投入した後続API smoke、本番Cloudflare/Neonと実データ原本保存は次フェーズで段階投入します。
+現行MVPは **データソース台帳、取得確認、取得ログ、地図プレビュー、品質状態、後続API、PostgreSQL/PostGIS標準レコード読取経路** を中心に実装しています。2026-07-19 時点で共有preview `http://192.168.0.185:3100/` は稼働確認済みです。ローカルSQLiteは台帳中心の軽量preview、CI/PostGIS previewは検証用 `standard_records` を投入した後続API smoke、本番Cloudflare/Neonと実データ原本保存は次フェーズで段階投入します。
 
 > 公開データを探すだけのサイトではなく、土木建設システムが公開データを安全に再利用するための共通データハブです。
 
@@ -156,6 +156,27 @@ flowchart TD
 
 ---
 
+## ✅ リリース後preview確認 (2026-07-19)
+
+| 区分 | 確認結果 |
+| --- | --- |
+| URL | `http://192.168.0.185:3100/` |
+| 主要画面 | ダッシュボード表示成功。登録データソース56件、カテゴリ別集計、最近登録データ表示を確認 |
+| ブラウザログ | Chrome console error/warn 0件 |
+| API | `/api/health` 200、`/api/ready` 200、`/api/dashboard` 200、`/api/sources` 200、`/api/openapi` 200 |
+| 管理保護 | `/api/fetch-logs` は未認証401、`/api/admin/audit-events` のGETは405 |
+| DB | `/api/ready` 200でアプリからDB接続を確認。共有previewは正本Neonではなくローカル/preview DB |
+| Cloudflare/Neon | `wrangler.jsonc` と `infra/cloudflare/` は準備済み。Hyperdrive IDはplaceholderで、DNS/Access/Secret/Neon実リソースは人間承認後に確定 |
+
+### 🔧 2026-07-19 安定化改善
+
+| 区分 | 内容 |
+| --- | --- |
+| Workers互換 | SSRF事前DNS検証を `dns.lookup` から `resolve4` / `resolve6` へ変更。Workers上のfail-closed範囲を縮小 |
+| 標準レコード | `standardRecordsAvailable()` を60秒TTL + single-flight化し、標準データのロールバック/空化と並行アクセス競合へ対応 |
+| 管理認証 | `CODIP_DISABLE_TOKEN_AUTH=true` を追加。Cloudflare Access等のproxy authを正とする環境で、直接token経路とtokenによる新規セッション開始を閉じられる |
+| テスト | URL guard、標準レコード可用性、管理認証、環境変数検証、管理セッションAPIの回帰テストを追加 |
+
 ## ✅ リリース準備状況 (2026-07-18 再検証)
 
 `branch agent/release-readiness-postgis-ci` (PR #17 Draft, commit `1f1d570`) を 2026-07-18 に再検証した結果。すべての単体ゲートがgreen、PostgreSQL/PostGIS Docker previewの起動とruntime smokeも成功しました。GitHub Actions CI も同一 commit に対して全 job green です。
@@ -198,7 +219,7 @@ flowchart TD
 ### ⚠️ 残課題
 
 - **Codex review (通常・対抗)**: `disable-model-invocation` により自律 CTO から起動不可。人間実行待ち ([Issue #19](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/19))
-- **Cloudflare Workers ランタイム互換**: [Issue #18](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/18)。Cloudflare 公式ドキュメントで確認したとおり、`nodejs_compat` の `node:dns` は `lookup` / `lookupService` / `resolve` が "Not implemented" を throw する。CODIP の SSRF ガードは例外を捕捉して拒否側へ倒れる (fail-closed) ため脆弱性化はしないが、Workers 上では外部URL取得が機能しない。修正経路は `dns.promises.resolve4` / `resolve6` への置換
+- **Cloudflare Workers ランタイム互換**: [Issue #18](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/18)。SSRF事前DNS検証は `dns.promises.resolve4` / `resolve6` へ変更済み。残りは接続時ピン留め側のWorkers設計とPrisma Hyperdrive driver adapter導入
 - **main の branch protection 未設定**: 「CI 未通過 merge 禁止」「main 直 push 禁止」が技術的に強制されていない。PR #17 merge 前の設定を推奨
 - **PR #17 Draft → Ready**: Codex レビュー結果待ち。main への merge は人間判断待ち。**merge すると `docker-supply-chain` job が GHCR へイメージを push する** (リポジトリが private のためイメージも既定 private)
 
@@ -216,6 +237,7 @@ flowchart TD
 | CSRF | 管理セッションCookie/Proxy認証の変更系操作は同一Origin必須 |
 | SSRF | private / loopback / metadata IP、非HTTP、認証情報付きURLを拒否 |
 | APIキー | DB・ログに保存しない。e-Stat等はHTTPS正規ホストのみへ実行時付与 |
+| Proxy認証 | `CODIP_DISABLE_TOKEN_AUTH=true` で直接token経路を無効化し、Cloudflare Access + proxy secret + allowlist を正本にできる |
 | Rate Limit | 公開API、管理API、取得系API、タグAPIに適用 |
 | Supply Chain | Docker base image digest固定、GitHub Actions SHA固定、Trivy scan |
 | Preview DB image | PostGIS service imageもdigest固定 |
@@ -334,7 +356,9 @@ production `runner` は `npm ci --omit=dev` を使い、起動時migrationを行
 | [docs/12-test-plan.md](docs/12-test-plan.md) | テスト計画 |
 | [docs/13-deployment-and-operations.md](docs/13-deployment-and-operations.md) | デプロイ・運用 |
 | [docs/16-release-readiness-checklist.md](docs/16-release-readiness-checklist.md) | リリース直前チェック |
+| [docs/release-notes.md](docs/release-notes.md) | リリース後確認・安定化履歴 |
 | [docs/runbooks/cloudflare-neon-staging.md](docs/runbooks/cloudflare-neon-staging.md) | Cloudflare/Neon staging runbook |
+| [docs/runbooks/monitoring.md](docs/runbooks/monitoring.md) | 監視・アラート・初動確認手順 |
 | [docs/runbooks/database-deployment.md](docs/runbooks/database-deployment.md) | DBデプロイ、バックアップ、SQLite復元、PostgreSQL/PostGIS移行前チェック |
 | [docs/runbooks/rollback.md](docs/runbooks/rollback.md) | 障害時の切り戻し手順 (判断フロー、Workers、GHCR、Neon PITR、Prisma、SQLite) |
 

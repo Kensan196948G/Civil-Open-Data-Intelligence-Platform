@@ -155,9 +155,16 @@ export async function assertSafeUrl(urlStr: string): Promise<UrlGuardResult> {
   const hostname = url.hostname.replace(/^\[|\]$/g, "");
   if (net.isIP(hostname)) return staticResult;
   try {
-    const records = await dns.lookup(hostname, { all: true, verbatim: true });
-    for (const record of records) {
-      if (isPrivateIp(record.address)) {
+    const [v4, v6] = await Promise.allSettled([dns.resolve4(hostname), dns.resolve6(hostname)]);
+    const addresses = [
+      ...(v4.status === "fulfilled" ? v4.value : []),
+      ...(v6.status === "fulfilled" ? v6.value : []),
+    ];
+    if (addresses.length === 0) {
+      return { ok: false, reason: "ホスト名を解決できませんでした" };
+    }
+    for (const address of addresses) {
+      if (isPrivateIp(address)) {
         return { ok: false, reason: "内部ネットワークへ解決されるホストは禁止されています" };
       }
     }

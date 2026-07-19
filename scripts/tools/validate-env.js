@@ -51,6 +51,14 @@ function isStrongSecret(value) {
   return typeof value === "string" && value.trim().length >= MIN_SECRET_LENGTH;
 }
 
+function normalizedBoolean(value) {
+  const trimmed = (value ?? "").trim().toLowerCase();
+  if (!trimmed) return false;
+  if (trimmed === "true") return true;
+  if (trimmed === "false") return false;
+  return null;
+}
+
 function isSqliteUrl(databaseUrl) {
   return databaseUrl.startsWith("file:");
 }
@@ -100,6 +108,7 @@ function main() {
   const adminEmails = csv(env.CODIP_ADMIN_EMAILS);
   const adminDomains = csv(env.CODIP_ADMIN_EMAIL_DOMAINS);
   const sqlitePreviewAccepted = env.CODIP_ACCEPT_SQLITE_PREVIEW === "true";
+  const disableTokenAuth = normalizedBoolean(env.CODIP_DISABLE_TOKEN_AUTH);
 
   if (!databaseUrl) {
     fail(errors, "DATABASE_URL is required");
@@ -118,6 +127,10 @@ function main() {
     );
   }
 
+  if (disableTokenAuth === null) {
+    fail(errors, "CODIP_DISABLE_TOKEN_AUTH must be true or false when set");
+  }
+
   if (mode === "production" && runMigrationsOnStart) {
     fail(errors, "CODIP_RUN_MIGRATIONS_ON_START=true is allowed only for local/preview one-off validation");
   }
@@ -130,7 +143,7 @@ function main() {
       );
     }
   } else {
-    const tokenGuard = isStrongSecret(adminToken);
+    const tokenGuard = disableTokenAuth !== true && isStrongSecret(adminToken);
     const proxyGuard =
       trustProxy &&
       isStrongSecret(proxySecret) &&
@@ -147,6 +160,13 @@ function main() {
       fail(
         errors,
         `CODIP_ADMIN_TOKEN must be at least ${MIN_SECRET_LENGTH} characters in preview/production`,
+      );
+    }
+
+    if (disableTokenAuth === true && !proxyGuard) {
+      fail(
+        errors,
+        "CODIP_DISABLE_TOKEN_AUTH=true requires a valid proxy authentication guard in preview/production",
       );
     }
   }
