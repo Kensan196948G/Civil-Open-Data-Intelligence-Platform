@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireAdminRequest } from "@/lib/admin-auth";
-import { recordAudit } from "@/lib/audit";
+import { auditLogCreateData } from "@/lib/audit";
 import { dataSourceCreateSchema } from "@/lib/validators";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 import { safeSourceDto } from "@/lib/source-dto";
@@ -144,15 +144,26 @@ export async function POST(request: NextRequest) {
 
   let created;
   try {
-    created = await prisma.dataSource.create({
-      data: {
-        ...data,
-        providerId: resolvedProviderId,
-        tags: tagIds?.length
-          ? { create: [...new Set(tagIds)].map((tagId) => ({ tagId })) }
-          : undefined,
-      },
-      include: { provider: true, tags: { include: { tag: true } } },
+    created = await prisma.$transaction(async (tx) => {
+      const row = await tx.dataSource.create({
+        data: {
+          ...data,
+          providerId: resolvedProviderId,
+          tags: tagIds?.length
+            ? { create: [...new Set(tagIds)].map((tagId) => ({ tagId })) }
+            : undefined,
+        },
+        include: { provider: true, tags: { include: { tag: true } } },
+      });
+      await tx.auditLog.create({
+        data: auditLogCreateData({
+          action: "データソース登録",
+          target: row.name,
+          detail: "新規登録",
+          level: "info",
+        }),
+      });
+      return row;
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -163,13 +174,6 @@ export async function POST(request: NextRequest) {
     }
     throw error;
   }
-
-  await recordAudit({
-    action: "データソース登録",
-    target: created.name,
-    detail: "新規登録",
-    level: "info",
-  });
 
   return NextResponse.json(safeSourceDto(created, { includeSensitive: true }), { status: 201 });
 }
