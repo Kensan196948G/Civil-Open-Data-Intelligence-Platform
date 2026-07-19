@@ -282,6 +282,12 @@ DATABASE_URL='file:./dev.db' npm run dev
 
 ## 🧪 主要コマンド
 
+WindowsのUNCパス (`\\server\share\...`) 直下で `npm run ...` を実行すると、npmが内部で起動する `cmd.exe` がカレントディレクトリを `C:\Windows` へ落とし、相対パスのスクリプトが見つからないことがあります。共有フォルダ上でリリースゲートやCloudflare検証を実行する場合は、先に一時ドライブへ割り当ててから実行します。
+
+```powershell
+cmd /c "pushd \\192.168.0.185\kensan\Projects\Mirai-DX-Project\Civil-Open-Data-Intelligence-Platform && npm run release:production-evidence -- --strict"
+```
+
 | コマンド | 用途 |
 | --- | --- |
 | `npm run dev` | 開発サーバー起動 |

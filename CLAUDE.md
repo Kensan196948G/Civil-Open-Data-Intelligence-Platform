@@ -1331,7 +1331,7 @@ launcher finalize（goal-rotation.js）がポインタ前進 → supervisor が�
 
 ## 33. デプロイ対応表（Cloudflare / Neon）
 
-2026-07-19のユーザー指示により、グローバル`~/.claude/CLAUDE.md` §27（Cloudflare/Neonデプロイ権限の個別合意）を本プロジェクトへ適用する。本節は本ファイルおよび`.claude/CLAUDE.md`の§8.6「人間最終決断の境界」に対する特則として優先し、Workersデプロイ（`wrangler deploy`）、名前指定サブドメイン追加（実行時の権限プロンプトが承認ゲート）およびNeon操作（破壊的操作を除く）を自律実行可とする。Cloudflare Accessとzone登録はユーザー手動のまま維持する。
+2026-07-19のユーザー指示により、Cloudflare zone と production subdomain を本プロジェクトへ記録する。ただし、本番影響を持つ Workers deploy、DNS/custom domain、Access、Secrets、Neon production branch、Hyperdrive config、課金プラン、認証方式の変更は、承認済みCI/CD経路または人間の明示操作でのみ実行する。Codex/ClaudeOS は設定・手順・証跡ゲートの整備と deploy ready 判定までを担当し、秘密情報を出力しない。
 
 | 項目 | 値 | 状態（2026-07-19確認） |
 | --- | --- | --- |

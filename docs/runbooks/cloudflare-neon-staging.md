@@ -28,6 +28,8 @@ runtimeとmigrationの接続文字列は分離する。migrationはHyperdriveを
 
 ## 1.1 Build & Deploy
 
+WindowsのUNC共有上で作業している場合は、`npm run ...` をUNCカレントディレクトリから直接実行しない。npmが内部で起動する `cmd.exe` はUNCカレントディレクトリを保持できず、`C:\Windows` から相対パスを解決してゲートが失敗する。共有フォルダ上で実行する場合は `cmd /c "pushd \\192.168.0.185\kensan\Projects\Mirai-DX-Project\Civil-Open-Data-Intelligence-Platform && npm run <script>"` 形式で一時ドライブへ割り当ててから実行する。
+
 ```bash
 npm run cf:typegen
 npm run cf:build
