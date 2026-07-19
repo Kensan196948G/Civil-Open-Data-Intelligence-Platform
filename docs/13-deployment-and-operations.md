@@ -245,8 +245,22 @@ Cloudflare Workers本番では、データソース接続確認・サンプル�
 | ドキュメント | Gitで管理 |
 
 > ⚠️ Neon の history window は既定で短い (同組織の既存プロジェクトは 24 時間)。
-> 検知が遅れると PITR で戻せないため、本番運用開始前に history window を確認し、
-> 必要に応じて `pg_dump` の定期バックアップを併用すること。
+> 検知が遅れると PITR で戻せないため、**「本番運用開始前」の一度きりの確認では不十分であり、
+> 運用開始後も継続的に監視する必要がある** (保持期間の設定変更や組織プラン変更でドリフトし得るため)。
+>
+> - 確認頻度: 週次 Monitor フェーズ (本プロジェクト CLAUDE.md §5 セッション開始時調査に準拠) ごとに
+>   `describe_project` で history window 設定を再照会する
+> - 担当: セッションを実行する CTO 代行 (Claude Code) が確認し、既定値からの変更を検知した場合は
+>   Issue を起票して DevOps ロールへ引き継ぐ
+> - アラート条件: history window の短縮を検知した場合、または `pg_dump` バックアップの実行間隔を
+>   超過した場合
+> - `pg_dump` バックアップ証跡: 実行日時・対象 branch・成否を本チェックリスト
+>   (`docs/16-release-readiness-checklist.md`) または `state.json` の検証記録に残す
+>
+> 未整備: `pg_dump` 定期バックアップの自動化 (cron 登録・スクリプト・証跡保存先)
+> 理由: 本セッション時点で自動化スクリプトおよびスケジュールが未作成
+> 代替確認: 上記の確認頻度・担当・アラート方針を本節に明記した
+> Issue化: [#63](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/63)
 
 ## 6. ログ保持期限
 
