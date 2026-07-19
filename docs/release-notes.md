@@ -11,6 +11,7 @@
 | Audit | データソース登録・更新・削除、タグ追加・削除、接続確認、サンプル取得、品質再計算は主操作と `audit_logs` 記録を同一transaction化。クライアント起点監査イベントは記録失敗時に503を返す |
 | Production evidence | `npm run release:production-evidence -- --strict` を追加。Cloudflare/Neon実ターゲット、Wrangler本番構成、監視・アラート、バックアップ・リストアのEvidence入力をSecret値なしMarkdownで出力し、未充足時は失敗する |
 | Access evidence | `CODIP_CLOUDFLARE_ACCESS_EVIDENCE` をproduction evidence必須項目に追加し、Cloudflare Access application/policy/allowlist/proxy secret設定済み証跡なしではstrict gateを通さない |
+| GitHub Actions production evidence | `production-target-env` 手動jobに `CODIP_CLOUDFLARE_ACCESS_EVIDENCE` を渡し、Access証跡を実Cloudflare/Neon target検証で欠落させないようにした |
 | Cloudflare deploy gate | `npm run release:check-production-placeholders -- --env production` を追加。production Hyperdrive ID等の未解決placeholderが残る状態で本番検証を進めない |
 | Cloudflare artifact gate | `npm run release:check-cloudflare-build-artifact` を追加。`cf:build` 後にOpenNextのWorker entrypointと静的assetsが存在することをdeploy前に確認する |
 | Cloudflare production deploy | `npm run cf:deploy:production` を追加し、production deploy時に実target env検証、production evidence strict、placeholder検査、Cloudflare build、artifact検査、OpenNext deploy `--env production` を固定順序で実行する |
