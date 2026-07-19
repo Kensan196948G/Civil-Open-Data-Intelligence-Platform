@@ -6,6 +6,7 @@ const dataSourceFindManyMock = vi.hoisted(() => vi.fn());
 const dataSourceCountMock = vi.hoisted(() => vi.fn());
 const dataSourceFindUniqueMock = vi.hoisted(() => vi.fn());
 const dataSourceUpdateMock = vi.hoisted(() => vi.fn());
+const auditLogCreateMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/db", () => ({
   prisma: {
@@ -18,7 +19,10 @@ vi.mock("@/lib/db", () => ({
     // route の PUT は $transaction(async tx => ...) を使う。テストでは tx に
     // 同じ update mock を渡してコールバックを実行する
     $transaction: (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({ dataSource: { update: dataSourceUpdateMock } }),
+      fn({
+        dataSource: { update: dataSourceUpdateMock },
+        auditLog: { create: auditLogCreateMock },
+      }),
   },
 }));
 
@@ -122,6 +126,15 @@ describe("sources PUT route: requiresApiKey→HTTPS 不変条件のマージ後�
 
     expect(response.status).toBe(200);
     expect(dataSourceUpdateMock).toHaveBeenCalledTimes(1);
+    expect(auditLogCreateMock).toHaveBeenCalledWith({
+      data: {
+        actor: "管理者",
+        action: "データソース更新",
+        target: "既存ソース",
+        detail: "内容を更新",
+        level: "info",
+      },
+    });
     vi.unstubAllEnvs();
   });
 

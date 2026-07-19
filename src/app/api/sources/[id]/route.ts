@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { isAdminHeaders, requireAdminRequest } from "@/lib/admin-auth";
-import { recordAudit } from "@/lib/audit";
+import { auditLogCreateData } from "@/lib/audit";
 import { apiKeyHttpsInvariantViolation, dataSourceUpdateSchema } from "@/lib/validators";
 import { safeFetchLogDto, safeSampleResponseDto } from "@/lib/operational-dto";
 import { safeSourceDto } from "@/lib/source-dto";
@@ -141,6 +141,14 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       if (committedViolation) {
         throw new ApiKeyHttpsConflictError(committedViolation);
       }
+      await tx.auditLog.create({
+        data: auditLogCreateData({
+          action: "データソース更新",
+          target: row.name,
+          detail: "内容を更新",
+          level: "info",
+        }),
+      });
       return row;
     });
   } catch (error) {
@@ -163,13 +171,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     throw error;
   }
 
-  await recordAudit({
-    action: "データソース更新",
-    target: updated.name,
-    detail: "内容を更新",
-    level: "info",
-  });
-
   return NextResponse.json(safeSourceDto(updated, { includeSensitive: true }));
 }
 
@@ -182,12 +183,16 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   if (!existing) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
-  await prisma.dataSource.delete({ where: { id } });
-  await recordAudit({
-    action: "データソース削除",
-    target: existing.name,
-    detail: "台帳から削除",
-    level: "danger",
+  await prisma.$transaction(async (tx) => {
+    await tx.dataSource.delete({ where: { id } });
+    await tx.auditLog.create({
+      data: auditLogCreateData({
+        action: "データソース削除",
+        target: existing.name,
+        detail: "台帳から削除",
+        level: "danger",
+      }),
+    });
   });
   return NextResponse.json({ ok: true });
 }
