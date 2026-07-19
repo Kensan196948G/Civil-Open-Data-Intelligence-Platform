@@ -16,7 +16,7 @@ MVPではローカル、CI、Docker previewで品質を確認する。2026-07-19
 ただし以下は未解決のアプリケーションコード/実リソース側の制約であり、Workers本番切替前に解消または証跡化が必須:
 
 - `src/lib/url-guard.ts` の事前DNS検証は `resolve4` / `resolve6` へ変更済み。接続時ピン留めはNode.js/Undici Agentで実施する。Cloudflare Workersでは公式仕様上 `dns.lookup` が未実装で、同等の接続時ピン留めを保証できないため、`src/lib/http-client.ts` はWorkers runtimeを検知した場合に外部URL取得を `unsupported_runtime` として明示的に停止する
-- `wrangler.jsonc` の production custom domain は `civilopendata.mirai-dx-platform.com` に固定済み。production `workers_dev=false` により本番の `*.workers.dev` 直公開経路は使わない。ただし Hyperdrive ID は placeholder であり、Cloudflare Worker / Hyperdrive / Access / Custom Domain / Neon project の実リソース作成とSecret登録は人間承認後に行う
+- `wrangler.jsonc` の production custom domain は `civilopendata.mirai-dx-platform.com` に固定済み。production `workers_dev=false` により本番の `*.workers.dev` 直公開経路は使わない。本番化手順は `docs/runbooks/cloudflare-production.md` を入口とする。ただし Hyperdrive ID は placeholder であり、Cloudflare Worker / Hyperdrive / Access / Custom Domain / Neon project の実リソース作成とSecret登録は人間承認後に行う
 
 Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、Cloudflareが現在推奨するNext.jsデプロイ経路が `@opennextjs/cloudflare` アダプタ経由のWorkersであり、レガシーの `@cloudflare/next-on-pages` ではないため。取得処理は将来Cloudflare Cron TriggersとWorkersへ分離する。
 

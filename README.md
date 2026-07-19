@@ -370,7 +370,8 @@ production `runner` は `npm ci --omit=dev` を使い、起動時migrationを行
 | [docs/13-deployment-and-operations.md](docs/13-deployment-and-operations.md) | デプロイ・運用 |
 | [docs/16-release-readiness-checklist.md](docs/16-release-readiness-checklist.md) | リリース直前チェック |
 | [docs/release-notes.md](docs/release-notes.md) | リリース後確認・安定化履歴 |
-| [docs/runbooks/cloudflare-neon-staging.md](docs/runbooks/cloudflare-neon-staging.md) | Cloudflare/Neon staging runbook |
+| [docs/runbooks/cloudflare-production.md](docs/runbooks/cloudflare-production.md) | `civilopendata.mirai-dx-platform.com` 本番化Runbook |
+| [docs/runbooks/cloudflare-neon-staging.md](docs/runbooks/cloudflare-neon-staging.md) | Cloudflare/Neon staging・rollback補助Runbook |
 | [docs/runbooks/monitoring.md](docs/runbooks/monitoring.md) | 監視・アラート・初動確認手順 |
 | [docs/runbooks/database-deployment.md](docs/runbooks/database-deployment.md) | DBデプロイ、バックアップ、SQLite復元、PostgreSQL/PostGIS移行前チェック |
 | [docs/runbooks/rollback.md](docs/runbooks/rollback.md) | 障害時の切り戻し手順 (判断フロー、Workers、GHCR、Neon PITR、Prisma、SQLite) |

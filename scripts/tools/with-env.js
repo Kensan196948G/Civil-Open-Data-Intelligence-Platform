@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const { spawnSync } = require("node:child_process");
+const { exitCodeFromSpawnResult } = require("./spawn-result");
 
 function main() {
   const separatorIndex = process.argv.indexOf("--");
@@ -34,12 +35,7 @@ function main() {
     env,
   });
 
-  if (result.error) {
-    console.error(`[with-env] failed to spawn "${command}": ${result.error.message}`);
-    process.exit(1);
-  }
-
-  process.exit(result.status ?? 1);
+  process.exit(exitCodeFromSpawnResult(result, command, "with-env"));
 }
 
 main();

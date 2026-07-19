@@ -1,12 +1,22 @@
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+const require = createRequire(import.meta.url);
 const withEnvScript = path.join(process.cwd(), "scripts/tools/with-env.js");
 const placeholderScript = path.join(process.cwd(), "scripts/tools/check-production-placeholders.js");
 const buildArtifactScript = path.join(process.cwd(), "scripts/tools/check-cloudflare-build-artifact.js");
+const { exitCodeFromSpawnResult } = require("../../scripts/tools/spawn-result.js") as {
+  exitCodeFromSpawnResult: (
+    result: { status: number | null; error?: Error },
+    command: string,
+    label: string,
+    logger?: (message: string) => void,
+  ) => number;
+};
 
 describe("tool scripts", () => {
   it("runs a command with cross-platform environment assignments", () => {
@@ -36,18 +46,16 @@ describe("tool scripts", () => {
   });
 
   it("reports a spawn failure distinctly from a non-zero exit code", () => {
-    const result = spawnSync(
-      process.execPath,
-      [withEnvScript, "CODIP_TEST_VALUE=x", "--", "codip-definitely-not-a-real-command"],
-      {
-        cwd: process.cwd(),
-        env: { PATH: process.env.PATH ?? "", NODE_ENV: "test" },
-        encoding: "utf8",
-      },
+    const logs: string[] = [];
+    const result = exitCodeFromSpawnResult(
+      { status: null, error: new Error("spawn EACCES") },
+      "codip-definitely-not-a-real-command",
+      "with-env",
+      (message) => logs.push(message),
     );
 
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain('failed to spawn "codip-definitely-not-a-real-command"');
+    expect(result).toBe(1);
+    expect(logs).toEqual(['[with-env] failed to spawn "codip-definitely-not-a-real-command": spawn EACCES']);
   });
 
   it("rejects unresolved production Cloudflare placeholders", () => {

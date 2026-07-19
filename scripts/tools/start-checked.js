@@ -2,6 +2,7 @@
 
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
+const { exitCodeFromSpawnResult } = require("./spawn-result");
 
 function run(command, args) {
   const result = spawnSync(command, args, {
@@ -9,11 +10,8 @@ function run(command, args) {
     shell: process.platform === "win32",
     env: process.env,
   });
-  if (result.error) {
-    console.error(`[start-checked] failed to spawn "${command}": ${result.error.message}`);
-    process.exit(1);
-  }
-  if (result.status !== 0) process.exit(result.status ?? 1);
+  const exitCode = exitCodeFromSpawnResult(result, command, "start-checked");
+  if (exitCode !== 0) process.exit(exitCode);
 }
 
 function main() {

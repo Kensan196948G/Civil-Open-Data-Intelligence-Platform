@@ -20,6 +20,7 @@
 | Docs | README、運用設計、監視runbook、Cloudflare/Neon runbook、リリースノートを更新 |
 | CI/契約 | Windows/UNCでOpenAPI route coverageが全APIをmissing扱いするパス正規化不具合を修正 |
 | Cloudflare | production FQDNを `civilopendata.mirai-dx-platform.com` に固定し、Workers Custom Domain、Access Terraform例、Cloudflare/Neon Runbook、契約チェックへ反映 |
+| Cloudflare | `docs/runbooks/cloudflare-production.md` を追加し、DNS/Access/Secrets/Hyperdrive/production evidenceの停止条件を本番専用Runbookとして分離 |
 | CI証跡 | PR #49 のCloudflare target反映commit `040c7bc` に対して CI #82 / CodeQL #64 が success。verify、e2e、postgresql-compat、docker-preview、docker-image-security が全てsuccess |
 
 ### 確認URL
