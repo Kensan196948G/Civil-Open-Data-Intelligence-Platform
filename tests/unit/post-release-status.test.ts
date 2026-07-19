@@ -9,6 +9,7 @@ const {
   parseArgs,
   renderReport,
   fetchWithTimeout,
+  inspectProbe,
 } = require("../../scripts/tools/post-release-status.js") as {
   DEFAULT_PREVIEW_URL: string;
   DEFAULT_PRODUCTION_URL: string;
@@ -18,6 +19,7 @@ const {
     strictProduction: boolean;
     allowPreviewDown: boolean;
     timeoutMs: number;
+    maxResponseMs: number;
   };
   buildReport: (
     args: {
@@ -26,6 +28,7 @@ const {
       strictProduction: boolean;
       allowPreviewDown: boolean;
       timeoutMs: number;
+      maxResponseMs: number;
     },
     deps: {
       resolver?: { resolve4: (host: string) => Promise<string[]>; resolve6: (host: string) => Promise<string[]> };
@@ -42,6 +45,18 @@ const {
     url: string,
     options: { fetcher: (url: string, init?: RequestInit) => Promise<Response>; timeoutMs: number },
   ) => Promise<{ ok: boolean; status: number; state: string }>;
+  inspectProbe: (
+    pathname: string,
+    result: { ok: boolean; status: number; state: string; responseTimeMs: number; bodyPreview: string },
+    maxResponseMs: number,
+  ) => {
+    ok: boolean;
+    state: string;
+    responseTimeOk: boolean;
+    readyPayloadOk: boolean;
+    databaseState?: string;
+    readyState?: string;
+  };
 };
 
 const baseArgs = {
@@ -50,6 +65,7 @@ const baseArgs = {
   strictProduction: false,
   allowPreviewDown: false,
   timeoutMs: 1000,
+  maxResponseMs: 5000,
 };
 
 function okFetcher() {
@@ -63,6 +79,7 @@ describe("post-release-status", () => {
     expect(args.productionUrl).toBe("https://civilopendata.mirai-dx-platform.com");
     expect(args.previewUrl).toBe("http://192.168.0.185:3100");
     expect(args.strictProduction).toBe(false);
+    expect(args.maxResponseMs).toBe(5000);
   });
 
   it("keeps non-strict monitoring usable while production DNS is not connected", async () => {
@@ -85,6 +102,7 @@ describe("post-release-status", () => {
 
     const text = renderReport(report);
     expect(text).toContain("civilopendata.mirai-dx-platform.com");
+    expect(text).toContain("Max response time: 5000ms");
     expect(text).toContain("Production connected: no");
     expect(text).toContain("Preview healthy: yes");
     expect(text).not.toMatch(/token|secret|password/i);
@@ -136,5 +154,60 @@ describe("post-release-status", () => {
 
     expect(result.ok).toBe(false);
     expect(result.status).toBe(302);
+  });
+
+  it("records /api/ready database health when the endpoint returns the standard payload", () => {
+    const probe = inspectProbe(
+      "/api/ready",
+      {
+        ok: true,
+        status: 200,
+        state: "200",
+        responseTimeMs: 37,
+        bodyPreview: JSON.stringify({ status: "ready", checks: { database: "ok" } }),
+      },
+      5000,
+    );
+
+    expect(probe.ok).toBe(true);
+    expect(probe.readyState).toBe("ready");
+    expect(probe.databaseState).toBe("ok");
+    expect(probe.state).toContain("db=ok");
+  });
+
+  it("fails /api/ready when the database check is not ok", () => {
+    const probe = inspectProbe(
+      "/api/ready",
+      {
+        ok: true,
+        status: 200,
+        state: "200",
+        responseTimeMs: 37,
+        bodyPreview: JSON.stringify({ status: "ready", checks: { database: "degraded" } }),
+      },
+      5000,
+    );
+
+    expect(probe.ok).toBe(false);
+    expect(probe.readyPayloadOk).toBe(false);
+    expect(probe.state).toContain("db=degraded");
+  });
+
+  it("marks slow probes as not ready", () => {
+    const probe = inspectProbe(
+      "/api/health",
+      {
+        ok: true,
+        status: 200,
+        state: "200",
+        responseTimeMs: 6001,
+        bodyPreview: "{}",
+      },
+      5000,
+    );
+
+    expect(probe.ok).toBe(false);
+    expect(probe.responseTimeOk).toBe(false);
+    expect(probe.state).toContain("slow>5000ms");
   });
 });
