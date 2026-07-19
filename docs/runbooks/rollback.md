@@ -1,7 +1,7 @@
 # 🔙 ロールバック Runbook
 
 障害発生時に**その場でコピー&ペーストして実行できる**切り戻し手順をまとめる。
-`docs/13-deployment-and-operations.md` §4 障害対応、`docs/runbooks/cloudflare-neon-staging.md` §5、
+`docs/13-deployment-and-operations.md` §4 障害対応、`docs/runbooks/cloudflare-production.md` §4、`docs/runbooks/cloudflare-neon-staging.md` §5、
 `docs/runbooks/database-deployment.md` §6 が示す「どう戻すか」の方針に対し、本書は「実際のコマンド」を担う。
 
 ---
@@ -265,6 +265,7 @@ npm run release:smoke -- --read-only --base-url "https://<対象URL>"
 | 文書 | 役割 |
 | --- | --- |
 | `docs/13-deployment-and-operations.md` | デプロイ方針・障害対応の初動 |
+| `docs/runbooks/cloudflare-production.md` | `civilopendata.mirai-dx-platform.com` 本番化と本番smoke/rollback証跡 |
 | `docs/runbooks/cloudflare-neon-staging.md` | staging デプロイ手順と rollback 方針 |
 | `docs/runbooks/database-deployment.md` | DB デプロイ手順と rollback 方針 |
 | `docs/16-release-readiness-checklist.md` | リリース直前チェックリスト |
