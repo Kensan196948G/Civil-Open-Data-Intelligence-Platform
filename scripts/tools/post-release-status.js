@@ -1,0 +1,249 @@
+#!/usr/bin/env node
+
+const dns = require("node:dns/promises");
+
+const DEFAULT_PRODUCTION_URL = "https://civilopendata.mirai-dx-platform.com";
+const DEFAULT_PREVIEW_URL = "http://192.168.0.185:3100";
+const DEFAULT_TIMEOUT_MS = 10_000;
+
+const PREVIEW_PATHS = ["/", "/api/health", "/api/ready", "/api/openapi"];
+const PRODUCTION_PATHS = ["/api/health", "/api/ready"];
+
+function parseArgs(argv) {
+  const args = {
+    productionUrl: process.env.CODIP_PRODUCTION_URL || DEFAULT_PRODUCTION_URL,
+    previewUrl: process.env.CODIP_PREVIEW_URL || DEFAULT_PREVIEW_URL,
+    strictProduction: false,
+    allowPreviewDown: false,
+    timeoutMs: DEFAULT_TIMEOUT_MS,
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--production-url") {
+      args.productionUrl = argv[++index] ?? "";
+    } else if (arg === "--preview-url") {
+      args.previewUrl = argv[++index] ?? "";
+    } else if (arg === "--strict-production") {
+      args.strictProduction = true;
+    } else if (arg === "--allow-preview-down") {
+      args.allowPreviewDown = true;
+    } else if (arg === "--timeout-ms") {
+      const value = Number.parseInt(argv[++index] ?? "", 10);
+      if (Number.isFinite(value) && value > 0) args.timeoutMs = value;
+    } else if (arg === "--help" || arg === "-h") {
+      args.help = true;
+    }
+  }
+
+  return args;
+}
+
+function usage() {
+  return [
+    "Usage: node scripts/tools/post-release-status.js [options]",
+    "",
+    "Options:",
+    "  --production-url <url>    Production URL to check. Defaults to civilopendata.mirai-dx-platform.com.",
+    "  --preview-url <url>       Shared preview URL to check. Defaults to http://192.168.0.185:3100.",
+    "  --strict-production       Fail when production DNS or read-only health probes are not ready.",
+    "  --allow-preview-down      Do not fail the command when the shared preview is unavailable.",
+    "  --timeout-ms <ms>         Per-request timeout. Default: 10000.",
+  ].join("\n");
+}
+
+function status(ok, warningText = "warning") {
+  return ok ? "OK" : warningText;
+}
+
+function parseUrl(value) {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+}
+
+function hostForDisplay(value) {
+  const parsed = parseUrl(value);
+  return parsed?.hostname || "";
+}
+
+async function resolveHost(hostname, resolver = dns) {
+  const result = { hostname, a: [], aaaa: [], ok: false, error: "" };
+  if (!hostname) {
+    result.error = "missing hostname";
+    return result;
+  }
+
+  const [a, aaaa] = await Promise.allSettled([resolver.resolve4(hostname), resolver.resolve6(hostname)]);
+  if (a.status === "fulfilled") result.a = a.value;
+  if (aaaa.status === "fulfilled") result.aaaa = aaaa.value;
+  result.ok = result.a.length > 0 || result.aaaa.length > 0;
+
+  if (!result.ok) {
+    const errors = [a, aaaa]
+      .filter((item) => item.status === "rejected")
+      .map((item) => item.reason?.code || item.reason?.message || "resolve failed");
+    result.error = [...new Set(errors)].join(", ") || "no address records";
+  }
+
+  return result;
+}
+
+async function fetchWithTimeout(url, { fetcher = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetcher(url, {
+      method: "GET",
+      redirect: "manual",
+      signal: controller.signal,
+      headers: { accept: "application/json,text/html;q=0.8,*/*;q=0.5" },
+    });
+    return {
+      url,
+      ok: response.status >= 200 && response.status < 300,
+      status: response.status,
+      state: `${response.status}`,
+    };
+  } catch (error) {
+    return {
+      url,
+      ok: false,
+      status: 0,
+      state: error?.name === "AbortError" ? "timeout" : error?.code || error?.message || "request failed",
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function buildUrl(baseUrl, pathname) {
+  const parsed = parseUrl(baseUrl);
+  if (!parsed) return "";
+  parsed.pathname = pathname;
+  parsed.search = "";
+  parsed.hash = "";
+  return parsed.toString();
+}
+
+async function probeUrl(baseUrl, paths, options) {
+  const parsed = parseUrl(baseUrl);
+  if (!parsed) {
+    return [{ url: baseUrl, path: "", ok: false, state: "invalid url" }];
+  }
+
+  const rows = [];
+  for (const pathname of paths) {
+    const url = buildUrl(baseUrl, pathname);
+    const result = await fetchWithTimeout(url, options);
+    rows.push({ path: pathname, ...result });
+  }
+  return rows;
+}
+
+function renderAddressList(values) {
+  if (!values.length) return "none";
+  return values.slice(0, 6).join(", ");
+}
+
+function renderReport(report) {
+  const lines = [
+    "# Post-release Runtime Status",
+    "",
+    `- Checked at: ${report.checkedAt}`,
+    `- Production URL: \`${report.productionUrl}\``,
+    `- Preview URL: \`${report.previewUrl}\``,
+    `- Overall: ${report.ready ? "OK" : "ATTENTION"}`,
+    "",
+    "## Production DNS",
+    "",
+    "| Hostname | A | AAAA | State |",
+    "| --- | --- | --- | --- |",
+    `| \`${report.productionDns.hostname}\` | ${renderAddressList(report.productionDns.a)} | ${renderAddressList(
+      report.productionDns.aaaa,
+    )} | ${report.productionDns.ok ? "resolved" : `unresolved (${report.productionDns.error})`} |`,
+    "",
+    "## Production Read-only Probes",
+    "",
+    "| Path | State |",
+    "| --- | --- |",
+    ...report.productionProbes.map((probe) => `| \`${probe.path || probe.url}\` | ${status(probe.ok, "not ready")} (${probe.state}) |`),
+    "",
+    "## Shared Preview Probes",
+    "",
+    "| Path | State |",
+    "| --- | --- |",
+    ...report.previewProbes.map((probe) => `| \`${probe.path || probe.url}\` | ${status(probe.ok, "not ready")} (${probe.state}) |`),
+    "",
+    "## CTO Decision",
+    "",
+    `- Production connected: ${report.productionConnected ? "yes" : "no"}`,
+    `- Preview healthy: ${report.previewHealthy ? "yes" : "no"}`,
+    `- Strict production mode: ${report.strictProduction ? "yes" : "no"}`,
+    `- Decision: ${report.ready ? "continue operation / evidence collection" : report.decision}`,
+    "",
+  ];
+
+  return lines.join("\n");
+}
+
+async function buildReport(args, deps = {}) {
+  const productionHost = hostForDisplay(args.productionUrl);
+  const productionDns = await resolveHost(productionHost, deps.resolver);
+  const productionProbes = productionDns.ok
+    ? await probeUrl(args.productionUrl, PRODUCTION_PATHS, { fetcher: deps.fetcher, timeoutMs: args.timeoutMs })
+    : [{ path: "(skipped)", ok: false, state: "dns unresolved" }];
+  const previewProbes = await probeUrl(args.previewUrl, PREVIEW_PATHS, { fetcher: deps.fetcher, timeoutMs: args.timeoutMs });
+
+  const productionConnected = productionDns.ok && productionProbes.every((probe) => probe.ok);
+  const previewHealthy = previewProbes.every((probe) => probe.ok);
+  const ready = (args.strictProduction ? productionConnected : true) && (args.allowPreviewDown || previewHealthy);
+  const decision = args.strictProduction
+    ? "hold production cutover until DNS/custom domain and health probes are ready"
+    : "production is not connected yet; continue preview monitoring and keep DNS changes gated";
+
+  return {
+    checkedAt: new Date().toISOString(),
+    productionUrl: args.productionUrl,
+    previewUrl: args.previewUrl,
+    strictProduction: args.strictProduction,
+    productionDns,
+    productionProbes,
+    previewProbes,
+    productionConnected,
+    previewHealthy,
+    ready,
+    decision,
+  };
+}
+
+async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.help) {
+    console.log(usage());
+    return;
+  }
+
+  const report = await buildReport(args);
+  console.log(renderReport(report));
+  if (!report.ready) process.exit(1);
+}
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(`[post-release-status][error] ${error?.message || error}`);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  DEFAULT_PREVIEW_URL,
+  DEFAULT_PRODUCTION_URL,
+  parseArgs,
+  resolveHost,
+  fetchWithTimeout,
+  buildReport,
+  renderReport,
+};

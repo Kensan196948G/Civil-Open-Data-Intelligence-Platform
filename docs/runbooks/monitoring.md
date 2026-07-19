@@ -46,7 +46,23 @@ npm run release:production-evidence -- --strict
 
 `--strict` はAccess証跡、上記監視証跡、バックアップ・リストア証跡が未記録の場合も失敗する。Cloudflare Workers Observabilityは `wrangler.jsonc` の `observability.enabled=true` を維持し、Workers Logs / Traces / alert policy の実確認結果をEvidenceへ転記する。NeonはPITR履歴ウィンドウ、restore rehearsalまたはrollback drillの結果、復旧確認担当を `CODIP_BACKUP_RESTORE_EVIDENCE` として記録する。
 
-## 2. 共有preview確認
+## 2. ポストリリース状態確認
+
+Cloudflare / Neon の実リソースを変更せず、DNSとHTTP到達性だけを読み取り専用で確認する。production DNSが未解決の場合、通常モードでは「本番未接続」として記録し、共有previewの健全性を確認できればコマンドは成功する。
+
+```powershell
+npm run release:post-release-status -- --preview-url http://192.168.0.185:3100 --production-url https://civilopendata.mirai-dx-platform.com
+```
+
+本番Custom Domain、DNS、Access、Secrets、Hyperdrive、Neon branchの作成・承認後は、production未接続を失敗扱いにする。
+
+```powershell
+npm run release:post-release-status -- --strict-production --production-url https://civilopendata.mirai-dx-platform.com
+```
+
+このコマンドはCloudflare API、Neon API、Secrets値を読み取らない。Access配下で `/api/health` / `/api/ready` が認証必須になる構成では、strict実行前に読み取り専用health endpointの公開範囲を運用設計で確定する。
+
+## 3. 共有preview確認
 
 ```powershell
 $base = "http://192.168.0.185:3100"
@@ -62,7 +78,7 @@ Invoke-WebRequest -Uri "http://192.168.0.185:3100/api/fetch-logs" -UseBasicParsi
 Invoke-WebRequest -Uri "http://192.168.0.185:3100/api/admin/audit-events" -UseBasicParsing -SkipHttpErrorCheck
 ```
 
-## 3. Cloudflare / Neon 本番化後
+## 4. Cloudflare / Neon 本番化後
 
 | 項目 | 確認 |
 | --- | --- |
@@ -73,7 +89,7 @@ Invoke-WebRequest -Uri "http://192.168.0.185:3100/api/admin/audit-events" -UseBa
 | Backup / restore | Neon PITR履歴ウィンドウ、restore rehearsalまたはrollback drill、復旧確認担当 |
 | Smoke | `npm run release:smoke -- --read-only --base-url https://<target>` |
 
-## 4. 初動
+## 5. 初動
 
 | 事象 | 初動 |
 | --- | --- |
@@ -82,6 +98,6 @@ Invoke-WebRequest -Uri "http://192.168.0.185:3100/api/admin/audit-events" -UseBa
 | 外部URL取得が全失敗 | Workers runtimeでは `unsupported_runtime` が想定される。Node previewで失敗する場合はDNSピン留め、SSRF guard、対象URL、外部ネットワークを確認 |
 | レスポンス遅延 | DB slow query、外部APIタイムアウト、Cloudflare logsを確認 |
 
-## 5. ロールバック判断
+## 6. ロールバック判断
 
 重大障害、データ破損、認証バイパス、高危険度脆弱性が疑われる場合は追加変更より復旧を優先し、`docs/runbooks/rollback.md` の判断フローへ移る。

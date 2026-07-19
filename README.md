@@ -302,6 +302,7 @@ cmd /c "pushd \\192.168.0.185\kensan\Projects\Mirai-DX-Project\Civil-Open-Data-I
 | `npm run release:smoke -- --read-only --base-url https://...` | staging/production向けの非破壊HTTPスモーク |
 | `npm run release:smoke -- --base-url http://127.0.0.1:3102 --expect-standard-records` | PostGIS投入環境で `/api/v1` の `standard_records` modeを強制確認 |
 | `npm run release:smoke -- --base-url http://127.0.0.1:3102 --expect-standard-records --expect-seed-standard-record` | PostgreSQL seed入りCI/previewで検証用標準レコードとproperties sanitizationも確認 |
+| `npm run release:post-release-status -- --production-url https://civilopendata.mirai-dx-platform.com` | Cloudflare/Neonを変更せず、production DNS/healthと共有previewの読み取り専用状態をMarkdownで確認。DNS未接続は通常モードでは記録のみ |
 | `npm run db:migrate` | SQLite preview/localへ既存migrationを適用 |
 | `npm run db:migrate:dev` | schema作成者向け。新規migration生成時のみ使用 |
 | `npm run release:check-docker-contract` | Dockerfile、`.dockerignore`、image scan、SBOM/provenance契約 |
@@ -309,6 +310,7 @@ cmd /c "pushd \\192.168.0.185\kensan\Projects\Mirai-DX-Project\Civil-Open-Data-I
 | `npm run release:check-github-actions-contract` | actionlint、危険trigger、Action SHA固定契約 |
 | `npm run release:validate-env:production-target` | 実Cloudflare/Neon targetのSecrets/Variables検証。productionでは `https://civilopendata.mirai-dx-platform.com` 固定 |
 | `npm run release:production-evidence -- --strict` | 実Cloudflare/Neon target、Wrangler本番構成、監視・アラート、バックアップ・リストアの証跡MarkdownをSecret値なしで出力し、未充足Evidenceを検知 |
+| `npm run release:post-release-status -- --strict-production` | 本番DNS/healthが未接続なら失敗させる本番化後の監視ゲート |
 | `npm run release:check-production-placeholders -- --env production` | 実デプロイ前にproduction Hyperdrive ID等の未解決placeholderを拒否 |
 | `npm run release:check-cloudflare-build-artifact` | `npm run cf:build` 後に `.open-next/worker.js` と `.open-next/assets` が揃っていることを確認 |
 | `npm run cf:deploy:production` | 実target env検証、production evidence strict、placeholder検査、Cloudflare build、artifact検査、OpenNext deploy `--env production` を固定順序で実行。人間承認済みCI/CD経路または明示操作のみ |
