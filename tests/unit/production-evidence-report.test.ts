@@ -31,7 +31,7 @@ const completeEvidenceEnv = {
   CODIP_BACKUP_RESTORE_EVIDENCE: "neon pitr restore rehearsal recorded",
 };
 
-function writeWrangler(root: string, hyperdriveId: string) {
+function writeWrangler(root: string, hyperdriveId: string, previewHyperdriveId = "REPLACE_WITH_STAGING_HYPERDRIVE_ID") {
   fs.writeFileSync(
     path.join(root, "wrangler.jsonc"),
     `{
@@ -42,7 +42,7 @@ function writeWrangler(root: string, hyperdriveId: string) {
       "env": {
         "preview": {
           "hyperdrive": [
-            { "binding": "HYPERDRIVE", "id": "REPLACE_WITH_STAGING_HYPERDRIVE_ID" }
+            { "binding": "HYPERDRIVE", "id": "${previewHyperdriveId}" }
           ]
         },
         "production": {
@@ -59,9 +59,9 @@ function writeWrangler(root: string, hyperdriveId: string) {
   );
 }
 
-function withWrangler(hyperdriveId: string) {
+function withWrangler(hyperdriveId: string, previewHyperdriveId?: string) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "codip-production-evidence-"));
-  writeWrangler(root, hyperdriveId);
+  writeWrangler(root, hyperdriveId, previewHyperdriveId);
   return root;
 }
 
@@ -83,6 +83,8 @@ describe("production-evidence-report", () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("Overall: ✅ evidence inputs look ready");
+    expect(result.stdout).toContain("Deploy target: `production`");
+    expect(result.stdout).toContain("Target URL: `https://civilopendata.mirai-dx-platform.com`");
     expect(result.stdout).toContain("DATABASE_URL");
     expect(result.stdout).toContain("set (redacted");
     expect(result.stdout).toContain("Monitoring Evidence");
@@ -118,6 +120,27 @@ describe("production-evidence-report", () => {
     expect(result.stdout).toContain("Cloudflare Access evidence recorded | ⚠️");
     expect(result.stdout).toContain("Neon monitoring evidence recorded | ⚠️");
     expect(result.stdout).toContain("Backup/restore evidence recorded | ⚠️");
+  });
+
+  it("accepts staging target evidence without requiring the production custom domain", () => {
+    const result = runProductionEvidence(
+      {
+        ...completeEvidenceEnv,
+        CODIP_DEPLOY_TARGET: "staging",
+        CODIP_BASE_URL: "https://codip-staging.mirai-dx-platform.com",
+        CODIP_NEON_BRANCH: "codip-staging-20260719",
+      },
+      ["--strict"],
+      withWrangler("REPLACE_WITH_PRODUCTION_HYPERDRIVE_ID", "hdg_staging_1234567890abcdef"),
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Deploy target: `staging`");
+    expect(result.stdout).toContain("Target URL: `https://codip-staging.mirai-dx-platform.com`");
+    expect(result.stdout).toContain("Target URL is a real HTTPS URL | ✅");
+    expect(result.stdout).toContain("Wrangler preview Hyperdrive id resolved | ✅");
+    expect(result.stdout).not.toContain("Wrangler production route configured");
+    expect(result.stdout).not.toContain("Wrangler production Hyperdrive id resolved");
   });
 
   it("fails strict mode when wrangler production placeholders remain", () => {

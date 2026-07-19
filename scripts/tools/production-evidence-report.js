@@ -6,6 +6,23 @@ const path = require("node:path");
 const PRODUCTION_URL = "https://civilopendata.mirai-dx-platform.com";
 const PRODUCTION_HOSTNAME = "civilopendata.mirai-dx-platform.com";
 
+const TARGETS = {
+  production: {
+    label: "Production",
+    wranglerEnv: "production",
+    expectedUrl: PRODUCTION_URL,
+    hostname: PRODUCTION_HOSTNAME,
+    requiresCustomDomain: true,
+  },
+  staging: {
+    label: "Staging",
+    wranglerEnv: "preview",
+    expectedUrl: null,
+    hostname: null,
+    requiresCustomDomain: false,
+  },
+};
+
 const SECRET_ENV_KEYS = [
   "DATABASE_URL",
   "CODIP_MIGRATION_DATABASE_URL",
@@ -67,6 +84,24 @@ function hasPlaceholder(value) {
   return PLACEHOLDER_PATTERNS.some((pattern) => pattern.test(value));
 }
 
+function resolveTarget(env) {
+  const targetName = env.CODIP_DEPLOY_TARGET?.trim() || "production";
+  return TARGETS[targetName] ?? {
+    label: "Unknown target",
+    wranglerEnv: "production",
+    expectedUrl: PRODUCTION_URL,
+    hostname: PRODUCTION_HOSTNAME,
+    requiresCustomDomain: true,
+  };
+}
+
+function isRealHttpsTarget(value) {
+  const parsed = parseUrl(value?.trim() ?? "");
+  if (!parsed || parsed.protocol !== "https:") return false;
+  if (["localhost", "127.0.0.1", "::1", "example.com"].includes(parsed.hostname)) return false;
+  return !hasPlaceholder(value);
+}
+
 function statusIcon(ok) {
   return ok ? "✅" : "⚠️";
 }
@@ -100,7 +135,7 @@ function secretUrlState(value) {
   })`;
 }
 
-function inspectWrangler(root) {
+function inspectWrangler(root, target) {
   const wranglerPath = path.join(root, "wrangler.jsonc");
   const result = {
     rows: [],
@@ -120,15 +155,12 @@ function inspectWrangler(root) {
     result.checks.push(["Wrangler config parseable", false]);
     return result;
   }
-  const productionEnv = wrangler.env?.production;
-  const productionRoute = productionEnv?.routes?.find((route) => route?.pattern === PRODUCTION_HOSTNAME);
-  const productionHyperdrive = Array.isArray(productionEnv?.hyperdrive) ? productionEnv.hyperdrive : [];
-  const hyperdriveId = productionHyperdrive.find((binding) => binding?.binding === "HYPERDRIVE")?.id ?? productionHyperdrive[0]?.id ?? "";
+  const targetEnv = wrangler.env?.[target.wranglerEnv];
+  const targetRoute = target.hostname ? targetEnv?.routes?.find((route) => route?.pattern === target.hostname) : null;
+  const targetHyperdrive = Array.isArray(targetEnv?.hyperdrive) ? targetEnv.hyperdrive : [];
+  const hyperdriveId = targetHyperdrive.find((binding) => binding?.binding === "HYPERDRIVE")?.id ?? targetHyperdrive[0]?.id ?? "";
   const checks = [
-    ["production env", "Wrangler production env configured", Boolean(productionEnv), "configured", "missing"],
-    ["production route", "Wrangler production route configured", Boolean(productionRoute), PRODUCTION_HOSTNAME, "production host missing"],
-    ["custom_domain", "Wrangler custom domain enabled", productionRoute?.custom_domain === true, "true", "not true"],
-    ["workers_dev", "Wrangler workers_dev disabled", productionEnv?.workers_dev === false, "false", "not false"],
+    [`${target.wranglerEnv} env`, `Wrangler ${target.wranglerEnv} env configured`, Boolean(targetEnv), "configured", "missing"],
     [
       "observability",
       "Wrangler observability enabled",
@@ -138,12 +170,22 @@ function inspectWrangler(root) {
     ],
     [
       "hyperdrive id",
-      "Wrangler production Hyperdrive id resolved",
+      `Wrangler ${target.wranglerEnv} Hyperdrive id resolved`,
       Boolean(hyperdriveId) && !hasPlaceholder(hyperdriveId),
       "no obvious placeholder",
       "missing or placeholder present",
     ],
   ];
+
+  if (target.requiresCustomDomain) {
+    checks.splice(
+      1,
+      0,
+      ["production route", "Wrangler production route configured", Boolean(targetRoute), target.hostname, "production host missing"],
+      ["custom_domain", "Wrangler custom domain enabled", targetRoute?.custom_domain === true, "true", "not true"],
+      ["workers_dev", "Wrangler workers_dev disabled", targetEnv?.workers_dev === false, "false", "not false"],
+    );
+  }
 
   for (const [rowLabel, checkLabel, ok, okText, warningText] of checks) {
     result.rows.push([rowLabel, ok ? `✅ ${okText}` : `⚠️ ${warningText}`]);
@@ -154,6 +196,8 @@ function inspectWrangler(root) {
 
 function buildReport(env = process.env, root = process.cwd()) {
   const rows = [];
+  const target = resolveTarget(env);
+  const targetUrl = env.CODIP_BASE_URL?.trim() || target.expectedUrl || "";
 
   for (const key of PUBLIC_ENV_KEYS) {
     rows.push([key, valueState(env[key])]);
@@ -165,11 +209,14 @@ function buildReport(env = process.env, root = process.cwd()) {
 
   const monitoringRows = MONITORING_ENV_KEYS.map((key) => [key, evidenceState(env[key])]);
   const backupRestoreRows = BACKUP_RESTORE_ENV_KEYS.map((key) => [key, evidenceState(env[key])]);
-  const wranglerEvidence = inspectWrangler(root);
+  const wranglerEvidence = inspectWrangler(root, target);
 
   const readinessChecks = [
-    ["Production URL fixed", env.CODIP_BASE_URL === PRODUCTION_URL],
     ["Deploy target is production or staging", ["production", "staging"].includes(env.CODIP_DEPLOY_TARGET ?? "")],
+    [
+      target.expectedUrl ? "Production URL fixed" : "Target URL is a real HTTPS URL",
+      target.expectedUrl ? env.CODIP_BASE_URL === target.expectedUrl : isRealHttpsTarget(env.CODIP_BASE_URL),
+    ],
     ["Hyperdrive binding named", Boolean(env.CODIP_HYPERDRIVE_BINDING?.trim()) && !hasPlaceholder(env.CODIP_HYPERDRIVE_BINDING)],
     ["Neon branch named", Boolean(env.CODIP_NEON_BRANCH?.trim()) && !hasPlaceholder(env.CODIP_NEON_BRANCH)],
     ["Runtime DB URL set", Boolean(env.DATABASE_URL?.trim()) && secretUrlState(env.DATABASE_URL).startsWith("✅")],
@@ -191,9 +238,10 @@ function buildReport(env = process.env, root = process.cwd()) {
   const ready = readinessChecks.every(([, ok]) => ok);
 
   const lines = [
-    "# Cloudflare / Neon Production Evidence",
+    "# Cloudflare / Neon Target Evidence",
     "",
-    `- Target URL: \`${PRODUCTION_URL}\``,
+    `- Deploy target: \`${env.CODIP_DEPLOY_TARGET ?? ""}\``,
+    `- Target URL: \`${targetUrl}\``,
     `- Overall: ${ready ? "✅ evidence inputs look ready" : "⚠️ evidence inputs incomplete"}`,
     "",
     "## Environment Evidence",
@@ -238,7 +286,7 @@ function buildReport(env = process.env, root = process.cwd()) {
     "| Neon | branch name, migration status, PostGIS capability, capacity / connection / slow query summary |",
     "| Backup / restore | Neon PITR window, restore rehearsal or rollback drill result, and restore verification owner |",
     "| Monitoring smoke | schedule, last success timestamp, next owner |",
-    "| Smoke | `npm run release:smoke -- --read-only --base-url https://civilopendata.mirai-dx-platform.com` result |",
+    `| Smoke | \`npm run release:smoke -- --read-only --base-url ${targetUrl || "<target-url>"}\` result |`,
     "",
   ];
 
