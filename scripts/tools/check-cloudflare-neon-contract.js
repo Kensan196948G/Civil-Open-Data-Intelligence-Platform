@@ -107,6 +107,8 @@ requireText("docs/16", docs16, "監視・アラート証跡");
 requireText("docs/16", docs16, "バックアップ・リストア証跡");
 requireText("docs/16", docs16, "release:check-production-placeholders");
 requireText("docs/16", docs16, "release:check-cloudflare-build-artifact");
+requireText("docs/16", docs16, "release:post-release-status");
+requireText("docs/16", docs16, "--strict-production --max-response-ms 5000");
 requireText("docs/16", docs16, "image digest");
 requireText("docs/16", docs16, "Neon branch");
 requireText("package.json", packageJson, "release:validate-env:production-target");

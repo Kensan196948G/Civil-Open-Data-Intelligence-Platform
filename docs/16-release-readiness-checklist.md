@@ -34,6 +34,7 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | リリースゲート | `npm run release:gate` | fresh環境のSQLite migration preflightを含め、ブラウザ非依存ゲートが一括成功 |
 | 起動スモーク | `CODIP_ADMIN_TOKEN=... npm run release:smoke -- --base-url http://127.0.0.1:3100` | 主要画面、未認証管理UI非表示、CSP/HSTS、監視API、OpenAPI v1 schema、seed最小件数、公開DTO、後続API契約、v1 warning契約、地点照会の不正入力、管理APIガード、管理セッションCSRF、悪性URL複数種の登録拒否が成功 |
 | 実ターゲットread-onlyスモーク | `npm run release:smoke -- --read-only --base-url https://civilopendata.mirai-dx-platform.com` | staging/production DBへ書き込まず、主要画面、監視API、後続API、管理ガードを確認 |
+| post-release runtime status | `npm run release:post-release-status -- --production-url https://civilopendata.mirai-dx-platform.com --max-response-ms 5000` | DNS、read-only health、応答時間、`/api/ready` `status=ready` / `checks.database=ok` をSecret値なしMarkdownで確認。DNS未接続時は通常モードで記録のみ、production接続後は `--strict-production` で失敗扱い |
 | Docker preview | GitHub Actions `docker-preview` job | production runner / preview runner build、production runner + PostgreSQL smoke、SQLite/PostgreSQL compose config、preview起動、ready、release smokeが成功 |
 | Docker image scan | GitHub Actions `docker-image-security` job | Trivyでproduction runner imageに固定可能なHigh/Critical CVEがない |
 | Docker supply chain | GitHub Actions `docker-supply-chain` job | GHCR image push、SBOM attestation、`mode=max` provenance、sha tag/digestが確認できる |
@@ -48,11 +49,11 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 
 | 項目 | 記録 |
 | --- | --- |
-| PR | main最新。PR #52 dependency maintenance merge後 |
-| commit SHA | `1d66e4831dd0a24a22335c80f93f2aecaa5a41e3` |
-| commit message | `build(deps): bump app dependencies` |
-| CI run | `29693346265` success |
-| CodeQL run | `29693346235` success |
+| PR | main最新。PR #59 runtime status monitoring merge後 |
+| commit SHA | `8d89ab0469b15002cc762665b274f8505d65a49b` |
+| commit message | `ops: add runtime status latency evidence` |
+| CI run | `29695839586` success |
+| CodeQL run | `29695839579` success |
 | verify | pass |
 | e2e | pass |
 | postgresql-compat | pass。PostGIS migration、seed、`/api/v1` standard_records smokeを確認 |
@@ -60,8 +61,9 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | docker-image-security | pass。Trivy High/Critical CVE checkを確認 |
 | production-target-env | skipped。PRでは実ターゲットSecretsを読まず、`workflow_dispatch` 実行時に記録 |
 | docker-supply-chain | pass。main push後にGHCR image push、SBOM attestation、`mode=max` provenanceを確認 |
-| CodeRabbit | PR #52 / #56 は success。オープンPRなし |
-| ローカルread-only smoke | `http://127.0.0.1:3104` に対して63 checks成功 |
+| CodeRabbit | PR #59 success。オープンPRなし |
+| post-release runtime status | `civilopendata.mirai-dx-platform.com` はDNS未解決。共有previewは `/` 66ms、`/api/health` 6ms、`/api/ready` 10ms `status=ready; db=ok`、`/api/openapi` 4ms |
+| ローカルread-only smoke | 共有preview / CI previewで継続確認。`release:post-release-status` はSecretなしでDB readyと応答時間を記録 |
 | ローカルDocker | Docker daemon未接続のためローカル実行不可。CI `docker-preview` を証跡に採用 |
 
 最新mainに対するCI状態はGitHub Actionsを正とする。実ターゲットstaging/production release時は、下の記録欄へ対象環境のSecrets/Variables、GHCR digest、SBOM/provenance、read-only smoke結果を追記する。
@@ -385,6 +387,7 @@ Codex 指摘修正 (`51bdda5`) は CodeRabbit 未レビューのコード変更�
 | migration ID |  |
 | 実ターゲット `release:validate-env:production-target` 結果 |  |
 | 実ターゲット `release:production-evidence -- --strict` 結果 |  |
+| 実ターゲット `release:post-release-status -- --strict-production --max-response-ms 5000` 結果 |  |
 | 監視・アラートEvidence結果 |  |
 | バックアップ・リストアEvidence結果 |  |
 | 実ターゲット `release:check-production-placeholders -- --env production` 結果 |  |

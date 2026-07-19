@@ -28,6 +28,7 @@
 | CI証跡 | PR #49 のCloudflare target反映commit `040c7bc` に対して CI #82 / CodeQL #64 が success。verify、e2e、postgresql-compat、docker-preview、docker-image-security が全てsuccess |
 | Dependency maintenance | PR #52で `undici` 8.7.0、`@eslint/eslintrc` 3.3.6、`@types/node` 22.20.1、`autoprefixer` 10.5.4、`eslint` 9.39.5、`tailwindcss` 3.4.19、`tsx` 4.23.1、`vitest` 3.2.7、`wrangler` 4.112.0へ更新 |
 | CI証跡 | dependency更新後のmain commit `1d66e48` に対して CI `29693346265` / CodeQL `29693346235` が success。verify、e2e、postgresql-compat、docker-preview、docker-image-security、docker-supply-chain が全てsuccess |
+| CI証跡 | runtime status監視強化後のmain commit `8d89ab0` に対して CI `29695839586` / CodeQL `29695839579` が success。verify、e2e、postgresql-compat、docker-preview、docker-image-security、docker-supply-chain が全てsuccess |
 
 ### 確認URL
 
@@ -39,6 +40,7 @@
 | `/api/dashboard` | 200 |
 | `/api/sources` | 200 |
 | `/api/openapi` | 200 |
+| `release:post-release-status` | production DNS未解決、共有preview `/` 66ms、`/api/health` 6ms、`/api/ready` 10ms `status=ready; db=ok`、`/api/openapi` 4ms |
 | `/api/fetch-logs` | 401。未認証で保護 |
 | `/api/admin/audit-events` | 405。GET不可 |
 | `https://civilopendata.mirai-dx-platform.com` | `release:post-release-status` の対象。現時点では `Resolve-DnsName` 未解決。Cloudflare Custom Domain / DNS / Access / Hyperdrive / Secrets / Neon実リソース作成は人間承認待ち |

@@ -136,14 +136,14 @@ flowchart TD
 
 ## 🚦 記録済みリリースゲート証跡
 
-2026-07-19T15:41Z (2026-07-20 JST) に確認したmain最新証跡です。実Cloudflare/Neon targetの検証はまだ未実行のため、production target envだけは `workflow_dispatch` で承認済みSecrets/Variablesを読み込んで別途記録します。
+2026-07-19T16:56Z (2026-07-20 JST) に確認したmain最新証跡です。実Cloudflare/Neon targetの検証はまだ未実行のため、production target envだけは `workflow_dispatch` で承認済みSecrets/Variablesを読み込んで別途記録します。
 
 | 区分 | 状態 | 証跡 |
 | --- | --- | --- |
-| branch | 🟢 main | release hardening + dependency maintenance |
-| commit | 🟢 `1d66e48` | `build(deps): bump app dependencies` |
-| CI run | 🟢 success | `29693346265` |
-| CodeQL run | 🟢 success | `29693346235` |
+| branch | 🟢 main | release hardening + runtime status monitoring |
+| commit | 🟢 `8d89ab0` | `ops: add runtime status latency evidence` |
+| CI run | 🟢 success | `29695839586` |
+| CodeQL run | 🟢 success | `29695839579` |
 | verify | 🟢 pass | lint、型、単体、契約、build、smoke |
 | e2e | 🟢 pass | Playwright CI browser |
 | postgresql-compat | 🟢 pass | PostGIS migration、seed、`/api/v1` standard_records smoke |
@@ -151,7 +151,8 @@ flowchart TD
 | docker-image-security | 🟢 pass | Trivy High/Critical CVE check |
 | production-target-env | ⚪ skipped | `workflow_dispatch` で実staging/production Secretsを読む手動ゲート |
 | docker-supply-chain | 🟢 pass | GHCR image push、SBOM attestation、`mode=max` provenance |
-| CodeRabbit | 🟢 pass | PR #52 / #56 success。オープンPRなし |
+| runtime status | 🟢 pass | `release:post-release-status` でproduction DNS未解決、共有preview `/api/ready` `status=ready; db=ok`、全probe 5000ms未満 |
+| CodeRabbit | 🟢 pass | PR #59 success。オープンPRなし |
 
 ⚠️ `production-target-env` はmain greenだけでは完了しません。Cloudflare/Neon実ターゲット検証は、staging/production移行時に承認済みSecrets/Variablesを読み込んで別途記録します。
 
@@ -166,7 +167,7 @@ flowchart TD
 | ブラウザログ | Chrome console error/warn 0件 |
 | API | `/api/health` 200、`/api/ready` 200、`/api/dashboard` 200、`/api/sources` 200、`/api/openapi` 200 |
 | 管理保護 | `/api/fetch-logs` は未認証401、`/api/admin/audit-events` のGETは405 |
-| DB | `/api/ready` 200でアプリからDB接続を確認。共有previewは正本Neonではなくローカル/preview DB |
+| DB | `/api/ready` 200、`status=ready; db=ok` でアプリからDB接続を確認。共有previewは正本Neonではなくローカル/preview DB |
 | Cloudflare/Neon | production targetは `civilopendata.mirai-dx-platform.com`。`wrangler.jsonc` と `infra/cloudflare/` は準備済み。Hyperdrive IDはplaceholderで、DNS/Access/Secret/Neon実リソースは人間承認後に確定 |
 
 ### 🔧 2026-07-19 安定化改善
@@ -177,6 +178,7 @@ flowchart TD
 | 標準レコード | `standardRecordsAvailable()` を60秒TTL + single-flight化し、標準データのロールバック/空化と並行アクセス競合へ対応 |
 | 管理認証 | `CODIP_DISABLE_TOKEN_AUTH=true` を追加。Cloudflare Access等のproxy authを正とする環境で、直接token経路と、tokenから導出される署名済みセッションCookieの両方を無効化できる |
 | 依存関係 | PR #52で `undici` 8.7.0、`@eslint/eslintrc` 3.3.6、`autoprefixer` 10.5.4、`eslint` 9.39.5、`tailwindcss` 3.4.19、`vitest` 3.2.7、`wrangler` 4.112.0などへ更新。main CI/CodeQL成功 |
+| 監視 | `release:post-release-status` でproduction DNS、read-only health、応答時間、`/api/ready` DB状態をSecretなしMarkdownで確認可能 |
 | テスト | URL guard、標準レコード可用性、管理認証、環境変数検証、管理セッションAPIの回帰テストを追加 |
 
 ## ✅ リリース準備履歴 (2026-07-18 再検証)
