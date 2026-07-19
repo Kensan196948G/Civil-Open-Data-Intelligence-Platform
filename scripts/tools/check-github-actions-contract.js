@@ -22,6 +22,8 @@ requireText("CI workflow", ci, "production-target-env:");
 requireText("CI workflow", ci, "npm run release:validate-env:production-target");
 requireText("CI workflow", ci, "npm run cf:build");
 requireText("CI workflow", ci, "npm run release:check-cloudflare-build-artifact");
+requireText("CI workflow", ci, "CODIP_CLOUDFLARE_ALERT_POLICY");
+requireText("CI workflow", ci, "CODIP_NEON_MONITORING_EVIDENCE");
 requireText("CI workflow", ci, "npm run db:pg:check-postgis-ddl");
 requireText("CI workflow", ci, "npm run db:pg:check-drift");
 requireText("CI workflow", ci, "npm run release:smoke -- --read-only");

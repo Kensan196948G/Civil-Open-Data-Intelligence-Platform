@@ -24,6 +24,15 @@ const PUBLIC_ENV_KEYS = [
   "CODIP_ADMIN_EMAIL_DOMAINS",
 ];
 
+const MONITORING_ENV_KEYS = [
+  "CODIP_MONITORING_CONTACTS",
+  "CODIP_CLOUDFLARE_ALERT_POLICY",
+  "CODIP_CLOUDFLARE_LOGS_EVIDENCE",
+  "CODIP_NEON_MONITORING_EVIDENCE",
+  "CODIP_SMOKE_MONITORING_SCHEDULE",
+  "CODIP_ROLLBACK_OWNER",
+];
+
 const PLACEHOLDER_PATTERNS = [
   /example/i,
   /change[-_]?this/i,
@@ -55,6 +64,13 @@ function valueState(value, { secret = false } = {}) {
   if (!trimmed) return "⚠️ unset";
   if (hasPlaceholder(trimmed)) return "⚠️ placeholder-like";
   return secret ? "✅ set (redacted)" : `✅ ${trimmed}`;
+}
+
+function evidenceState(value) {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) return "⚠️ unset";
+  if (hasPlaceholder(trimmed)) return "⚠️ placeholder-like";
+  return "✅ set (recorded)";
 }
 
 function secretUrlState(value) {
@@ -94,6 +110,10 @@ function inspectWrangler(root) {
     wrangler.includes('"workers_dev": false') ? "✅ false" : "⚠️ not false",
   ]);
   result.push([
+    "observability",
+    wrangler.includes('"observability"') && wrangler.includes('"enabled": true') ? "✅ enabled" : "⚠️ not enabled",
+  ]);
+  result.push([
     "hyperdrive id",
     /placeholder|replace/i.test(wrangler) ? "⚠️ placeholder present" : "✅ no obvious placeholder",
   ]);
@@ -111,6 +131,7 @@ function buildReport(env = process.env, root = process.cwd()) {
     rows.push([key, state]);
   }
 
+  const monitoringRows = MONITORING_ENV_KEYS.map((key) => [key, evidenceState(env[key])]);
   const wranglerRows = inspectWrangler(root);
 
   const readinessChecks = [
@@ -123,6 +144,12 @@ function buildReport(env = process.env, root = process.cwd()) {
       "Migration DB URL set",
       Boolean(env.CODIP_MIGRATION_DATABASE_URL?.trim()) && secretUrlState(env.CODIP_MIGRATION_DATABASE_URL).startsWith("✅"),
     ],
+    ["Monitoring contacts recorded", evidenceState(env.CODIP_MONITORING_CONTACTS).startsWith("✅")],
+    ["Cloudflare alert policy recorded", evidenceState(env.CODIP_CLOUDFLARE_ALERT_POLICY).startsWith("✅")],
+    ["Cloudflare logs evidence recorded", evidenceState(env.CODIP_CLOUDFLARE_LOGS_EVIDENCE).startsWith("✅")],
+    ["Neon monitoring evidence recorded", evidenceState(env.CODIP_NEON_MONITORING_EVIDENCE).startsWith("✅")],
+    ["Smoke monitoring schedule recorded", evidenceState(env.CODIP_SMOKE_MONITORING_SCHEDULE).startsWith("✅")],
+    ["Rollback owner recorded", evidenceState(env.CODIP_ROLLBACK_OWNER).startsWith("✅")],
   ];
 
   const ready = readinessChecks.every(([, ok]) => ok);
@@ -138,6 +165,12 @@ function buildReport(env = process.env, root = process.cwd()) {
     "| Key | State |",
     "| --- | --- |",
     ...rows.map(([key, state]) => `| \`${key}\` | ${state} |`),
+    "",
+    "## Monitoring Evidence",
+    "",
+    "| Key | State |",
+    "| --- | --- |",
+    ...monitoringRows.map(([key, state]) => `| \`${key}\` | ${state} |`),
     "",
     "## Wrangler Evidence",
     "",
@@ -158,8 +191,10 @@ function buildReport(env = process.env, root = process.cwd()) {
     "| Cloudflare deploy | `wrangler deployments list --env production` result |",
     "| Cloudflare Access | application domain, policy name, allowlist summary |",
     "| Workers logs | error count / request sample / trace query timestamp |",
+    "| Cloudflare alerts | alert policy name, threshold summary, notification test timestamp |",
     "| Hyperdrive | binding name and config id, with connection string omitted |",
-    "| Neon | branch name, migration status, PostGIS capability, capacity summary |",
+    "| Neon | branch name, migration status, PostGIS capability, capacity / connection / slow query summary |",
+    "| Monitoring smoke | schedule, last success timestamp, next owner |",
     "| Smoke | `npm run release:smoke -- --read-only --base-url https://civilopendata.mirai-dx-platform.com` result |",
     "",
   ];

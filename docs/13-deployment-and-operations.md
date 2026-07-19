@@ -46,6 +46,12 @@ Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、C
 | `CODIP_HYPERDRIVE_BINDING` | Cloudflare | RuntimeからNeonへ接続するCloudflare Hyperdrive binding名。未設定時は `HYPERDRIVE` |
 | `CODIP_NEON_BRANCH` | Staging/Production evidence | Neon branch名を証跡として記録 |
 | `CODIP_MIGRATION_DATABASE_URL` | Migration | Hyperdriveを経由しないNeon direct endpoint。CI/CD secretで管理 |
+| `CODIP_MONITORING_CONTACTS` | Staging/Production evidence | 監視通知先またはon-callグループ名。`production-evidence` では値を出さず設定有無のみ記録 |
+| `CODIP_CLOUDFLARE_ALERT_POLICY` | Staging/Production evidence | Cloudflare alert policy名、閾値概要、通知テスト時刻の証跡 |
+| `CODIP_CLOUDFLARE_LOGS_EVIDENCE` | Staging/Production evidence | Workers Logs / Traces の確認クエリ、error count、対象deploy idの証跡 |
+| `CODIP_NEON_MONITORING_EVIDENCE` | Staging/Production evidence | Neon branch、容量、接続数、slow query、PITR window確認証跡 |
+| `CODIP_SMOKE_MONITORING_SCHEDULE` | Staging/Production evidence | read-only smoke監視の実行頻度、直近成功時刻、失敗時担当 |
+| `CODIP_ROLLBACK_OWNER` | Staging/Production evidence | rollback判断者または当番ロール |
 | `ESTAT_APP_ID` | Optional | e-Stat API利用時のアプリケーションID |
 
 ## 2.1a Cloudflare Workers IaC構成

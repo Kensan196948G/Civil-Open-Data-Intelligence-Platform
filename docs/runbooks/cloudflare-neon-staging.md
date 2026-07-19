@@ -107,6 +107,7 @@ npm run release:validate-env:production-target
 `DATABASE_URL`、`CODIP_MIGRATION_DATABASE_URL`、`CODIP_HYPERDRIVE_BINDING`、`CODIP_NEON_BRANCH`、管理トークンまたはProxy認証設定は、対象環境の実値を使う。`example.com`、localhost、CI用token、placeholder値が混入している場合は失敗させる。
 
 Secrets/Variablesの実値を読み込んだ端末では、次のread-only証跡レポートも取得する。接続文字列、管理トークン、proxy secretは値を出さず、set/unsetとSSL条件だけを記録する。
+監視・アラート証跡 (`CODIP_MONITORING_CONTACTS`, `CODIP_CLOUDFLARE_ALERT_POLICY`, `CODIP_CLOUDFLARE_LOGS_EVIDENCE`, `CODIP_NEON_MONITORING_EVIDENCE`, `CODIP_SMOKE_MONITORING_SCHEDULE`, `CODIP_ROLLBACK_OWNER`) は値を表示せず、設定済みかだけを記録する。
 
 ```bash
 npm run release:production-evidence -- --strict
@@ -179,6 +180,10 @@ npm run release:smoke -- --read-only --base-url "https://civilopendata.mirai-dx-
 | `db:pg:check-drift` 結果 |  |
 | `db:pg:check-postgis-ddl` 結果 |  |
 | `release:validate-env:production-target` 結果 |  |
+| `release:production-evidence -- --strict` 結果 |  |
+| Cloudflare alert / logs 証跡 |  |
+| Neon monitoring 証跡 |  |
+| smoke監視スケジュール |  |
 | `/api/ready` 結果 |  |
 | `release:smoke` 結果 |  |
 | rollback owner |  |

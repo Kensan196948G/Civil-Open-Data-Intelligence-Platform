@@ -33,6 +33,12 @@ describe("production-evidence-report", () => {
         CODIP_DISABLE_TOKEN_AUTH: "true",
         CODIP_TRUST_PROXY_AUTH: "true",
         CODIP_ADMIN_EMAIL_DOMAINS: "mirai-dx-platform.com",
+        CODIP_MONITORING_CONTACTS: "release-oncall",
+        CODIP_CLOUDFLARE_ALERT_POLICY: "codip-production-p1",
+        CODIP_CLOUDFLARE_LOGS_EVIDENCE: "workers logs query recorded",
+        CODIP_NEON_MONITORING_EVIDENCE: "neon branch metrics recorded",
+        CODIP_SMOKE_MONITORING_SCHEDULE: "*/5 read-only smoke",
+        CODIP_ROLLBACK_OWNER: "release-manager",
       },
       ["--strict"],
     );
@@ -41,10 +47,14 @@ describe("production-evidence-report", () => {
     expect(result.stdout).toContain("Overall: ✅ evidence inputs look ready");
     expect(result.stdout).toContain("DATABASE_URL");
     expect(result.stdout).toContain("set (redacted");
+    expect(result.stdout).toContain("Monitoring Evidence");
+    expect(result.stdout).toContain("CODIP_CLOUDFLARE_ALERT_POLICY");
+    expect(result.stdout).toContain("set (recorded)");
     expect(result.stdout).not.toContain("super-secret-runtime-pass");
     expect(result.stdout).not.toContain("super-secret-migration-pass");
     expect(result.stdout).not.toContain("real-admin-token-that-must-not-print");
     expect(result.stdout).not.toContain("real-proxy-secret-that-must-not-print");
+    expect(result.stdout).not.toContain("workers logs query recorded");
   });
 
   it("fails strict mode when required Cloudflare or Neon evidence is missing", () => {
@@ -60,5 +70,7 @@ describe("production-evidence-report", () => {
     expect(result.stdout).toContain("Overall: ⚠️ evidence inputs incomplete");
     expect(result.stdout).toContain("Hyperdrive binding named | ⚠️");
     expect(result.stdout).toContain("Runtime DB URL set | ⚠️");
+    expect(result.stdout).toContain("Cloudflare alert policy recorded | ⚠️");
+    expect(result.stdout).toContain("Neon monitoring evidence recorded | ⚠️");
   });
 });

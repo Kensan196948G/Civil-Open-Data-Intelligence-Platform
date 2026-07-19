@@ -27,6 +27,23 @@
 | Neon monitoring | 未設定 | branch、容量、接続数、slow query、PITR windowを記録 |
 | GitHub Actions | 設定済み | CI失敗時の担当・Issue化ルールをProjectへ反映 |
 
+実ターゲットの監視証跡は、Secrets値や個人情報を出さずに次の環境変数で `production-evidence` へ渡す。値はレポートに表示されず、`set (recorded)` のみ出力される。
+
+| 変数 | 記録する証跡 |
+| --- | --- |
+| `CODIP_MONITORING_CONTACTS` | 通知経路またはon-callグループ名 |
+| `CODIP_CLOUDFLARE_ALERT_POLICY` | Cloudflare alert policy名、閾値概要、通知テスト時刻 |
+| `CODIP_CLOUDFLARE_LOGS_EVIDENCE` | Workers Logs / Traces の確認クエリ、error count、対象deploy id |
+| `CODIP_NEON_MONITORING_EVIDENCE` | Neon branch、容量、接続数、slow query、PITR window確認 |
+| `CODIP_SMOKE_MONITORING_SCHEDULE` | read-only smokeの実行頻度、直近成功時刻、失敗時担当 |
+| `CODIP_ROLLBACK_OWNER` | rollback判断者または当番ロール |
+
+```bash
+npm run release:production-evidence -- --strict
+```
+
+`--strict` は上記監視証跡が未記録の場合も失敗する。Cloudflare Workers Observabilityは `wrangler.jsonc` の `observability.enabled=true` を維持し、Workers Logs / Traces / alert policy の実確認結果をEvidenceへ転記する。
+
 ## 2. 共有preview確認
 
 ```powershell

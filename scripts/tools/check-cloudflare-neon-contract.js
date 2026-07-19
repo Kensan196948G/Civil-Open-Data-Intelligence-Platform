@@ -27,9 +27,13 @@ requireText(".env.example", envExample, "CODIP_HYPERDRIVE_BINDING");
 requireText(".env.example", envExample, "CODIP_NEON_BRANCH");
 requireText(".env.example", envExample, "CODIP_MIGRATION_DATABASE_URL");
 requireText(".env.example", envExample, "civilopendata.mirai-dx-platform.com");
+requireText(".env.example", envExample, "CODIP_CLOUDFLARE_ALERT_POLICY");
+requireText(".env.example", envExample, "CODIP_NEON_MONITORING_EVIDENCE");
 requireText("wrangler.jsonc", wrangler, "civilopendata.mirai-dx-platform.com");
 requireText("wrangler.jsonc", wrangler, "\"custom_domain\": true");
 requireText("wrangler.jsonc", wrangler, "\"workers_dev\": false");
+requireText("wrangler.jsonc", wrangler, "\"observability\"");
+requireText("wrangler.jsonc", wrangler, "\"enabled\": true");
 requireText("infra/cloudflare terraform vars", accessVars, "application_domain     = \"civilopendata.mirai-dx-platform.com\"");
 
 for (const token of [
@@ -45,6 +49,8 @@ for (const token of [
   "npm run db:pg:check-postgis-ddl",
   "npm run release:smoke",
   "npm run release:production-evidence",
+  "CODIP_CLOUDFLARE_ALERT_POLICY",
+  "CODIP_NEON_MONITORING_EVIDENCE",
   "GHCR image digest",
   "rollback owner",
 ]) {
@@ -57,6 +63,7 @@ requireText("docs/13", docs13, "SBOM");
 requireText("docs/13", docs13, "provenance");
 requireText("docs/16", docs16, "release:validate-env:production-target");
 requireText("docs/16", docs16, "release:production-evidence");
+requireText("docs/16", docs16, "監視・アラート証跡");
 requireText("docs/16", docs16, "release:check-production-placeholders");
 requireText("docs/16", docs16, "release:check-cloudflare-build-artifact");
 requireText("docs/16", docs16, "image digest");
