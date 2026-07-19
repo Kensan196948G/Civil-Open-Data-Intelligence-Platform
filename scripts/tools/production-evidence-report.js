@@ -102,6 +102,10 @@ function isRealHttpsTarget(value) {
   return !hasPlaceholder(value);
 }
 
+function isEnabled(value) {
+  return value?.trim().toLowerCase() === "true";
+}
+
 function statusIcon(ok) {
   return ok ? "✅" : "⚠️";
 }
@@ -234,6 +238,22 @@ function buildReport(env = process.env, root = process.cwd()) {
     ["Backup/restore evidence recorded", evidenceState(env.CODIP_BACKUP_RESTORE_EVIDENCE).startsWith("✅")],
     ...wranglerEvidence.checks,
   ];
+
+  if (env.CODIP_DEPLOY_TARGET === "production") {
+    readinessChecks.push(
+      ["Production direct token auth disabled", isEnabled(env.CODIP_DISABLE_TOKEN_AUTH)],
+      ["Production proxy auth enabled", isEnabled(env.CODIP_TRUST_PROXY_AUTH)],
+      [
+        "Production proxy secret set",
+        Boolean(env.CODIP_TRUST_PROXY_SECRET?.trim()) && !hasPlaceholder(env.CODIP_TRUST_PROXY_SECRET),
+      ],
+      [
+        "Production admin allowlist recorded",
+        Boolean(env.CODIP_ADMIN_EMAILS?.trim() || env.CODIP_ADMIN_EMAIL_DOMAINS?.trim()) &&
+          !hasPlaceholder(`${env.CODIP_ADMIN_EMAILS ?? ""}${env.CODIP_ADMIN_EMAIL_DOMAINS ?? ""}`),
+      ],
+    );
+  }
 
   const ready = readinessChecks.every(([, ok]) => ok);
 

@@ -143,6 +143,27 @@ describe("production-evidence-report", () => {
     expect(result.stdout).not.toContain("Wrangler production Hyperdrive id resolved");
   });
 
+  it("fails production strict mode when proxy-only admin hardening is incomplete", () => {
+    const result = runProductionEvidence(
+      {
+        ...completeEvidenceEnv,
+        CODIP_DISABLE_TOKEN_AUTH: "false",
+        CODIP_TRUST_PROXY_AUTH: "false",
+        CODIP_TRUST_PROXY_SECRET: "",
+        CODIP_ADMIN_EMAIL_DOMAINS: "",
+      },
+      ["--strict"],
+      withWrangler("hdg_prod_1234567890abcdef"),
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("Overall: ⚠️ evidence inputs incomplete");
+    expect(result.stdout).toContain("Production direct token auth disabled | ⚠️");
+    expect(result.stdout).toContain("Production proxy auth enabled | ⚠️");
+    expect(result.stdout).toContain("Production proxy secret set | ⚠️");
+    expect(result.stdout).toContain("Production admin allowlist recorded | ⚠️");
+  });
+
   it("fails strict mode when wrangler production placeholders remain", () => {
     const result = runProductionEvidence(
       completeEvidenceEnv,
