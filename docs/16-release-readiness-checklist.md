@@ -318,7 +318,8 @@ Cloudflare / Neon への実デプロイは、以下の**人間承認必須**の�
 
 | # | 作業 | 承認が必要な理由 |
 | --- | --- | --- |
-| 1 | Neon **production 用 branch** の新規作成 (project 自体は既存 `falling-dawn-93620497`。§5.1 参照) | 課金発生・リソース作成 |
+| 1 | Neon **production 用 branch** の新規作成 (project 自体は既存 `falling-dawn-93620497`。§5.1 参照) | 課金発生・リソース作成、人間承認必須 |
+| - | (対比参考) **非本番 preview branch** の作成・検証 (例: 今回作成した `preview-20260720`) | `.claude/CLAUDE.md` §27.2 特則により CTO 自律実行可。ただし branch 削除・既存データ削除等の破壊的操作は人間承認必須 |
 | 2 | `wrangler hyperdrive create` と `wrangler.jsonc` の id 置換 | 課金発生・リソース作成 |
 | 3 | `wrangler secret put` による秘密情報登録 | Secrets の登録 |
 | 4 | Issue #18 の残件解消 (実Hyperdrive/Neon証跡、外部URL取得egress設計) | `resolve4` / `resolve6` 事前検証、Node接続時DNSピン留め、Workers runtime安全停止、`@prisma/adapter-pg` 導入は完了。実Cloudflare/Neon targetでのDB接続証跡は本番切替の前提条件 |
@@ -521,10 +522,11 @@ project 自体もこの時刻前後に作成されたとみなせる。すなわ
 
 #### 本番化の前提 (§本番化の前提) への影響
 
-- 表内「1 Neon project / branch の作成」のうち、**project は既存**であり新規作成は不要。
-  branch 作成 (今回の `preview-20260720` 等の非本番 branch) は `.claude/CLAUDE.md` §27.2
-  特則により CTO 自律実行範囲。人間承認が必要なのは、本番用 branch を新規に切る場合や
-  破壊的操作 (branch 削除、既存データ削除) に限られる。
+- 表項目 1「Neon production 用 branch の新規作成」のうち、**project は既存**であり
+  project 自体の新規作成は不要。表の対比参考行のとおり、非本番 preview branch 作成
+  (今回の `preview-20260720` 等) は `.claude/CLAUDE.md` §27.2 特則により CTO 自律実行範囲。
+  人間承認が必要なのは、本番用 branch を新規に切る場合や破壊的操作 (branch 削除、
+  既存データ削除) に限られる。
 - Hyperdrive 経由の「接続時 DNS ピン留め」実証 (Issue #18 残件) は、Hyperdrive config
   自体が未作成のため**引き続き未実施**。今回の検証は Neon MCP 直結によるスキーマ・
   migration 適用状態の確認であり、Cloudflare Workers ランタイムからの接続経路とは別物であるため
