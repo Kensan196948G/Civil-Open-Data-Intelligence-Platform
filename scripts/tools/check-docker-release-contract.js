@@ -40,7 +40,7 @@ requireText("CI workflow", ci, "needs: [verify, e2e, postgresql-compat, docker-p
 requireText("CI workflow", ci, "packages: write");
 requireText("CI workflow", ci, "attestations: write");
 requireText("CI workflow", ci, "id-token: write");
-requireText("CI workflow", ci, "aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8");
+requireText("CI workflow", ci, "aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25");
 requireText("CI workflow", ci, "postgis/postgis@sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5");
 requireText("CI workflow", ci, "image-ref: codip-production-scan");
 requireText("CI workflow", ci, "postgres_ready=false");
