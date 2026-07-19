@@ -105,6 +105,14 @@ npm run release:validate-env:production-target
 
 `DATABASE_URL`、`CODIP_MIGRATION_DATABASE_URL`、`CODIP_HYPERDRIVE_BINDING`、`CODIP_NEON_BRANCH`、管理トークンまたはProxy認証設定は、対象環境の実値を使う。`example.com`、localhost、CI用token、placeholder値が混入している場合は失敗させる。
 
+Secrets/Variablesの実値を読み込んだ端末では、次のread-only証跡レポートも取得する。接続文字列、管理トークン、proxy secretは値を出さず、set/unsetとSSL条件だけを記録する。
+
+```bash
+npm run release:production-evidence -- --strict
+```
+
+`--strict` は実ターゲットに必要なEvidence入力が欠けている場合に失敗する。失敗時はDNS/Secrets/Deployを進めず、不足項目を本runbook §6 Evidenceへ記録する。
+
 合格条件:
 
 | 確認 | 合格条件 |

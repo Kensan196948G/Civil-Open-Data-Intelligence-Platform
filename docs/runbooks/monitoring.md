@@ -10,6 +10,23 @@
 | 管理保護 | 未認証 `GET /api/fetch-logs` | 401 以外 |
 | ブラウザ | ダッシュボード表示、console error/warn | 主要画面の描画失敗、console error |
 
+## 1.1 アラート運用
+
+実通知先は本番Cloudflare/Neon作成時に確定する。未確定の間は、本表を暫定SLO/エスカレーション基準として扱い、確認結果を `docs/16-release-readiness-checklist.md` と `docs/release-notes.md` に記録する。
+
+| 重大度 | 条件 | 初動目標 | 初動担当 | エスカレーション | 復旧目標 |
+| --- | --- | ---: | --- | --- | ---: |
+| P1 | `/api/ready` 503継続、認証バイパス疑い、データ破損疑い、Cloudflare本番routing障害 | 15分 | ReleaseManager / DevOps | CTO判断でrollback runbookへ移行 | 60分 |
+| P2 | 主要API 5xx増加、Workers error増加、Neon接続遅延、read-only smoke失敗 | 30分 | DevOps / QA | SecurityまたはDB影響時はCTOへ即時共有 | 4時間 |
+| P3 | console warn、低頻度の外部API timeout、監査ログ欠落疑い、性能劣化傾向 | 1営業日 | QA / Developer | 週次改善Issueへ登録 | 次回改善サイクル |
+
+| 通知経路 | 現状 | 本番化時の完了条件 |
+| --- | --- | --- |
+| Cloudflare Workers Logs / Traces | 手動確認予定 | error rate、例外sample、対象deploy idをEvidenceへ記録 |
+| Cloudflare alert / Web Analytics | 未設定 | 通知先、閾値、通知テスト結果を記録 |
+| Neon monitoring | 未設定 | branch、容量、接続数、slow query、PITR windowを記録 |
+| GitHub Actions | 設定済み | CI失敗時の担当・Issue化ルールをProjectへ反映 |
+
 ## 2. 共有preview確認
 
 ```powershell
