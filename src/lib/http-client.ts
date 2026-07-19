@@ -30,7 +30,15 @@ function getPinnedAgent(): Agent {
   if (!pinnedAgent) {
     pinnedAgent = new Agent({
       connect: {
-        lookup(hostname, options, callback) {
+        lookup(
+          hostname: string,
+          options: dns.LookupOptions,
+          callback: (
+            err: NodeJS.ErrnoException | null,
+            address?: string | dns.LookupAddress[],
+            family?: number,
+          ) => void,
+        ) {
           // 呼び出し元 (node:net) は options.all の有無でコールバック形式が変わる:
           // autoSelectFamily (Node 20+ 既定) は (err, addresses[]) を期待する
           const cb = callback as unknown as (

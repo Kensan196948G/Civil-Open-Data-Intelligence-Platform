@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -10,7 +11,7 @@ const productionTargetScriptPath = path.join(
 
 function runValidateEnv(mode: "local" | "preview" | "production", env: Record<string, string>) {
   return spawnSync(process.execPath, [scriptPath, "--mode", mode], {
-    cwd: "/tmp",
+    cwd: os.tmpdir(),
     env: {
       PATH: process.env.PATH ?? "",
       NODE_ENV: "test",

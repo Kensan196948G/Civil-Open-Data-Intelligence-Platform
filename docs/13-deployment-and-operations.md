@@ -11,10 +11,11 @@
 
 ## 2. デプロイ方針
 
-MVPではローカル、CI、Docker previewで品質を確認する。2026-07-19 時点の共有previewは `http://192.168.0.185:3100/` で稼働し、`/api/health`、`/api/ready`、`/api/dashboard`、`/api/sources`、`/api/openapi` のread-only smokeは成功している。Cloudflare WorkersとNeon/PostGISは本番目標構成であり、`wrangler.jsonc`、`open-next.config.ts`、`infra/cloudflare/` (Terraformテンプレート) は導入済みで、`npm run cf:build` / `cf:preview` / `cf:deploy` / `cf:typegen` から実行できる。ただし以下は未解決のアプリケーションコード/実リソース側の制約であり、Workers本番切替前に解消が必須 (詳細はIssue #18):
+MVPではローカル、CI、Docker previewで品質を確認する。2026-07-19 時点の共有previewは `http://192.168.0.185:3100/` で稼働し、`/api/health`、`/api/ready`、`/api/dashboard`、`/api/sources`、`/api/openapi` のread-only smokeは成功している。Cloudflare WorkersとNeon/PostGISは本番目標構成であり、`wrangler.jsonc`、`open-next.config.ts`、`infra/cloudflare/` (Terraformテンプレート) は導入済みで、`npm run cf:build` / `cf:preview` / `cf:deploy` / `cf:typegen` から実行できる。アプリケーションコード側では、SSRF事前DNS検証をWorkers互換の `resolve4` / `resolve6` へ更新し、PostgreSQL Prisma Clientに `@prisma/adapter-pg` を導入した。Prisma 6.19系ではdriver adapterにpreview flagは不要であり、deprecated warningを避けるため `previewFeatures = ["driverAdapters"]` は設定しない。Workers実行時は `CODIP_HYPERDRIVE_BINDING` (既定 `HYPERDRIVE`) のCloudflare Hyperdrive bindingから `connectionString` を取得できる場合にそれを優先し、Node.js/Docker/CIでは `DATABASE_URL` を使う。
+
+ただし以下は未解決のアプリケーションコード/実リソース側の制約であり、Workers本番切替前に解消または証跡化が必須:
 
 - `src/lib/url-guard.ts` の事前DNS検証は `resolve4` / `resolve6` へ変更済み。接続時ピン留め側の `src/lib/http-client.ts` は引き続き `dns.lookup()` 依存のため、Workers上では外部URL取得機能がfail-closedする可能性がある
-- `prisma/postgresql/schema.prisma` に `driverAdapters` preview featureが未設定のため、Prisma ClientがCloudflare Hyperdrive bindingを消費できない (`wrangler.jsonc` の `hyperdrive` bindingは宣言のみで現状は不活性)
 - `wrangler.jsonc` の Hyperdrive ID は placeholder であり、Cloudflare Worker / Hyperdrive / Access / Custom Domain / Neon project の実リソース作成とSecret登録は人間承認後に行う
 
 Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、Cloudflareが現在推奨するNext.jsデプロイ経路が `@opennextjs/cloudflare` アダプタ経由のWorkersであり、レガシーの `@cloudflare/next-on-pages` ではないため。取得処理は将来Cloudflare Cron TriggersとWorkersへ分離する。
@@ -42,7 +43,7 @@ Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、C
 | `CODIP_TRUST_PROXY_SECRET` | Proxy auth時 | プロキシから `x-codip-proxy-secret` として送る共有シークレット |
 | `CODIP_ADMIN_EMAILS` | Proxy auth時 | 管理者として許可するメールアドレス |
 | `CODIP_ADMIN_EMAIL_DOMAINS` | Proxy auth時 | 管理者として許可するメールドメイン |
-| `CODIP_HYPERDRIVE_BINDING` | Future Cloudflare | RuntimeからNeonへ接続するCloudflare Hyperdrive binding名 |
+| `CODIP_HYPERDRIVE_BINDING` | Cloudflare | RuntimeからNeonへ接続するCloudflare Hyperdrive binding名。未設定時は `HYPERDRIVE` |
 | `CODIP_NEON_BRANCH` | Staging/Production evidence | Neon branch名を証跡として記録 |
 | `CODIP_MIGRATION_DATABASE_URL` | Migration | Hyperdriveを経由しないNeon direct endpoint。CI/CD secretで管理 |
 | `ESTAT_APP_ID` | Optional | e-Stat API利用時のアプリケーションID |

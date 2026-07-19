@@ -6,7 +6,7 @@ CODIPをCloudflare + Neon/PostGISへ出す前のstaging確認手順である。�
 
 | 用途 | 接続先 | 方針 |
 | --- | --- | --- |
-| Runtime | Cloudflare Hyperdrive経由Neon pooled endpoint | `CODIP_HYPERDRIVE_BINDING` をCloudflare側Binding名として管理。**未解決**: Prisma Client側に `driverAdapters` preview featureが未導入のため、Hyperdrive bindingは現状不活性 (Issue #18で追跡、解消までWorkers本番切替不可) |
+| Runtime | Cloudflare Hyperdrive経由Neon pooled endpoint | `CODIP_HYPERDRIVE_BINDING` をCloudflare側Binding名として管理。未設定時は `HYPERDRIVE`。Prisma Client側は `@prisma/adapter-pg` を導入済み。Prisma 6.19系ではdriver adapterのpreview flagは不要 |
 | Migration | Neon direct endpoint | `CODIP_MIGRATION_DATABASE_URL` をCI/CD secretで管理し、`sslmode=require` または `verify-full` を必須 |
 | Staging DB | Neon branch | `CODIP_NEON_BRANCH` にbranch名を記録 |
 | 管理入口 | Cloudflare Access | Access allowlist + `x-codip-proxy-secret` + 管理メールallowlist |
@@ -23,6 +23,8 @@ npm run cf:deploy    # 実際のCloudflareアカウントへdeploy (人間が実
 ```
 
 `wrangler.jsonc` の `env.preview` / `env.production` named environmentを使う場合は `--env preview` / `--env production` を各コマンドに付与する。Hyperdrive binding IDは `wrangler hyperdrive create <name> --connection-string="$CODIP_MIGRATION_DATABASE_URL"` で払い出し、`wrangler.jsonc` のプレースホルダーを置き換えてから `cf:deploy` する。秘密情報は `wrangler secret put <name> [--env preview|production]` で登録し、`wrangler.jsonc` にはコミットしない。
+
+Workers runtimeでは `src/lib/db.ts` がOpenNextのCloudflare contextから `CODIP_HYPERDRIVE_BINDING` 名のbindingを読み、bindingの `connectionString` を `@prisma/adapter-pg` へ渡す。bindingが取得できないNode.js/Docker/CIでは `DATABASE_URL` を使うため、共有previewとCI smokeは従来どおり動作する。
 
 Cloudflare Access保護は `infra/cloudflare/` のTerraformテンプレートを使う (`infra/cloudflare/README.md` 参照)。`terraform apply` は人間が実行する。
 

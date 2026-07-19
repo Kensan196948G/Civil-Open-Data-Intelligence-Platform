@@ -201,7 +201,7 @@ PR #17 branch (`agent/release-readiness-postgis-ci`) を自律 CTO が再検証�
 | 残課題 | 状態 |
 | --- | --- |
 | Codex review (通常・対抗) | 未実施。Issue #19 で人間依頼中、PR は Draft 維持 |
-| Issue #18 Workers 互換性 (`dns.lookup`, `driverAdapters`) | 未実装。ローカル/Docker preview 運用では影響なし、Workers 本番切替時の前提条件として P1 維持 |
+| Issue #18 Workers 互換性 (`dns.lookup`, `driverAdapters`) | 部分解消。SSRF事前DNS検証は `resolve4` / `resolve6` へ更新済み、PostgreSQL Prisma Clientは `@prisma/adapter-pg` へ更新済み。Prisma 6.19系ではdriver adapterのpreview flagは不要。残りは接続時DNSピン留めのWorkers最終設計と実Cloudflare/Neonリソース証跡 |
 | PR #17 merge | 人間判断待ち (Codex レビュー結果 + main 承認) |
 | Cloudflare/Neon staging smoke 実環境証跡 | 未実施 (staging/production deploy 時に記録欄 §6 を使用) |
 
@@ -314,7 +314,7 @@ Cloudflare / Neon への実デプロイは、以下の**人間承認必須**の�
 | 1 | Neon project / branch の作成 | 課金発生・リソース作成 |
 | 2 | `wrangler hyperdrive create` と `wrangler.jsonc` の id 置換 | 課金発生・リソース作成 |
 | 3 | `wrangler secret put` による秘密情報登録 | Secrets の登録 |
-| 4 | Issue #18 の解消 (`dns.lookup` → `resolve4`/`resolve6`、`driverAdapters` 導入) | Workers 上で外部 URL 取得と DB 接続が動作しないため、本番切替の前提条件 |
+| 4 | Issue #18 の残件解消 (接続時DNSピン留めのWorkers最終設計、実Hyperdrive/Neon証跡) | `dns.lookup` 依存除去と `@prisma/adapter-pg` 導入は完了。実Cloudflare/Neon targetでのDB接続証跡は本番切替の前提条件 |
 | 5 | `infra/cloudflare/` の `terraform apply` (Access 保護) | 本番アクセス制御の変更 |
 | 6 | `wrangler deploy --env production` | 本番デプロイ |
 

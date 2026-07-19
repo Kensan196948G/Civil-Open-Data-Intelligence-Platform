@@ -28,7 +28,7 @@
 
 | 優先度 | 項目 | 方針 |
 | --- | --- | --- |
-| P1 | Issue #18 の残り: 接続時DNSピン留めのWorkers設計、Prisma Hyperdrive driver adapter | Cloudflare Workers staging前に専用PRで解消 |
+| P1 | Issue #18 の残り: 接続時DNSピン留めのWorkers最終設計、実Hyperdrive/Neon証跡 | Prisma Hyperdrive driver adapter側は `@prisma/adapter-pg` で実装済み。Cloudflare Workers staging前に実ターゲットで検証 |
 | P1 | Cloudflare/Neon実リソース未確定 | 人間承認後に Worker、Hyperdrive、Access、Secrets、Neon branch を作成し証跡化 |
 | P2 | Issue #46 監査記録の原子性 | 同一トランザクション/outbox方式を設計し、書き込みAPI単位で適用 |
 | P2 | De-dockerization #35 | CI/branch protection/docsを確認し、Docker依存ゲートを段階的に置換 |

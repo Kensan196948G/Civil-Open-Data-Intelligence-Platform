@@ -10,6 +10,8 @@ const runbook = fs.existsSync(runbookPath) ? fs.readFileSync(runbookPath, "utf8"
 const docs13 = fs.readFileSync(path.join(root, "docs/13-deployment-and-operations.md"), "utf8");
 const docs16 = fs.readFileSync(path.join(root, "docs/16-release-readiness-checklist.md"), "utf8");
 const packageJson = fs.readFileSync(path.join(root, "package.json"), "utf8");
+const dbLoader = fs.readFileSync(path.join(root, "src/lib/db.ts"), "utf8");
+const pgSchema = fs.readFileSync(path.join(root, "prisma/postgresql/schema.prisma"), "utf8");
 
 const errors = [];
 
@@ -48,6 +50,12 @@ requireText("docs/16", docs16, "release:validate-env:production-target");
 requireText("docs/16", docs16, "image digest");
 requireText("docs/16", docs16, "Neon branch");
 requireText("package.json", packageJson, "release:validate-env:production-target");
+requireText("package.json", packageJson, "@prisma/adapter-pg");
+requireText("package.json", packageJson, "@opennextjs/cloudflare");
+requireText("postgresql schema", pgSchema, "provider        = \"prisma-client-js\"");
+requireText("db loader", dbLoader, "PrismaPg");
+requireText("db loader", dbLoader, "getCloudflareContext");
+requireText("db loader", dbLoader, "connectionString");
 
 if (errors.length > 0) {
   for (const error of errors) console.error(`[cloudflare-neon-contract][error] ${error}`);
