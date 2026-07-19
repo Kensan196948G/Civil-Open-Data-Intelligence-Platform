@@ -176,6 +176,12 @@ jobs:
       - name: Reject unresolved Cloudflare placeholders
         run: npm run release:check-production-placeholders -- --env "$CODIP_DEPLOY_TARGET"
 
+      - name: Build Cloudflare Worker artifact
+        run: npm run cf:build
+
+      - name: Verify Cloudflare Worker artifact
+        run: npm run release:check-cloudflare-build-artifact
+
       - name: Verify target PostGIS DDL
         run: npm run db:pg:check-postgis-ddl
 

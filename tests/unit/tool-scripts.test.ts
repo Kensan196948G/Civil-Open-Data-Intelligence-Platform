@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 const withEnvScript = path.join(process.cwd(), "scripts/tools/with-env.js");
 const placeholderScript = path.join(process.cwd(), "scripts/tools/check-production-placeholders.js");
+const buildArtifactScript = path.join(process.cwd(), "scripts/tools/check-cloudflare-build-artifact.js");
 
 describe("tool scripts", () => {
   it("runs a command with cross-platform environment assignments", () => {
@@ -62,5 +63,35 @@ describe("tool scripts", () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("[production-placeholders] OK (production)");
+  });
+
+  it("rejects missing Cloudflare build artifacts", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "codip-cloudflare-artifact-missing-"));
+    fs.copyFileSync(path.join(process.cwd(), "wrangler.jsonc"), path.join(tmp, "wrangler.jsonc"));
+
+    const result = spawnSync(process.execPath, [buildArtifactScript], {
+      cwd: tmp,
+      env: { PATH: process.env.PATH ?? "", NODE_ENV: "test" },
+      encoding: "utf8",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Cloudflare Worker entrypoint is missing");
+  });
+
+  it("accepts generated Cloudflare build artifacts", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "codip-cloudflare-artifact-present-"));
+    fs.copyFileSync(path.join(process.cwd(), "wrangler.jsonc"), path.join(tmp, "wrangler.jsonc"));
+    fs.mkdirSync(path.join(tmp, ".open-next/assets"), { recursive: true });
+    fs.writeFileSync(path.join(tmp, ".open-next/worker.js"), "export default {};\n");
+
+    const result = spawnSync(process.execPath, [buildArtifactScript], {
+      cwd: tmp,
+      env: { PATH: process.env.PATH ?? "", NODE_ENV: "test" },
+      encoding: "utf8",
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("[cloudflare-build-artifact] OK");
   });
 });

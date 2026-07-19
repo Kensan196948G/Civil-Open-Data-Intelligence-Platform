@@ -31,6 +31,7 @@ runtimeとmigrationの接続文字列は分離する。migrationはHyperdriveを
 ```bash
 npm run cf:typegen
 npm run cf:build
+npm run release:check-cloudflare-build-artifact
 npm run cf:preview   # ローカルでWorkersランタイムを模したプレビュー確認
 npm run cf:deploy    # 実際のCloudflareアカウントへdeploy (人間が実行)
 ```

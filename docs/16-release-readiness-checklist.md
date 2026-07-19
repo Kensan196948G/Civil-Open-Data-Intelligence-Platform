@@ -24,6 +24,7 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | production実ターゲットenv検証 | 実デプロイ環境のSecrets/Variablesを読み込んで `CODIP_BASE_URL=https://civilopendata.mirai-dx-platform.com npm run release:validate-env:production-target` | `CODIP_DEPLOY_TARGET`、実HTTPS `CODIP_BASE_URL`、Cloudflare Hyperdrive、Neon branch、migration direct URL、外部PostgreSQL SSL、管理トークンまたはProxy認証設定、起動時migration禁止が実値で妥当 |
 | production実ターゲット証跡 | 実デプロイ環境のSecrets/Variablesを読み込んで `npm run release:production-evidence -- --strict` | Secret値を出力せず、Cloudflare/Neon本番Evidence入力、wrangler本番route、未充足項目をMarkdownで記録 |
 | Cloudflare placeholder検査 | `npm run release:check-production-placeholders -- --env production` | production Hyperdrive ID、Workers Custom Domain、`workers_dev=false`、`CODIP_BASE_URL` に未解決placeholderや本番URL不一致がない |
+| Cloudflare build artifact検査 | `npm run cf:build && npm run release:check-cloudflare-build-artifact` | OpenNext for CloudflareのWorker entrypoint (`.open-next/worker.js`) と静的assets (`.open-next/assets`) がdeploy前に生成済み |
 | ログ保持dry-run | `npm run db:prune -- --dry-run` | 取得ログ・サンプル保持期間の削除候補を確認できる |
 | 本番ビルド | `npm run build` | 成功 |
 | リリースゲート | `npm run release:gate` | ブラウザ非依存ゲートが一括成功 |
@@ -381,6 +382,7 @@ Codex 指摘修正 (`51bdda5`) は CodeRabbit 未レビューのコード変更�
 | 実ターゲット `release:validate-env:production-target` 結果 |  |
 | 実ターゲット `release:production-evidence -- --strict` 結果 |  |
 | 実ターゲット `release:check-production-placeholders -- --env production` 結果 |  |
+| `cf:build` / `release:check-cloudflare-build-artifact` 結果 |  |
 | `db:pg:check-drift` 結果 |  |
 | `db:pg:check-postgis-ddl` 結果 |  |
 | `/api/ready` 結果 |  |

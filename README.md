@@ -304,6 +304,7 @@ DATABASE_URL='file:./dev.db' npm run dev
 | `npm run release:validate-env:production-target` | 実Cloudflare/Neon targetのSecrets/Variables検証。productionでは `https://civilopendata.mirai-dx-platform.com` 固定 |
 | `npm run release:production-evidence -- --strict` | 実Cloudflare/Neon targetの証跡MarkdownをSecret値なしで出力し、未充足Evidenceを検知 |
 | `npm run release:check-production-placeholders -- --env production` | 実デプロイ前にproduction Hyperdrive ID等の未解決placeholderを拒否 |
+| `npm run release:check-cloudflare-build-artifact` | `npm run cf:build` 後に `.open-next/worker.js` と `.open-next/assets` が揃っていることを確認 |
 | `npm run db:pg:check-postgis-ddl` | PostGIS DDL確認 |
 | `npm run db:pg:check-drift` | PostgreSQL schema drift確認 |
 | `npm run db:prune -- --dry-run` | 運用ログ保持期間の削除候補確認 |
