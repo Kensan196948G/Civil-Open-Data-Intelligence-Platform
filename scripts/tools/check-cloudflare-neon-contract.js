@@ -40,6 +40,7 @@ requireText("wrangler.jsonc", wrangler, "\"custom_domain\": true");
 requireText("wrangler.jsonc", wrangler, "\"workers_dev\": false");
 requireText("wrangler.jsonc", wrangler, "\"observability\"");
 requireText("wrangler.jsonc", wrangler, "\"enabled\": true");
+requireText("wrangler.jsonc", wrangler, "\"CODIP_DISABLE_TOKEN_AUTH\": \"true\"");
 requireText("infra/cloudflare terraform vars", accessVars, "application_domain     = \"civilopendata.mirai-dx-platform.com\"");
 requireText("infra/cloudflare README", accessReadme, "Terraform >= 1.9");
 

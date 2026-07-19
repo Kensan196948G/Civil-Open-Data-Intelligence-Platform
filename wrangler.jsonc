@@ -59,7 +59,8 @@
         "CODIP_DEPLOY_TARGET": "production",
         "CODIP_BASE_URL": "https://civilopendata.mirai-dx-platform.com",
         "CODIP_TRUST_PROXY_AUTH": "true",
-        "CODIP_TRUST_PROXY_HEADERS": "true"
+        "CODIP_TRUST_PROXY_HEADERS": "true",
+        "CODIP_DISABLE_TOKEN_AUTH": "true"
       },
       "hyperdrive": [
         {

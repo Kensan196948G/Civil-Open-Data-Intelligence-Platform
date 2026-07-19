@@ -23,6 +23,7 @@
 | Cloudflare | production FQDNを `civilopendata.mirai-dx-platform.com` に固定し、Workers Custom Domain、Access Terraform例、Cloudflare/Neon Runbook、契約チェックへ反映 |
 | Cloudflare | `docs/runbooks/cloudflare-production.md` を追加し、DNS/Access/Secrets/Hyperdrive/production evidenceの停止条件を本番専用Runbookとして分離 |
 | Cloudflare | 新規サブドメイン `civilopendata` の初回Custom Domain gateを追加。DNS未解決、hostname衝突、zone active、Access境界、証明書/validation証跡を確認するまでDNS変更・deployを停止する |
+| Cloudflare | `wrangler.jsonc` のproduction varsに `CODIP_DISABLE_TOKEN_AUTH=true` を固定し、Cloudflare Access/proxy auth配下で直接token経路を閉じる設定を契約チェック対象に追加 |
 | CI証跡 | PR #49 のCloudflare target反映commit `040c7bc` に対して CI #82 / CodeQL #64 が success。verify、e2e、postgresql-compat、docker-preview、docker-image-security が全てsuccess |
 
 ### 確認URL
