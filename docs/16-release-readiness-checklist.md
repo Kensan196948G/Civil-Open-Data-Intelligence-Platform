@@ -563,3 +563,26 @@ secret 露出確認」は前提のデプロイが BLOCKED のため **NOT RUN** 
 (`CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` にNeon接続文字列を設定して
 ローカルエミュレーションする等) は、実際の Cloudflare Hyperdrive 経由の接続を検証したことに
 ならず実態を偽ることになるため採用しなかった。Hyperdrive config 作成後に本手順を再実行する。
+
+#### 追記2: origin/main rebase 後の再検証 (同日)
+
+上記検証の完了後、`release/production-cutover-20260719` ブランチが `origin/main` から
+9 コミット遅れており (このセッションの変更対象と同じ 3 ファイルへ並行して変更が入っていた)、
+`git rebase origin/main` で追随したためコミット済み HEAD の SHA が変化した。
+グローバル CLAUDE.md §15「head SHA が変化した場合は、影響する検証を再実行する」に従い、
+`npm ci` で依存関係 (Wrangler 4.110.0 → 4.112.0 含む) を同期したうえで Verify 一式を再実行した。
+
+| # | 実施内容 | rebase 前 | rebase 後 | 判定 |
+| --- | --- | --- | --- | --- |
+| 1 | lint | PASS | PASS | ✅ 変化なし |
+| 2 | typecheck | PASS | PASS | ✅ 変化なし |
+| 3 | test | 27 files / 289 tests PASS | 28 files / 297 tests PASS | ✅ origin/main 側 (PR #61 等) で追加されたテストを含めて全成功 |
+| 4 | build | 16 ルート PASS | 32 ルート PASS | ✅ origin/main 側で追加された API route 等を含めて成功 |
+| 5 | release:check-production-placeholders | FAIL (意図通り) | FAIL (意図通り) | ✅ 変化なし |
+| 6 | cf:build | PASS | PASS | ✅ 変化なし |
+| 7 | release:check-cloudflare-build-artifact | PASS | PASS | ✅ 変化なし |
+| 8 | `wrangler deploy --env preview` | BLOCKED (Hyperdrive UserError) | BLOCKED (同一 UserError、Wrangler 4.112.0) | ✅ 再現性確認。Wrangler バージョン更新では解消しない設計上の制約であることを確認 |
+
+**結論:** rebase による依存関係・コードベースの更新後も、上記の結論 (Hyperdrive config 未作成に
+よる preview デプロイ BLOCKED) は完全に再現し、変化しなかった。origin/main 側の並行作業
+(テスト・ルート数の増加) はこのブランチの変更と非重複であり、コンフリクトなく統合できている。
