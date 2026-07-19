@@ -4,8 +4,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = process.cwd();
-const ci = fs.readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf8");
-const codeql = fs.readFileSync(path.join(root, ".github/workflows/codeql.yml"), "utf8");
+function readNormalized(relativePath) {
+  return fs.readFileSync(path.join(root, relativePath), "utf8").replace(/\r\n/g, "\n");
+}
+
+const ci = readNormalized(".github/workflows/ci.yml");
+const codeql = readNormalized(".github/workflows/codeql.yml");
 
 const errors = [];
 
@@ -38,13 +42,13 @@ requireText("CI workflow", ci, "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530
 requireText("CI workflow", ci, "sha256sum -c -");
 requireText("CI workflow", ci, "./actionlint -color");
 requireText("CI workflow", ci, "docker-image-security:");
-requireText("CI workflow", ci, "aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8");
-requireText("CI workflow", ci, "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5");
+requireText("CI workflow", ci, "aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25");
+requireText("CI workflow", ci, "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0");
 requireText("CI workflow", ci, "fetch-depth: 0");
-requireText("CI workflow", ci, "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020");
-requireText("CI workflow", ci, "gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc");
-requireText("CI workflow", ci, "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
-requireText("CodeQL workflow", codeql, "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5");
+requireText("CI workflow", ci, "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020");
+requireText("CI workflow", ci, "gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7");
+requireText("CI workflow", ci, "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
+requireText("CodeQL workflow", codeql, "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0");
 requireText("CodeQL workflow", codeql, "github/codeql-action/init@1ad29ea4a422cce9a242a9fae469541dcd08addc");
 requireText("CodeQL workflow", codeql, "github/codeql-action/analyze@1ad29ea4a422cce9a242a9fae469541dcd08addc");
 requireText("CodeQL workflow", codeql, "continue-on-error: true");
