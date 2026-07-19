@@ -24,7 +24,8 @@
   },
   // Hyperdrive: id はプレースホルダー。`wrangler hyperdrive create <name> --connection-string="$CODIP_MIGRATION_DATABASE_URL"`
   // を実ターゲットのNeon direct endpointに対して実行し、払い出されたIDへ置き換える (人間が実施)。
-  // Prisma Client 側は driverAdapters preview feature + @prisma/adapter-pg を導入済み。
+  // Prisma Client 側は @prisma/adapter-pg (driver adapter) を導入済み (src/lib/db.ts)。
+  // Prisma 6.15+ では driverAdapters の previewFeatures 指定は撤廃済みのため schema.prisma に記載不要。
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
