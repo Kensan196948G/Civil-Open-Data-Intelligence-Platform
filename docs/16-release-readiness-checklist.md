@@ -7,7 +7,7 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | 区分 | コマンド | 合格条件 |
 | --- | --- | --- |
 | 静的解析 | `npm run lint` | エラー0件 |
-| 型検査 | `npx tsc --noEmit` | エラー0件 |
+| 型検査 | `npm run typecheck` | Prisma Client生成を含めてエラー0件 |
 | 単体テスト | `npm run test` | 全テスト成功 |
 | 依存監査 | `npm audit --audit-level=moderate` | moderate以上0件 |
 | DB事前確認 | `DATABASE_URL=file:./dev.db npm run db:check-duplicates` | 公式URL重複0件 |
@@ -31,7 +31,7 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | Cloudflare production deploy固定 | `npm run cf:deploy:production` | `release:validate-env:production-target`、`release:production-evidence -- --strict`、`release:check-production-placeholders -- --env production`、`cf:build`、`release:check-cloudflare-build-artifact`、OpenNext deploy `--env production` を同一コマンドで実行。人間承認済みCI/CD経路または明示操作のみ |
 | ログ保持dry-run | `npm run db:prune -- --dry-run` | 取得ログ・サンプル保持期間の削除候補を確認できる |
 | 本番ビルド | `npm run build` | 成功 |
-| リリースゲート | `npm run release:gate` | ブラウザ非依存ゲートが一括成功 |
+| リリースゲート | `npm run release:gate` | fresh環境のSQLite migration preflightを含め、ブラウザ非依存ゲートが一括成功 |
 | 起動スモーク | `CODIP_ADMIN_TOKEN=... npm run release:smoke -- --base-url http://127.0.0.1:3100` | 主要画面、未認証管理UI非表示、CSP/HSTS、監視API、OpenAPI v1 schema、seed最小件数、公開DTO、後続API契約、v1 warning契約、地点照会の不正入力、管理APIガード、管理セッションCSRF、悪性URL複数種の登録拒否が成功 |
 | 実ターゲットread-onlyスモーク | `npm run release:smoke -- --read-only --base-url https://civilopendata.mirai-dx-platform.com` | staging/production DBへ書き込まず、主要画面、監視API、後続API、管理ガードを確認 |
 | Docker preview | GitHub Actions `docker-preview` job | production runner / preview runner build、production runner + PostgreSQL smoke、SQLite/PostgreSQL compose config、preview起動、ready、release smokeが成功 |

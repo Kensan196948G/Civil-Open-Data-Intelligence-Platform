@@ -2,14 +2,21 @@
 
 const { spawnSync } = require("node:child_process");
 
+function quoteShellArg(value) {
+  if (/^[A-Za-z0-9_./:@=:-]+$/.test(value)) return value;
+  return `"${value.replace(/"/g, '\\"')}"`;
+}
+
 function run(name, command, args, options = {}) {
   console.log(`\n[release-gate] ${name}`);
-  const result = spawnSync(command, args, {
+  const isWindows = process.platform === "win32";
+  const result = spawnSync(isWindows ? [command, ...args].map(quoteShellArg).join(" ") : command, isWindows ? [] : args, {
     stdio: "inherit",
-    shell: false,
+    shell: isWindows,
     env: { ...process.env, ...(options.env ?? {}) },
   });
   if (result.status !== 0) {
+    if (result.error) console.error(`[release-gate] ${result.error.message}`);
     console.error(`[release-gate] FAILED: ${name}`);
     process.exit(result.status ?? 1);
   }
@@ -20,6 +27,9 @@ function main() {
   const sqliteEnv = { DATABASE_URL: "file:./dev.db" };
 
   run("dependency audit", "npm", ["audit", "--audit-level=moderate"]);
+  run("sqlite migration preflight", "npm", ["run", "db:migrate"], {
+    env: sqliteEnv,
+  });
   run("duplicate officialUrl preflight", "npm", ["run", "db:check-duplicates"], {
     env: sqliteEnv,
   });
@@ -59,7 +69,7 @@ function main() {
     },
   });
   run("lint", "npm", ["run", "lint"]);
-  run("typecheck", "npx", ["tsc", "--noEmit"]);
+  run("typecheck", "npm", ["run", "typecheck"]);
   run("unit tests", "npm", ["run", "test"]);
   run("production build", "npm", ["run", "build"], { env: sqliteEnv });
 
