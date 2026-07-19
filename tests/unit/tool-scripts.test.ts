@@ -35,6 +35,21 @@ describe("tool scripts", () => {
     expect(result.stderr).toContain("invalid assignment");
   });
 
+  it("reports a spawn failure distinctly from a non-zero exit code", () => {
+    const result = spawnSync(
+      process.execPath,
+      [withEnvScript, "CODIP_TEST_VALUE=x", "--", "codip-definitely-not-a-real-command"],
+      {
+        cwd: process.cwd(),
+        env: { PATH: process.env.PATH ?? "", NODE_ENV: "test" },
+        encoding: "utf8",
+      },
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('failed to spawn "codip-definitely-not-a-real-command"');
+  });
+
   it("rejects unresolved production Cloudflare placeholders", () => {
     const result = spawnSync(process.execPath, [placeholderScript, "--env", "production"], {
       cwd: process.cwd(),

@@ -34,6 +34,11 @@ function main() {
     env,
   });
 
+  if (result.error) {
+    console.error(`[with-env] failed to spawn "${command}": ${result.error.message}`);
+    process.exit(1);
+  }
+
   process.exit(result.status ?? 1);
 }
 

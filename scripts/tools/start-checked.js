@@ -9,6 +9,10 @@ function run(command, args) {
     shell: process.platform === "win32",
     env: process.env,
   });
+  if (result.error) {
+    console.error(`[start-checked] failed to spawn "${command}": ${result.error.message}`);
+    process.exit(1);
+  }
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
