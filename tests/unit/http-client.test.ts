@@ -20,6 +20,7 @@ function jsonResponse(body: string, init: ResponseInit = {}): Response {
 
 beforeEach(() => {
   mockFetch.mockReset();
+  vi.unstubAllGlobals();
 });
 
 describe("fetchWithGuard", () => {
@@ -79,6 +80,17 @@ describe("fetchWithGuard", () => {
     const result = await fetchWithGuard("https://rebinding.example.com/");
     expect(result.success).toBe(false);
     expect(result.errorType).toBe("blocked_url");
+  });
+
+  it("Cloudflare Workers runtimeでは未ピン留めfetchへ落とさず明示停止する", async () => {
+    vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
+
+    const result = await fetchWithGuard("https://example.com/api");
+
+    expect(result.success).toBe(false);
+    expect(result.errorType).toBe("unsupported_runtime");
+    expect(result.errorMessage).toContain("接続時DNSピン留め");
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it("401 は auth_required に分類する", async () => {

@@ -215,14 +215,14 @@ flowchart TD
 | 1 | Neon project / branch の作成 | 課金発生・リソース作成 |
 | 2 | `wrangler hyperdrive create` と `wrangler.jsonc` の id 置換 | 課金発生・リソース作成 |
 | 3 | `wrangler secret put` による秘密情報登録 | Secrets の登録 |
-| 4 | Issue #18 の解消 | Workers 上で外部URL取得とDB接続が動作しないため |
+| 4 | Issue #18 の実Cloudflare/Neon証跡 | Workers 上の外部URL取得は接続時DNSピン留め不可のため `unsupported_runtime` で安全停止。DB接続はHyperdrive adapter構成で実ターゲット証跡待ち |
 | 5 | `infra/cloudflare/` の `terraform apply` | 本番アクセス制御の変更 |
 | 6 | `wrangler deploy --env production` | 本番デプロイ |
 
 ### ⚠️ 残課題
 
 - **Codex review (通常・対抗)**: `disable-model-invocation` により自律 CTO から起動不可。人間実行待ち ([Issue #19](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/19))
-- **Cloudflare Workers ランタイム互換**: [Issue #18](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/18)。SSRF事前DNS検証は `dns.promises.resolve4` / `resolve6` へ変更済み。PostgreSQL Prisma Clientは `@prisma/adapter-pg` によりHyperdrive `connectionString` を消費できる構成へ変更済み。Prisma 6.19系ではdriver adapterのpreview flagは不要。残りは接続時ピン留め側のWorkers最終設計と実Cloudflare/Neon証跡
+- **Cloudflare Workers ランタイム互換**: [Issue #18](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/18)。SSRF事前DNS検証は `dns.promises.resolve4` / `resolve6` へ変更済み。接続時DNSピン留めはNode.js/Undiciで継続し、Cloudflare Workersでは同等保証ができないため外部URL取得を `unsupported_runtime` で安全停止する。PostgreSQL Prisma Clientは `@prisma/adapter-pg` によりHyperdrive `connectionString` を消費できる構成へ変更済み。残りは実Cloudflare/Neon証跡
 - **main の branch protection 未設定**: 「CI 未通過 merge 禁止」「main 直 push 禁止」が技術的に強制されていない。PR #17 merge 前の設定を推奨
 - **PR #17 Draft → Ready**: Codex レビュー結果待ち。main への merge は人間判断待ち。**merge すると `docker-supply-chain` job が GHCR へイメージを push する** (リポジトリが private のためイメージも既定 private)
 

@@ -42,7 +42,7 @@ Invoke-WebRequest -Uri "http://192.168.0.185:3100/api/admin/audit-events" -UseBa
 | --- | --- |
 | `/api/ready` 503 | DB接続文字列、migration、Neon branch、Hyperdrive statusを確認 |
 | 管理APIが401でない | Access/proxy secret/`CODIP_DISABLE_TOKEN_AUTH`/admin token設定を確認 |
-| 外部URL取得が全失敗 | Issue #18 残課題、Workers runtime、DNSピン留め、SSRF guardを確認 |
+| 外部URL取得が全失敗 | Workers runtimeでは `unsupported_runtime` が想定される。Node previewで失敗する場合はDNSピン留め、SSRF guard、対象URL、外部ネットワークを確認 |
 | レスポンス遅延 | DB slow query、外部APIタイムアウト、Cloudflare logsを確認 |
 
 ## 5. ロールバック判断

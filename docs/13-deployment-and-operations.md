@@ -15,7 +15,7 @@ MVPではローカル、CI、Docker previewで品質を確認する。2026-07-19
 
 ただし以下は未解決のアプリケーションコード/実リソース側の制約であり、Workers本番切替前に解消または証跡化が必須:
 
-- `src/lib/url-guard.ts` の事前DNS検証は `resolve4` / `resolve6` へ変更済み。接続時ピン留め側の `src/lib/http-client.ts` は引き続き `dns.lookup()` 依存のため、Workers上では外部URL取得機能がfail-closedする可能性がある
+- `src/lib/url-guard.ts` の事前DNS検証は `resolve4` / `resolve6` へ変更済み。接続時ピン留めはNode.js/Undici Agentで実施する。Cloudflare Workersでは公式仕様上 `dns.lookup` が未実装で、同等の接続時ピン留めを保証できないため、`src/lib/http-client.ts` はWorkers runtimeを検知した場合に外部URL取得を `unsupported_runtime` として明示的に停止する
 - `wrangler.jsonc` の production custom domain は `civilopendata.mirai-dx-platform.com` に固定済み。production `workers_dev=false` により本番の `*.workers.dev` 直公開経路は使わない。ただし Hyperdrive ID は placeholder であり、Cloudflare Worker / Hyperdrive / Access / Custom Domain / Neon project の実リソース作成とSecret登録は人間承認後に行う
 
 Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、Cloudflareが現在推奨するNext.jsデプロイ経路が `@opennextjs/cloudflare` アダプタ経由のWorkersであり、レガシーの `@cloudflare/next-on-pages` ではないため。取得処理は将来Cloudflare Cron TriggersとWorkersへ分離する。
@@ -154,6 +154,8 @@ Prisma schemaはSQLite用 `prisma/schema.prisma` とPostgreSQL用 `prisma/postgr
 | `/api/openapi` | API契約の公開確認 | `200` 以外またはOpenAPIバージョン欠落 |
 
 デプロイ直後は、画面表示に加えて `/api/ready` を確認し、DB migrationと接続設定が正しく反映されていることを確認する。`release:smoke` は各HTTPリクエストにタイムアウトを設け、CI側の `curl` も `--connect-timeout` / `--max-time` を指定する。staging/production相当の実ターゲットへ向ける場合は `--read-only` を付け、管理トークン付きの書き込み系negative testは使い捨てCI/preview DBでのみ実行する。
+
+Cloudflare Workers本番では、データソース接続確認・サンプル取得・外部標高APIなどの外部URL取得系は、接続時DNSピン留めを同等に保証できる実装または専用egress設計が入るまで `unsupported_runtime` として停止する。これはSSRF防御を弱めないための安全側制御であり、台帳閲覧、検索、後続API、DB read/write、監視APIとは切り分けて扱う。
 
 2026-07-19 の共有preview確認では、ブラウザトップ画面表示、コンソールerror/warn 0件、`/api/fetch-logs` 未認証401、`/api/admin/audit-events` GET 405 を確認した。これはread-only一般画面は公開、運用ログ・管理系は認証/許可メソッドで保護する現行方針と一致する。
 

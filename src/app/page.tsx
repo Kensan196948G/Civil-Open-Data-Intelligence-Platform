@@ -24,6 +24,7 @@ const ERROR_TYPE_MESSAGES: Record<string, string> = {
   parse_error: "レスポンス形式を判定できませんでした",
   rate_limited: "アクセス制限の可能性があります",
   blocked_url: "取得が許可されていないURLです",
+  unsupported_runtime: "この実行環境では安全な外部取得を実行できません",
   unknown: "不明なエラーが発生しました",
 };
 
