@@ -12,6 +12,7 @@
     "start": "next start",
     "start:checked": "node scripts/tools/start-checked.js",
     "lint": "eslint .",
+    "typecheck": "npm run db:generate && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

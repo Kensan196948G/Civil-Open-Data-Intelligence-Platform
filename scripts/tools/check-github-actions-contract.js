@@ -10,6 +10,7 @@ function readNormalized(relativePath) {
 
 const ci = readNormalized(".github/workflows/ci.yml");
 const codeql = readNormalized(".github/workflows/codeql.yml");
+const packageJson = readNormalized("package.json");
 
 const errors = [];
 
@@ -25,6 +26,7 @@ requireText("CI workflow", ci, "workflow_dispatch:");
 requireText("CI workflow", ci, "production-target-env:");
 requireText("CI workflow", ci, "npm run release:validate-env:production-target");
 requireText("CI workflow", ci, "npm run release:check-audit-contract");
+requireText("CI workflow", ci, "npm run typecheck");
 requireText("CI workflow", ci, "npm run cf:build");
 requireText("CI workflow", ci, "npm run release:check-cloudflare-build-artifact");
 requireText("CI workflow", ci, "CODIP_CLOUDFLARE_ACCESS_EVIDENCE");
@@ -52,6 +54,7 @@ requireText("CodeQL workflow", codeql, "actions/checkout@9c091bb21b7c1c1d1991bb9
 requireText("CodeQL workflow", codeql, "github/codeql-action/init@1ad29ea4a422cce9a242a9fae469541dcd08addc");
 requireText("CodeQL workflow", codeql, "github/codeql-action/analyze@1ad29ea4a422cce9a242a9fae469541dcd08addc");
 requireText("CodeQL workflow", codeql, "continue-on-error: true");
+requireText("package.json", packageJson, "\"typecheck\": \"npm run db:generate && tsc --noEmit\"");
 
 const forbiddenPatterns = [
   "pull_request_target:",

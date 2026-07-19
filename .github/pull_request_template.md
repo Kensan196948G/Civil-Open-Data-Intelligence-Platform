@@ -5,7 +5,7 @@
 ## 確認
 
 - [ ] `npm run lint`
-- [ ] `npx tsc --noEmit`
+- [ ] `npm run typecheck`
 - [ ] `npm run test`
 - [ ] `npm audit --audit-level=moderate`
 - [ ] `npm run release:gate`

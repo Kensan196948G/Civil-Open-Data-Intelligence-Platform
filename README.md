@@ -186,7 +186,7 @@ flowchart TD
 | 区分 | コマンド | 結果 |
 | --- | --- | --- |
 | 静的解析 | `npm run lint` | 🟢 0 errors |
-| 型検査 | `npx tsc --noEmit` | 🟢 0 errors |
+| 型検査 | `npm run typecheck` | 🟢 0 errors |
 | 単体テスト | `npm run test` | 🟢 222 passed / 21 files |
 | 契約チェック | `release:check-{v1-contract,doc-api-contract,openapi-coverage,docker-contract,cloudflare-contract,github-actions-contract}` | 🟢 all OK (19 API routes covered) |
 | 本番ビルド | `npm run build` | 🟢 success (27 routes) |
@@ -294,7 +294,7 @@ cmd /c "pushd \\192.168.0.185\kensan\Projects\Mirai-DX-Project\Civil-Open-Data-I
 | `npm run start:checked` | 環境変数検査後に本番サーバー起動 |
 | `npm run build` | 本番ビルド |
 | `npm run lint` | 静的チェック |
-| `npx tsc --noEmit` | 型検査 |
+| `npm run typecheck` | Prisma Client生成を含む型検査 |
 | `npm run test` | 単体テスト |
 | `npm run test:e2e` | Playwright E2E。保護preview相当で管理セッションも確認 |
 | `npm run release:gate` | audit、契約、schema、env、lint、型、単体、build |
