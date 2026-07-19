@@ -118,7 +118,7 @@ MVPのCSPはNext.jsとLeaflet/地理院タイルを動かすため `unsafe-inlin
 
 | 項目 | 現行方針 |
 | --- | --- |
-| CodeQL | GitHub Actionsで実行し、2026-07-13時点のPR #17ではworkflow successを確認済み |
+| CodeQL | GitHub Actionsで実行。2026-07-19T15:41Z (2026-07-20 JST) のmain commit `1d66e48` で CodeQL run `29693346235` success。ただしworkflowはcode scanning設定差異でrelease gate全体を止めないために `continue-on-error` を持つ。SASTをmerge必須条件にする前にcode scanning alert状態と `continue-on-error` の扱いを再確認する |
 | Code scanning gate | リポジトリ側のcode scanning設定差異でCI全体を止めないよう、現行workflowは `continue-on-error` を含む |
 | Release前条件 | SASTを必須gateにする場合は、GitHub code scanningを有効化し、alert状態確認または `continue-on-error` 撤廃を判断する |
 | Docker scan | `docker-image-security` jobでproduction runner imageをTrivy High/Critical CVE検査にかける |

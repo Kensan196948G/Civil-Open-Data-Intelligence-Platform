@@ -101,21 +101,21 @@ CIではpreview検証に加え、SSL付きPostgreSQL URLの合成値で `npm run
 
 ## 2.3 記録済みリリース証跡
 
-2026-07-13時点のDraft PR #17で取得したgreen baselineを記録する。最新のPR head状態はGitHub PR checksを正とし、実ターゲットへのrelease時は `docs/16-release-readiness-checklist.md` の実ターゲット記録欄へ追記する。
+2026-07-19T15:41Z (2026-07-20 JST) に確認したmain最新証跡を正とする。2026-07-13時点のDraft PR #17証跡は履歴baselineとして残すが、現在のrelease gate判断はmain commit `1d66e48` のCI/CodeQL結果を優先する。実ターゲットへのrelease時は `docs/16-release-readiness-checklist.md` の実ターゲット記録欄へCloudflare/Neon Secrets/Variables、GHCR digest、read-only smoke結果を追記する。
 
 | 項目 | 状態 |
 | --- | --- |
-| branch | `agent/release-readiness-postgis-ci` |
-| commit | `e2c007f4772235b77f9228805714d8aee4f8404d` |
-| CI run | `29232542066` success |
-| CodeQL run | `29232541952` success |
+| branch | `main` |
+| commit | `1d66e4831dd0a24a22335c80f93f2aecaa5a41e3` |
+| CI run | `29693346265` success |
+| CodeQL run | `29693346235` success |
 | verify | pass |
 | e2e | pass |
 | postgresql-compat | pass。PostGIS migration、seed、`/api/v1` standard_records modeを確認 |
 | docker-preview | pass。PostgreSQL/PostGIS preview-runnerとproduction runner smokeを確認 |
 | docker-image-security | pass。Trivy High/Critical CVE checkを確認 |
 | production-target-env | skipped。実staging/production Secretsを使う `workflow_dispatch` 専用 |
-| docker-supply-chain | skipped。`main` push後のGHCR push、SBOM、provenance専用 |
+| docker-supply-chain | pass。main push後のGHCR image push、SBOM attestation、`mode=max` provenanceを確認 |
 
 CodeQL workflowは成功しているが、現在のworkflowはリポジトリのcode scanning設定差異でrelease gate全体を止めないために `continue-on-error` を持つ。SASTをmerge必須条件として扱う前には、GitHub code scanningを有効化し、alert状態の確認または `continue-on-error` の撤廃をrelease判断へ含める。
 

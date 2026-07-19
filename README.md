@@ -136,24 +136,24 @@ flowchart TD
 
 ## 🚦 記録済みリリースゲート証跡
 
-2026-07-13時点のDraft PR #17で取得したgreen baselineです。最新のPR headに対する状態はGitHub PR checksを正とし、run IDはリリース時に [docs/16-release-readiness-checklist.md](docs/16-release-readiness-checklist.md) へ追記します。
+2026-07-19T15:41Z (2026-07-20 JST) に確認したmain最新証跡です。実Cloudflare/Neon targetの検証はまだ未実行のため、production target envだけは `workflow_dispatch` で承認済みSecrets/Variablesを読み込んで別途記録します。
 
 | 区分 | 状態 | 証跡 |
 | --- | --- | --- |
-| PR | 🟢 Draft PR #17 | `agent/release-readiness-postgis-ci` |
-| commit | 🟢 `e2c007f` | `align docker smoke admin token` |
-| CI run | 🟢 success | `29232542066` |
-| CodeQL run | 🟢 success | `29232541952` |
+| branch | 🟢 main | release hardening + dependency maintenance |
+| commit | 🟢 `1d66e48` | `build(deps): bump app dependencies` |
+| CI run | 🟢 success | `29693346265` |
+| CodeQL run | 🟢 success | `29693346235` |
 | verify | 🟢 pass | lint、型、単体、契約、build、smoke |
 | e2e | 🟢 pass | Playwright CI browser |
 | postgresql-compat | 🟢 pass | PostGIS migration、seed、`/api/v1` standard_records smoke |
 | docker-preview | 🟢 pass | preview-runner migration/seed、production runner smoke |
 | docker-image-security | 🟢 pass | Trivy High/Critical CVE check |
 | production-target-env | ⚪ skipped | `workflow_dispatch` で実staging/production Secretsを読む手動ゲート |
-| docker-supply-chain | ⚪ skipped | `main` push後のGHCR push、SBOM、provenance gate |
-| CodeRabbit | ⚪ draft skipped | PRをReady化後、または `@coderabbitai review` でレビュー対象 |
+| docker-supply-chain | 🟢 pass | GHCR image push、SBOM attestation、`mode=max` provenance |
+| CodeRabbit | 🟢 pass | PR #52 / #56 success。オープンPRなし |
 
-⚠️ `production-target-env` と `docker-supply-chain` はPR greenだけでは完了しません。Cloudflare/Neon実ターゲット検証とGHCR供給網証跡は、staging/production移行時に別途記録します。
+⚠️ `production-target-env` はmain greenだけでは完了しません。Cloudflare/Neon実ターゲット検証は、staging/production移行時に承認済みSecrets/Variablesを読み込んで別途記録します。
 
 ---
 
@@ -176,11 +176,12 @@ flowchart TD
 | Workers互換 | SSRF事前DNS検証を `dns.lookup` から `resolve4` / `resolve6` へ変更。Workers上のfail-closed範囲を縮小 |
 | 標準レコード | `standardRecordsAvailable()` を60秒TTL + single-flight化し、標準データのロールバック/空化と並行アクセス競合へ対応 |
 | 管理認証 | `CODIP_DISABLE_TOKEN_AUTH=true` を追加。Cloudflare Access等のproxy authを正とする環境で、直接token経路と、tokenから導出される署名済みセッションCookieの両方を無効化できる |
+| 依存関係 | PR #52で `undici` 8.7.0、`@eslint/eslintrc` 3.3.6、`autoprefixer` 10.5.4、`eslint` 9.39.5、`tailwindcss` 3.4.19、`vitest` 3.2.7、`wrangler` 4.112.0などへ更新。main CI/CodeQL成功 |
 | テスト | URL guard、標準レコード可用性、管理認証、環境変数検証、管理セッションAPIの回帰テストを追加 |
 
-## ✅ リリース準備状況 (2026-07-18 再検証)
+## ✅ リリース準備履歴 (2026-07-18 再検証)
 
-`branch agent/release-readiness-postgis-ci` (PR #17 Draft, commit `1f1d570`) を 2026-07-18 に再検証した結果。すべての単体ゲートがgreen、PostgreSQL/PostGIS Docker previewの起動とruntime smokeも成功しました。GitHub Actions CI も同一 commit に対して全 job green です。
+`branch agent/release-readiness-postgis-ci` (当時のPR #17 Draft, commit `1f1d570`) を 2026-07-18 に再検証した履歴です。現在のリリース判断は上記のmain最新証跡を正とします。
 
 | 区分 | コマンド | 結果 |
 | --- | --- | --- |
@@ -221,10 +222,9 @@ flowchart TD
 
 ### ⚠️ 残課題
 
-- **Codex review (通常・対抗)**: `disable-model-invocation` により自律 CTO から起動不可。人間実行待ち ([Issue #19](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/19))
 - **Cloudflare Workers ランタイム互換**: [Issue #18](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/18)。SSRF事前DNS検証は `dns.promises.resolve4` / `resolve6` へ変更済み。接続時DNSピン留めはNode.js/Undiciで継続し、Cloudflare Workersでは同等保証ができないため外部URL取得を `unsupported_runtime` で安全停止する。PostgreSQL Prisma Clientは `@prisma/adapter-pg` によりHyperdrive `connectionString` を消費できる構成へ変更済み。残りは実Cloudflare/Neon証跡
-- **main の branch protection 未設定**: 「CI 未通過 merge 禁止」「main 直 push 禁止」が技術的に強制されていない。PR #17 merge 前の設定を推奨
-- **PR #17 Draft → Ready**: Codex レビュー結果待ち。main への merge は人間判断待ち。**merge すると `docker-supply-chain` job が GHCR へイメージを push する** (リポジトリが private のためイメージも既定 private)
+- **main branch protection**: 現在は有効。required checksは `verify` / `e2e` / `postgresql-compat` / `docker-preview` / `docker-image-security` / `analyze`、strict=true、admin enforcement=true。今後はrequired review数やCode Ownersの要否を運用成熟度に合わせて判断する
+- **Cloudflare/Neon実ターゲット証跡未取得**: DNS、Custom Domain、Access、Secrets、Hyperdrive、Neon branch、production smoke、監視/バックアップ証跡は人間承認後に取得
 
 🔒 **本番リリース・本番デプロイは未実施**。リリース直前の完成状態まで整え、承認待ちで停止しています。
 切り戻し手順は [`docs/runbooks/rollback.md`](docs/runbooks/rollback.md) を参照してください。
