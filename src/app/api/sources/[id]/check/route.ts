@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminRequest } from "@/lib/admin-auth";
-import { recordAudit } from "@/lib/audit";
+import { auditLogCreateData } from "@/lib/audit";
 import { ERROR_TYPE_MESSAGES } from "@/lib/constants";
 import { sanitizeUrl } from "@/lib/http-client";
 import { redactOperationalText } from "@/lib/operational-dto";
@@ -37,8 +37,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
     : null;
 
   const now = new Date();
-  const [log] = await prisma.$transaction([
-    prisma.fetchLog.create({
+  // 外部fetchは完了済みなので、DB保存と監査証跡だけを短いtransactionで束ねる。
+  const log = await prisma.$transaction(async (tx) => {
+    const log = await tx.fetchLog.create({
       data: {
         dataSourceId: source.id,
         executionType: "check",
@@ -53,25 +54,27 @@ export async function POST(request: NextRequest, context: RouteContext) {
         errorMessage,
         note: `connector: ${connector.name}`,
       },
-    }),
-    prisma.dataSource.update({
+    });
+    await tx.dataSource.update({
       where: { id: source.id },
       data: {
         lastCheckedAt: now,
         status: result.success ? "active" : "unstable",
       },
-    }),
-  ]);
-
-  // 失敗時は backfill (migration) と同じ分類 (接続失敗検知 + エラー種別詳細) を使い、
-  // 生成時期によって audit_logs の action ラベルが割れないようにする
-  await recordAudit({
-    action: result.success ? "接続確認実行" : "接続失敗検知",
-    target: source.name,
-    detail: result.success
-      ? "疎通確認 成功"
-      : (ERROR_TYPE_MESSAGES[result.errorType ?? "unknown"] ?? "疎通確認 失敗"),
-    level: result.success ? "success" : "danger",
+    });
+    // 失敗時は backfill (migration) と同じ分類 (接続失敗検知 + エラー種別詳細) を使い、
+    // 生成時期によって audit_logs の action ラベルが割れないようにする。
+    await tx.auditLog.create({
+      data: auditLogCreateData({
+        action: result.success ? "接続確認実行" : "接続失敗検知",
+        target: source.name,
+        detail: result.success
+          ? "疎通確認 成功"
+          : (ERROR_TYPE_MESSAGES[result.errorType ?? "unknown"] ?? "疎通確認 失敗"),
+        level: result.success ? "success" : "danger",
+      }),
+    });
+    return log;
   });
 
   return NextResponse.json({

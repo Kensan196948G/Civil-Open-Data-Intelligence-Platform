@@ -161,6 +161,7 @@ MVPの地図は2Dに限定する。
 | `rate_limited` | 制限超過 | 時間を置いて再実行してください |
 | `parse_error` | 形式解析失敗 | レスポンス形式を確認してください |
 | `network` | DNS、TLS、接続失敗 | 接続先またはネットワークを確認してください |
+| `unsupported_runtime` | 実行環境で安全な外部取得を保証できない | Cloudflare Workersでは専用egress設計またはNode previewで確認してください |
 | `unknown` | その他 | 管理者がログを確認してください |
 
 ## 11. 権限仕様

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminRequest } from "@/lib/admin-auth";
-import { recordAudit } from "@/lib/audit";
+import { auditLogCreateData } from "@/lib/audit";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -17,12 +17,16 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   if (!existing) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
-  await prisma.tag.delete({ where: { id } });
-  await recordAudit({
-    action: "タグ削除",
-    target: existing.name,
-    detail: "タグを削除",
-    level: "danger",
+  await prisma.$transaction(async (tx) => {
+    await tx.tag.delete({ where: { id } });
+    await tx.auditLog.create({
+      data: auditLogCreateData({
+        action: "タグ削除",
+        target: existing.name,
+        detail: "タグを削除",
+        level: "danger",
+      }),
+    });
   });
   return NextResponse.json({ ok: true });
 }

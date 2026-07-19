@@ -21,12 +21,19 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | GitHub Actions契約確認 | `npm run release:check-github-actions-contract` | actionlint、危険なworkflow trigger、Trivy action固定、主要ActionsのSHA固定が妥当 |
 | env検証 | `npm run release:validate-env:preview` | 共有プレビュー必須設定が妥当 |
 | production env形状検証 | `npm run release:gate` 内の合成production env | PostgreSQL/PostGIS前提、外部DBのSSL指定、本番管理トークン強度、SQLite/未対応DB URL/起動時migration禁止の検査ロジックを確認 |
-| production実ターゲットenv検証 | 実デプロイ環境のSecrets/Variablesを読み込んで `npm run release:validate-env:production-target` | `CODIP_DEPLOY_TARGET`、実HTTPS `CODIP_BASE_URL`、Cloudflare Hyperdrive、Neon branch、migration direct URL、外部PostgreSQL SSL、管理トークンまたはProxy認証設定、起動時migration禁止が実値で妥当 |
+| production実ターゲットenv検証 | 実デプロイ環境のSecrets/Variablesを読み込んで `CODIP_BASE_URL=https://civilopendata.mirai-dx-platform.com npm run release:validate-env:production-target` | `CODIP_DEPLOY_TARGET`、実HTTPS `CODIP_BASE_URL`、Cloudflare Hyperdrive、Neon branch、migration direct URL、外部PostgreSQL SSL、管理トークンまたはProxy認証設定、起動時migration禁止が実値で妥当 |
+| production実ターゲット証跡 | 実デプロイ環境のSecrets/Variablesを読み込んで `npm run release:production-evidence -- --strict` | Secret値を出力せず、Cloudflare/Neon本番Evidence入力、Access、監視、バックアップ・リストア、wrangler本番route、Custom Domain、`workers_dev=false`、Observability、Hyperdrive ID解決状態、未充足項目をMarkdownで記録 |
+| Access証跡 | `release:production-evidence -- --strict` 内の `CODIP_CLOUDFLARE_ACCESS_EVIDENCE` | Cloudflare Access application domain、policy名、allowlist summary、proxy secret設定済み証跡が記録済み |
+| 監視・アラート証跡 | `release:production-evidence -- --strict` 内の Monitoring Evidence | 通知先、Cloudflare alert policy、Workers Logs / Traces、Neon monitoring、read-only smoke監視、rollback ownerが記録済み |
+| バックアップ・リストア証跡 | `release:production-evidence -- --strict` 内の Backup / Restore Evidence | Neon PITR履歴ウィンドウ、restore rehearsalまたはrollback drill、復旧確認担当が記録済み |
+| Cloudflare placeholder検査 | `npm run release:check-production-placeholders -- --env production` | production Hyperdrive ID、Workers Custom Domain、`workers_dev=false`、`CODIP_BASE_URL` に未解決placeholderや本番URL不一致がない |
+| Cloudflare build artifact検査 | `npm run cf:build && npm run release:check-cloudflare-build-artifact` | OpenNext for CloudflareのWorker entrypoint (`.open-next/worker.js`) と静的assets (`.open-next/assets`) がdeploy前に生成済み |
+| Cloudflare production deploy固定 | `npm run cf:deploy:production` | `release:validate-env:production-target`、`release:production-evidence -- --strict`、`release:check-production-placeholders -- --env production`、`cf:build`、`release:check-cloudflare-build-artifact`、OpenNext deploy `--env production` を同一コマンドで実行。人間承認済みCI/CD経路または明示操作のみ |
 | ログ保持dry-run | `npm run db:prune -- --dry-run` | 取得ログ・サンプル保持期間の削除候補を確認できる |
 | 本番ビルド | `npm run build` | 成功 |
 | リリースゲート | `npm run release:gate` | ブラウザ非依存ゲートが一括成功 |
 | 起動スモーク | `CODIP_ADMIN_TOKEN=... npm run release:smoke -- --base-url http://127.0.0.1:3100` | 主要画面、未認証管理UI非表示、CSP/HSTS、監視API、OpenAPI v1 schema、seed最小件数、公開DTO、後続API契約、v1 warning契約、地点照会の不正入力、管理APIガード、管理セッションCSRF、悪性URL複数種の登録拒否が成功 |
-| 実ターゲットread-onlyスモーク | `npm run release:smoke -- --read-only --base-url https://...` | staging/production DBへ書き込まず、主要画面、監視API、後続API、管理ガードを確認 |
+| 実ターゲットread-onlyスモーク | `npm run release:smoke -- --read-only --base-url https://civilopendata.mirai-dx-platform.com` | staging/production DBへ書き込まず、主要画面、監視API、後続API、管理ガードを確認 |
 | Docker preview | GitHub Actions `docker-preview` job | production runner / preview runner build、production runner + PostgreSQL smoke、SQLite/PostgreSQL compose config、preview起動、ready、release smokeが成功 |
 | Docker image scan | GitHub Actions `docker-image-security` job | Trivyでproduction runner imageに固定可能なHigh/Critical CVEがない |
 | Docker supply chain | GitHub Actions `docker-supply-chain` job | GHCR image push、SBOM attestation、`mode=max` provenance、sha tag/digestが確認できる |
@@ -201,7 +208,7 @@ PR #17 branch (`agent/release-readiness-postgis-ci`) を自律 CTO が再検証�
 | 残課題 | 状態 |
 | --- | --- |
 | Codex review (通常・対抗) | 未実施。Issue #19 で人間依頼中、PR は Draft 維持 |
-| Issue #18 Workers 互換性 (`dns.lookup`, `driverAdapters`) | 未実装。ローカル/Docker preview 運用では影響なし、Workers 本番切替時の前提条件として P1 維持 |
+| Issue #18 Workers 互換性 (`dns.lookup`, `driverAdapters`) | 部分解消。SSRF事前DNS検証は `resolve4` / `resolve6` へ更新済み、PostgreSQL Prisma Clientは `@prisma/adapter-pg` へ更新済み。Prisma 6.19系ではdriver adapterのpreview flagは不要。Cloudflare Workersでは接続時DNSピン留めを同等保証できないため外部URL取得を `unsupported_runtime` で安全停止。残りは実Cloudflare/Neonリソース証跡と専用egress設計 |
 | PR #17 merge | 人間判断待ち (Codex レビュー結果 + main 承認) |
 | Cloudflare/Neon staging smoke 実環境証跡 | 未実施 (staging/production deploy 時に記録欄 §6 を使用) |
 
@@ -314,7 +321,7 @@ Cloudflare / Neon への実デプロイは、以下の**人間承認必須**の�
 | 1 | Neon project / branch の作成 | 課金発生・リソース作成 |
 | 2 | `wrangler hyperdrive create` と `wrangler.jsonc` の id 置換 | 課金発生・リソース作成 |
 | 3 | `wrangler secret put` による秘密情報登録 | Secrets の登録 |
-| 4 | Issue #18 の解消 (`dns.lookup` → `resolve4`/`resolve6`、`driverAdapters` 導入) | Workers 上で外部 URL 取得と DB 接続が動作しないため、本番切替の前提条件 |
+| 4 | Issue #18 の残件解消 (実Hyperdrive/Neon証跡、外部URL取得egress設計) | `resolve4` / `resolve6` 事前検証、Node接続時DNSピン留め、Workers runtime安全停止、`@prisma/adapter-pg` 導入は完了。実Cloudflare/Neon targetでのDB接続証跡は本番切替の前提条件 |
 | 5 | `infra/cloudflare/` の `terraform apply` (Access 保護) | 本番アクセス制御の変更 |
 | 6 | `wrangler deploy --env production` | 本番デプロイ |
 
@@ -370,12 +377,18 @@ Codex 指摘修正 (`51bdda5`) は CodeRabbit 未レビューのコード変更�
 | --- | --- |
 | 確認日 |  |
 | 確認者 |  |
+| Production URL | `https://civilopendata.mirai-dx-platform.com` |
 | commit SHA |  |
 | GHCR image tag |  |
 | image digest |  |
 | Neon branch |  |
 | migration ID |  |
 | 実ターゲット `release:validate-env:production-target` 結果 |  |
+| 実ターゲット `release:production-evidence -- --strict` 結果 |  |
+| 監視・アラートEvidence結果 |  |
+| バックアップ・リストアEvidence結果 |  |
+| 実ターゲット `release:check-production-placeholders -- --env production` 結果 |  |
+| `cf:build` / `release:check-cloudflare-build-artifact` 結果 |  |
 | `db:pg:check-drift` 結果 |  |
 | `db:pg:check-postgis-ddl` 結果 |  |
 | `/api/ready` 結果 |  |

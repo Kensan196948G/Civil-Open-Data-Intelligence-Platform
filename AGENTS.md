@@ -1,8 +1,8 @@
-# ClaudeCode Universal Supervisor / ClaudeOS v10.5 — Project CLAUDE.md
+# Codex Universal Supervisor / ClaudeOS v10.5 — Project AGENTS.md
 ## 📌 Goal-Driven + Supervisor + Agent Teams + Agent View 統合版
 
-このファイルは、Claude Code を **AI 開発組織 / AI 運用組織 / AI 品質組織** として運用するためのプロジェクト単位ポリシーです。  
-グローバル設定 `~/.claude/CLAUDE.md` の方針を継承しつつ、各プロジェクト固有の実行・品質・停止ルールを定義します。
+このファイルは、Codex を **AI 開発組織 / AI 運用組織 / AI 品質組織** として運用するためのプロジェクト単位ポリシーです。  
+グローバル設定 `~/.Codex/AGENTS.md` の方針を継承しつつ、各プロジェクト固有の実行・品質・停止ルールを定義します。
 
 ```text
 止まらない。ただし暴走しない。
@@ -13,7 +13,7 @@
 
 ## 📌 0. 最上位コンセプト
 
-Claude Code は単なる AI IDE ではなく、以下を統合した **AI Development Organization** として動作します。
+Codex は単なる AI IDE ではなく、以下を統合した **AI Development Organization** として動作します。
 
 ```text
 AI Development Organization
@@ -77,7 +77,7 @@ Improve
 |---|---|
 | グローバル設定 | 全プロジェクト共通の運用方針 |
 | プロジェクト設定 | 本ファイル。プロジェクト固有の運用方針。グローバルを上書き可 |
-| 正規構成 | `.claude/claudeos` |
+| 正規構成 | `.Codex/claudeos` |
 | 対象 | agents / skills / commands / rules / hooks / scripts / contexts / examples / mcp-configs / kernel docs |
 
 ---
@@ -166,7 +166,7 @@ Codex が利用可能な場合のみ実行します。
 | 状態 | 判断 |
 |---|---|
 | Codex 認証済み | review 強化レイヤーとして活用 |
-| Codex 未認証 / 利用不可 | スキップして Claude 単独で継続 |
+| Codex 未認証 / 利用不可 | スキップして Codex 単独で継続 |
 | リリース直前 | `/codex:setup --enable-review-gate` を検討 |
 
 ### 4.4 state.json / GitHub 状態確認
@@ -189,7 +189,7 @@ gh pr list --state open
 #### /goal 設計原則
 
 - 1 セッション 1 Goal を原則とする
-- 条件は Claude が会話内で判定できる形式にする
+- 条件は Codex が会話内で判定できる形式にする
 - `or stop after N turns` を必ず含める
 - `/goal clear` で即時クリアできる状態にする
 - `/goal` 単体で進捗確認する
@@ -283,7 +283,7 @@ CI 未通過 merge
 | ゴール管理 | `/goal` コマンド |
 | 統括 | Supervisor / CTO |
 | モード | Auto Mode + Agent Teams |
-| セッション監視 | Agent View `claude agents` |
+| セッション監視 | Agent View `Codex agents` |
 | 並列開発 | WorkTree |
 | 最大作業時間 | 5 時間厳守 |
 | Loop Guard | 最優先 |
@@ -650,7 +650,7 @@ Deploy Gate
 ### 12.4 Agent View
 
 ```powershell
-claude agents
+Codex agents
 ```
 
 | 状態 | 意味 |
@@ -739,8 +739,8 @@ Enter: Attach
 
 | パス | スコープ |
 |---|---|
-| `.claude/workflows/<name>.js` | プロジェクト共有 |
-| `~/.claude/workflows/<name>.js` | ユーザー個人 |
+| `.Codex/workflows/<name>.js` | プロジェクト共有 |
+| `~/.Codex/workflows/<name>.js` | ユーザー個人 |
 
 ---
 
@@ -1185,7 +1185,7 @@ Agent Teams 専用フックで品質を強制します。
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/claudeos/scripts/hooks/teammate-idle-gate.js",
+            "command": "node .Codex/claudeos/scripts/hooks/teammate-idle-gate.js",
             "continueOnBlock": true
           }
         ]
@@ -1197,7 +1197,7 @@ Agent Teams 専用フックで品質を強制します。
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/claudeos/scripts/hooks/task-created-gate.js",
+            "command": "node .Codex/claudeos/scripts/hooks/task-created-gate.js",
             "continueOnBlock": true
           }
         ]
@@ -1209,7 +1209,7 @@ Agent Teams 専用フックで品質を強制します。
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/claudeos/scripts/hooks/task-completed-gate.js",
+            "command": "node .Codex/claudeos/scripts/hooks/task-completed-gate.js",
             "continueOnBlock": true
           }
         ]
@@ -1219,7 +1219,7 @@ Agent Teams 専用フックで品質を強制します。
 }
 ```
 
-ブロック時は Claude に理由をフィードバックし、修正判断に活用します。
+ブロック時は Codex に理由をフィードバックし、修正判断に活用します。
 
 ---
 
@@ -1241,7 +1241,7 @@ Agent Teams 専用フックで品質を強制します。
 | `worktree.bgIsolation` | `none` | BG セッションで直接編集 |
 | `skillOverrides` | `off` / `user-invocable-only` / `name-only` | スキル起動制限 |
 | `parentSettingsBehavior` | `first-wins` | 親設定のマージ方式 |
-| `fallbackModel` | `["claude-opus-4-8", ...]` | 過負荷時に順に試すフォールバックモデル（最大3。無人 AutoRun の失敗耐性 / v10.7） |
+| `fallbackModel` | `["Codex-opus-4-8", ...]` | 過負荷時に順に試すフォールバックモデル（最大3。無人 AutoRun の失敗耐性 / v10.7） |
 
 ---
 
@@ -1259,7 +1259,7 @@ Agent Teams 専用フックで品質を強制します。
 | CI | `claudeos/ci/ci-manager.md` |
 | Evolution | `claudeos/evolution/self-evolution.md` |
 | CTO | `claudeos/executive/ai-cto.md` |
-| グローバル設定 | `~/.claude/CLAUDE.md` |
+| グローバル設定 | `~/.Codex/AGENTS.md` |
 
 ---
 
@@ -1296,7 +1296,7 @@ AutoRun（無人運用）は Monitor / Development / Verify / Improvement の 4 
 ```text
 state.json goal_rotation.current
 ↓
-launcher が .claude/goal/<NN-phase>.md を /goal として注入（4000字検証付き）
+launcher が .Codex/goal/<NN-phase>.md を /goal として注入（4000字検証付き）
 ↓
 セッション: フェーズの Scope 内のみ作業
 ↓
@@ -1327,15 +1327,4 @@ launcher finalize（goal-rotation.js）がポインタ前進 → supervisor が�
 | 🛠️ 手動セッションでの巡回 | ミッション /goal のまま `/loop 45m /phase-loop` を使用 |
 | 🧯 blocked 解除 | `goal_rotation.blocked = false`（on_retry_exhausted=block 採用時のみ発生） |
 
-参照: `.claude/goal/README.md`（ローテーション仕様・命名規則・字数制約）
-
-## 33. デプロイ対応表（Cloudflare / Neon）
-
-2026-07-19のユーザー指示により、Cloudflare zone と production subdomain を本プロジェクトへ記録する。ただし、本番影響を持つ Workers deploy、DNS/custom domain、Access、Secrets、Neon production branch、Hyperdrive config、課金プラン、認証方式の変更は、承認済みCI/CD経路または人間の明示操作でのみ実行する。Codex/ClaudeOS は設定・手順・証跡ゲートの整備と deploy ready 判定までを担当し、秘密情報を出力しない。
-
-| 項目 | 値 | 状態（2026-07-19確認） |
-| --- | --- | --- |
-| zone | mirai-dx-platform.com | active |
-| サブドメイン | civilopendata.mirai-dx-platform.com | wrangler.jsoncにroute定義済み（custom_domain）、DNS未登録 |
-| Worker | codip | wrangler.jsonc定義済み、未デプロイ |
-| Neonプロジェクト | 未確認 | 既存Neonプロジェクトに対応名なし |
+参照: `.Codex/goal/README.md`（ローテーション仕様・命名規則・字数制約）

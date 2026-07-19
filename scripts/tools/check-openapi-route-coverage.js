@@ -17,11 +17,10 @@ function walk(dir) {
 }
 
 function routePath(filePath) {
-  const relative = path.relative(path.join(root, "src/app"), filePath);
+  const relative = path.relative(path.join(root, "src/app"), filePath).replaceAll(path.sep, "/");
   return `/${relative}`
     .replace(/\/route\.ts$/, "")
-    .replace(/\[([^\]]+)\]/g, "{$1}")
-    .replaceAll(path.sep, "/");
+    .replace(/\[([^\]]+)\]/g, "{$1}");
 }
 
 const routePaths = walk(apiRoot).map(routePath).sort();

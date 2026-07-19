@@ -470,6 +470,42 @@ async function main() {
     pointTooManyCategories.text.slice(0, 200),
   );
 
+  const searchInvalidLimit = await fetchJson(`${baseUrl}/api/v1/records/search?limit=0`);
+  requireStatus(checks, "api:/api/v1/records/search invalid limit", searchInvalidLimit.response.status, 400);
+  requireCondition(
+    checks,
+    "v1 records search invalid limit payload",
+    searchInvalidLimit.json?.error?.code === "invalid_query",
+    searchInvalidLimit.text.slice(0, 200),
+  );
+
+  const layersInvalidKeyword = await fetchJson(`${baseUrl}/api/v1/layers?q=a`);
+  requireStatus(checks, "api:/api/v1/layers invalid keyword", layersInvalidKeyword.response.status, 400);
+  requireCondition(
+    checks,
+    "v1 layers invalid keyword payload",
+    layersInvalidKeyword.json?.error?.code === "invalid_query",
+    layersInvalidKeyword.text.slice(0, 200),
+  );
+
+  const missingLayerFeatures = await fetchJson(`${baseUrl}/api/v1/layers/not-a-real-layer/features`);
+  requireStatus(checks, "api:/api/v1/layers/{id}/features missing layer", missingLayerFeatures.response.status, 404);
+  requireCondition(
+    checks,
+    "v1 layer features missing layer payload",
+    missingLayerFeatures.json?.error?.code === "not_found",
+    missingLayerFeatures.text.slice(0, 200),
+  );
+
+  const missingFreshness = await fetchJson(`${baseUrl}/api/v1/sources/not-a-real-source/freshness`);
+  requireStatus(checks, "api:/api/v1/sources/{id}/freshness missing source", missingFreshness.response.status, 404);
+  requireCondition(
+    checks,
+    "v1 freshness missing source payload",
+    missingFreshness.json?.error?.code === "not_found",
+    missingFreshness.text.slice(0, 200),
+  );
+
   const logsGuard = await fetchJson(`${baseUrl}/api/fetch-logs`);
   requireStatus(checks, "admin guard:/api/fetch-logs", logsGuard.response.status, 401);
 

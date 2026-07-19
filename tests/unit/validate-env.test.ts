@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -10,7 +11,7 @@ const productionTargetScriptPath = path.join(
 
 function runValidateEnv(mode: "local" | "preview" | "production", env: Record<string, string>) {
   return spawnSync(process.execPath, [scriptPath, "--mode", mode], {
-    cwd: "/tmp",
+    cwd: os.tmpdir(),
     env: {
       PATH: process.env.PATH ?? "",
       NODE_ENV: "test",
@@ -134,6 +135,42 @@ describe("validate-env release contract", () => {
     expect(result.stdout).toContain("[env] OK (production)");
   });
 
+  it("requires proxy authentication when token auth is disabled in production", () => {
+    const result = runValidateEnv("production", {
+      DATABASE_URL: "postgresql://codip:codip@example.com:5432/codip?schema=public&sslmode=require",
+      CODIP_ADMIN_TOKEN: "production-admin-token-1234567890",
+      CODIP_DISABLE_TOKEN_AUTH: "true",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("CODIP_DISABLE_TOKEN_AUTH=true requires a valid proxy authentication guard");
+  });
+
+  it("accepts disabled token auth when a proxy authentication guard is configured", () => {
+    const result = runValidateEnv("production", {
+      DATABASE_URL: "postgresql://codip:codip@example.com:5432/codip?schema=public&sslmode=require",
+      CODIP_ADMIN_TOKEN: "production-admin-token-1234567890",
+      CODIP_DISABLE_TOKEN_AUTH: "true",
+      CODIP_TRUST_PROXY_AUTH: "true",
+      CODIP_TRUST_PROXY_SECRET: "proxy-secret-token-123456789012345",
+      CODIP_ADMIN_EMAIL_DOMAINS: "example.com",
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("[env] OK (production)");
+  });
+
+  it("rejects invalid token auth disable flag values", () => {
+    const result = runValidateEnv("production", {
+      DATABASE_URL: "postgresql://codip:codip@example.com:5432/codip?schema=public&sslmode=require",
+      CODIP_ADMIN_TOKEN: "production-admin-token-1234567890",
+      CODIP_DISABLE_TOKEN_AUTH: "yes",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("CODIP_DISABLE_TOKEN_AUTH must be true or false");
+  });
+
   it("rejects synthetic production values for real target validation", () => {
     const result = runValidateProductionTargetEnv({
       CODIP_DEPLOY_TARGET: "production",
@@ -165,5 +202,60 @@ describe("validate-env release contract", () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("[production-target-env] OK (staging)");
+  });
+
+  it("rejects a production target environment with the wrong production hostname", () => {
+    const result = runValidateProductionTargetEnv({
+      CODIP_DEPLOY_TARGET: "production",
+      DATABASE_URL: "postgresql://codip:secret@ep-codip-neon.aws.neon.tech/codip?schema=public&sslmode=require",
+      CODIP_MIGRATION_DATABASE_URL:
+        "postgresql://codip:secret@ep-codip-neon-direct.aws.neon.tech/codip?schema=public&sslmode=verify-full",
+      CODIP_BASE_URL: "https://codip-staging.mirai-dx-platform.com",
+      CODIP_HYPERDRIVE_BINDING: "CODIP_HYPERDRIVE",
+      CODIP_NEON_BRANCH: "codip-production-20260719",
+      CODIP_ADMIN_TOKEN: "realistic-random-target-token-123456",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "Production CODIP_BASE_URL must be https://civilopendata.mirai-dx-platform.com",
+    );
+  });
+
+  it("accepts the fixed Cloudflare production hostname for production target validation", () => {
+    const result = runValidateProductionTargetEnv({
+      CODIP_DEPLOY_TARGET: "production",
+      DATABASE_URL: "postgresql://codip:secret@ep-codip-neon.aws.neon.tech/codip?schema=public&sslmode=require",
+      CODIP_MIGRATION_DATABASE_URL:
+        "postgresql://codip:secret@ep-codip-neon-direct.aws.neon.tech/codip?schema=public&sslmode=verify-full",
+      CODIP_BASE_URL: "https://civilopendata.mirai-dx-platform.com",
+      CODIP_HYPERDRIVE_BINDING: "CODIP_HYPERDRIVE",
+      CODIP_NEON_BRANCH: "codip-production-20260719",
+      CODIP_ADMIN_TOKEN: "realistic-random-target-token-123456",
+      CODIP_DISABLE_TOKEN_AUTH: "true",
+      CODIP_TRUST_PROXY_AUTH: "true",
+      CODIP_TRUST_PROXY_SECRET: "realistic-random-proxy-secret-123456",
+      CODIP_ADMIN_EMAIL_DOMAINS: "mirai-dx-platform.com",
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("[production-target-env] OK (production)");
+  });
+
+  it("rejects production target validation without proxy authentication hardening", () => {
+    const result = runValidateProductionTargetEnv({
+      CODIP_DEPLOY_TARGET: "production",
+      DATABASE_URL: "postgresql://codip:secret@ep-codip-neon.aws.neon.tech/codip?schema=public&sslmode=require",
+      CODIP_MIGRATION_DATABASE_URL:
+        "postgresql://codip:secret@ep-codip-neon-direct.aws.neon.tech/codip?schema=public&sslmode=verify-full",
+      CODIP_BASE_URL: "https://civilopendata.mirai-dx-platform.com",
+      CODIP_HYPERDRIVE_BINDING: "CODIP_HYPERDRIVE",
+      CODIP_NEON_BRANCH: "codip-production-20260719",
+      CODIP_ADMIN_TOKEN: "realistic-random-target-token-123456",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Production target requires CODIP_DISABLE_TOKEN_AUTH=true");
+    expect(result.stderr).toContain("Production target requires CODIP_TRUST_PROXY_AUTH=true");
   });
 });

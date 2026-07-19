@@ -89,7 +89,9 @@ export type StandardFeatureCollectionResult = {
   standardized: true;
 };
 
-let standardRecordsAvailableCache: boolean | null = null;
+const AVAILABILITY_TTL_MS = 60_000;
+let standardRecordsAvailableUntil = 0;
+let availabilityInFlight: Promise<boolean> | null = null;
 
 function parseJson(value: unknown) {
   if (!value) return null;
@@ -161,19 +163,30 @@ function bboxFromGeometries(geometries: unknown[]) {
 }
 
 export function resetStandardRecordsAvailabilityForTests() {
-  standardRecordsAvailableCache = null;
+  standardRecordsAvailableUntil = 0;
+  availabilityInFlight = null;
 }
 
 export async function standardRecordsAvailable() {
   if (!isPostgreSqlDatabase()) return false;
-  // true は恒久的な状態としてキャッシュしてよいが、false(未投入)は後続の取り込みで
-  // true に変わりうるため毎回再評価する(空結果を永続キャッシュしない)
-  if (standardRecordsAvailableCache) return true;
-  const rows = await prisma.$queryRaw<{ count: number | bigint }[]>`
-    SELECT COUNT(*)::int AS "count" FROM "standard_records"
-  `;
-  standardRecordsAvailableCache = Number(rows[0]?.count ?? 0) > 0;
-  return standardRecordsAvailableCache;
+  // true は短い TTL でキャッシュする。運用ロールバックで空化した場合も TTL 後に検知する。
+  // false は従来どおり毎回再評価し、取り込み後の有効化を妨げない。
+  if (Date.now() < standardRecordsAvailableUntil) return true;
+  if (!availabilityInFlight) {
+    availabilityInFlight = (async () => {
+      try {
+        const rows = await prisma.$queryRaw<{ count: number | bigint }[]>`
+          SELECT COUNT(*)::int AS "count" FROM "standard_records"
+        `;
+        const available = Number(rows[0]?.count ?? 0) > 0;
+        standardRecordsAvailableUntil = available ? Date.now() + AVAILABILITY_TTL_MS : 0;
+        return available;
+      } finally {
+        availabilityInFlight = null;
+      }
+    })();
+  }
+  return availabilityInFlight;
 }
 
 function standardRecordDto(row: RawStandardRecord) {

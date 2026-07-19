@@ -18,6 +18,12 @@ export type FetchResult = {
 };
 
 const PRIVATE_ADDR_CODE = "EPRIVATEADDR";
+const WORKERS_RUNTIME_ERROR =
+  "Cloudflare Workers runtimeでは接続時DNSピン留めを保証できないため、外部URL取得を停止しました";
+
+export function isCloudflareWorkersRuntime(): boolean {
+  return typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers";
+}
 
 /**
  * DNS rebinding 対策: 接続時に解決したアドレスそのものを検証・ピン留めする Agent。
@@ -30,7 +36,15 @@ function getPinnedAgent(): Agent {
   if (!pinnedAgent) {
     pinnedAgent = new Agent({
       connect: {
-        lookup(hostname, options, callback) {
+        lookup(
+          hostname: string,
+          options: dns.LookupOptions,
+          callback: (
+            err: NodeJS.ErrnoException | null,
+            address?: string | dns.LookupAddress[],
+            family?: number,
+          ) => void,
+        ) {
           // 呼び出し元 (node:net) は options.all の有無でコールバック形式が変わる:
           // autoSelectFamily (Node 20+ 既定) は (err, addresses[]) を期待する
           const cb = callback as unknown as (
@@ -133,6 +147,14 @@ export async function fetchWithGuard(
           success: false,
           errorType: "blocked_url",
           errorMessage: guard.reason,
+          responseTimeMs: Date.now() - startedAt,
+        };
+      }
+      if (isCloudflareWorkersRuntime()) {
+        return {
+          success: false,
+          errorType: "unsupported_runtime",
+          errorMessage: WORKERS_RUNTIME_ERROR,
           responseTimeMs: Date.now() - startedAt,
         };
       }

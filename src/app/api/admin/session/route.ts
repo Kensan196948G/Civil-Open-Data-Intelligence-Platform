@@ -9,6 +9,7 @@ import {
   hasAdminSessionCookie,
   isAdminHeaders,
   isSecureRequest,
+  isTokenAuthDisabled,
   rejectCrossOriginBrowserRequest,
   safeTokenEqual,
 } from "@/lib/admin-auth";
@@ -43,6 +44,16 @@ export async function POST(request: NextRequest) {
   const token = typeof body?.token === "string" ? body.token.trim() : "";
   const rawConfiguredToken = process.env.CODIP_ADMIN_TOKEN?.trim();
   const configuredToken = adminSecretUsable(rawConfiguredToken) ? rawConfiguredToken : "";
+
+  if (isTokenAuthDisabled()) {
+    return NextResponse.json(
+      {
+        error: "token_auth_disabled",
+        message: "管理トークンによるセッション開始は無効化されています",
+      },
+      { status: 403 },
+    );
+  }
 
   if (!configuredToken) {
     return NextResponse.json(

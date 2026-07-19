@@ -20,7 +20,7 @@
 | Release gate | audit、DB事前確認、v1/docs/OpenAPI/Docker/Cloudflare/GitHub Actions契約、schema、env、lint、型、単体、build | `npm run release:gate` |
 | Release gate + E2E | ブラウザ実行可能環境での一括検証 | `npm run release:gate -- --include-e2e` |
 | Smoke | 主要画面、未認証管理UI非表示、CSP/HSTS、監視API、OpenAPI v1 schema、seed最小件数、公開DTO、後続API契約、v1 warning契約、地点照会の不正入力、管理APIガード、管理セッションCSRF、悪性URL複数種の登録拒否 | `CODIP_ADMIN_TOKEN=... npm run release:smoke -- --base-url ...` |
-| Read-only Smoke | staging/production向け。DBへ書き込む管理トークン付き悪性URL登録拒否テストをスキップ | `npm run release:smoke -- --read-only --base-url ...` |
+| Read-only Smoke | staging/production向け。DBへ書き込む管理トークン付き悪性URL登録拒否テストをスキップしつつ、主要画面/API、管理ガード、CSRF、v1 invalid query、存在しないlayer/sourceの404を非破壊で確認 | `npm run release:smoke -- --read-only --base-url ...` |
 | Standard Records Smoke | PostGIS投入環境で `/api/v1/records/search`, `/point`, `/layers`, `/features` が `standard_records` modeを返すこと、FeatureCollectionとproperties sanitizationを確認 | `npm run release:smoke -- --base-url ... --expect-standard-records` |
 | Seed Standard Records Smoke | PostgreSQL seed入りCI/previewで固定検証レコードが返り、秘密系propertiesが漏れないことを確認 | `npm run release:smoke -- --base-url ... --expect-standard-records --expect-seed-standard-record` |
 | Docker preview | Dockerfile/compose preview起動経路 | GitHub Actions `docker-preview` job |

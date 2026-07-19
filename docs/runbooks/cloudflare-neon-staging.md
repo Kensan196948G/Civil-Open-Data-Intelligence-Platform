@@ -2,11 +2,24 @@
 
 CODIPをCloudflare + Neon/PostGISへ出す前のstaging確認手順である。現行MVPの正式デプロイ可否は、このrunbookの証跡が揃ってから判断する。
 
+## 0. Cloudflare target
+
+| 項目 | 値 |
+| --- | --- |
+| Zone | `mirai-dx-platform.com` |
+| Production subdomain | `civilopendata` |
+| Production FQDN | `civilopendata.mirai-dx-platform.com` |
+| Production URL | `https://civilopendata.mirai-dx-platform.com` |
+| Worker | `codip` (`wrangler.jsonc`) |
+| Routing | Workers Custom Domain (`routes[].custom_domain=true`, production `workers_dev=false`) |
+
+Cloudflare公式docsでは、Workers Custom Domainは `wrangler.jsonc` の `routes` に `pattern` と `custom_domain=true` を設定し、`wrangler deploy` でWorkerへ接続する構成である。CODIPでは本番URLを `civilopendata.mirai-dx-platform.com` に固定し、production `workers_dev=false` で `*.workers.dev` 直公開経路を閉じる。Custom Domain、DNSレコード、Access application、Hyperdrive、Secretsの作成・更新は本番影響を持つため、人間承認済みのCI/CDまたはCloudflare操作手順でのみ実行する。
+
 ## 1. 接続方針
 
 | 用途 | 接続先 | 方針 |
 | --- | --- | --- |
-| Runtime | Cloudflare Hyperdrive経由Neon pooled endpoint | `CODIP_HYPERDRIVE_BINDING` をCloudflare側Binding名として管理。**未解決**: Prisma Client側に `driverAdapters` preview featureが未導入のため、Hyperdrive bindingは現状不活性 (Issue #18で追跡、解消までWorkers本番切替不可) |
+| Runtime | Cloudflare Hyperdrive経由Neon pooled endpoint | `CODIP_HYPERDRIVE_BINDING` をCloudflare側Binding名として管理。未設定時は `HYPERDRIVE`。Prisma Client側は `@prisma/adapter-pg` を導入済み。Prisma 6.19系ではdriver adapterのpreview flagは不要 |
 | Migration | Neon direct endpoint | `CODIP_MIGRATION_DATABASE_URL` をCI/CD secretで管理し、`sslmode=require` または `verify-full` を必須 |
 | Staging DB | Neon branch | `CODIP_NEON_BRANCH` にbranch名を記録 |
 | 管理入口 | Cloudflare Access | Access allowlist + `x-codip-proxy-secret` + 管理メールallowlist |
@@ -15,14 +28,19 @@ runtimeとmigrationの接続文字列は分離する。migrationはHyperdriveを
 
 ## 1.1 Build & Deploy
 
+WindowsのUNC共有上で作業している場合は、`npm run ...` をUNCカレントディレクトリから直接実行しない。npmが内部で起動する `cmd.exe` はUNCカレントディレクトリを保持できず、`C:\Windows` から相対パスを解決してゲートが失敗する。共有フォルダ上で実行する場合は `cmd /c "pushd \\192.168.0.185\kensan\Projects\Mirai-DX-Project\Civil-Open-Data-Intelligence-Platform && npm run <script>"` 形式で一時ドライブへ割り当ててから実行する。
+
 ```bash
 npm run cf:typegen
 npm run cf:build
+npm run release:check-cloudflare-build-artifact
 npm run cf:preview   # ローカルでWorkersランタイムを模したプレビュー確認
-npm run cf:deploy    # 実際のCloudflareアカウントへdeploy (人間が実行)
+npm run cf:deploy:production  # 実target env + evidence strict + placeholder + build + artifact + deploy --env production (人間が実行)
 ```
 
-`wrangler.jsonc` の `env.preview` / `env.production` named environmentを使う場合は `--env preview` / `--env production` を各コマンドに付与する。Hyperdrive binding IDは `wrangler hyperdrive create <name> --connection-string="$CODIP_MIGRATION_DATABASE_URL"` で払い出し、`wrangler.jsonc` のプレースホルダーを置き換えてから `cf:deploy` する。秘密情報は `wrangler secret put <name> [--env preview|production]` で登録し、`wrangler.jsonc` にはコミットしない。
+`npm run cf:deploy` はproduction手順では使わない。`wrangler.jsonc` の `env.preview` / `env.production` named environmentを使う場合は `--env preview` / `--env production` を各コマンドに付与する。productionでは `https://civilopendata.mirai-dx-platform.com` を `CODIP_BASE_URL` とし、`routes[].custom_domain=true` で同FQDNをWorker Custom Domainへ割り当てる。Hyperdrive binding IDは `wrangler hyperdrive create <name> --connection-string="$CODIP_MIGRATION_DATABASE_URL"` で払い出し、`wrangler.jsonc` のプレースホルダーを置き換える。`cf:deploy:production` は `release:validate-env:production-target` と `release:production-evidence -- --strict` も必ず実行するため、実Cloudflare/Neon/Access/監視/backup evidenceが揃わない状態ではdeployへ進まない。秘密情報は `wrangler secret put <name> [--env preview|production]` で登録し、`wrangler.jsonc` にはコミットしない。
+
+Workers runtimeでは `src/lib/db.ts` がOpenNextのCloudflare contextから `CODIP_HYPERDRIVE_BINDING` 名のbindingを読み、bindingの `connectionString` を `@prisma/adapter-pg` へ渡す。bindingが取得できないNode.js/Docker/CIでは `DATABASE_URL` を使うため、共有previewとCI smokeは従来どおり動作する。
 
 Cloudflare Access保護は `infra/cloudflare/` のTerraformテンプレートを使う (`infra/cloudflare/README.md` 参照)。`terraform apply` は人間が実行する。
 
@@ -83,12 +101,29 @@ DATABASE_URL="$CODIP_MIGRATION_DATABASE_URL" \
 Cloudflare/Neon stagingまたはproductionのSecrets/Variablesを読み込んだ状態で、合成値ではない実ターゲット検証を実行する。
 
 ```bash
-CODIP_DEPLOY_TARGET="staging" \
-CODIP_BASE_URL="$CODIP_STAGING_BASE_URL" \
+CODIP_DEPLOY_TARGET="production" \
+CODIP_BASE_URL="https://civilopendata.mirai-dx-platform.com" \
 npm run release:validate-env:production-target
 ```
 
 `DATABASE_URL`、`CODIP_MIGRATION_DATABASE_URL`、`CODIP_HYPERDRIVE_BINDING`、`CODIP_NEON_BRANCH`、管理トークンまたはProxy認証設定は、対象環境の実値を使う。`example.com`、localhost、CI用token、placeholder値が混入している場合は失敗させる。
+
+Secrets/Variablesの実値を読み込んだ端末では、次のread-only証跡レポートも取得する。接続文字列、管理トークン、proxy secretは値を出さず、set/unsetとSSL条件だけを記録する。
+Access証跡 (`CODIP_CLOUDFLARE_ACCESS_EVIDENCE`)、監視・アラート証跡 (`CODIP_MONITORING_CONTACTS`, `CODIP_CLOUDFLARE_ALERT_POLICY`, `CODIP_CLOUDFLARE_LOGS_EVIDENCE`, `CODIP_NEON_MONITORING_EVIDENCE`, `CODIP_SMOKE_MONITORING_SCHEDULE`, `CODIP_ROLLBACK_OWNER`) と backup / restore 証跡 (`CODIP_BACKUP_RESTORE_EVIDENCE`) は値を表示せず、設定済みかだけを記録する。
+
+```bash
+npm run release:production-evidence -- --strict
+```
+
+`--strict` は実ターゲットに必要なEvidence入力、Wrangler production envのroute、Custom Domain、`workers_dev=false`、Observability、production Hyperdrive ID解決状態が欠けている場合に失敗する。失敗時はDNS/Secrets/Deployを進めず、不足項目を本runbook §6 Evidenceへ記録する。staging/preview側のplaceholderは、staging検証時に `release:check-production-placeholders -- --env staging` で別途確認する。
+
+Cloudflare deploy前には、対象environmentの `wrangler.jsonc` に未解決placeholderが残っていないことも確認する。
+
+```bash
+npm run release:check-production-placeholders -- --env production
+```
+
+`REPLACE_WITH_PRODUCTION_HYPERDRIVE_ID` 等が残っている場合は失敗する。Hyperdrive IDの置換は `wrangler hyperdrive create` の払い出し結果を確認してから行う。
 
 合格条件:
 
@@ -104,13 +139,13 @@ npm run release:validate-env:production-target
 
 ```bash
 CODIP_ADMIN_TOKEN="$CODIP_ADMIN_TOKEN" \
-  npm run release:smoke -- --read-only --base-url "$CODIP_STAGING_BASE_URL"
+  npm run release:smoke -- --read-only --base-url "https://civilopendata.mirai-dx-platform.com"
 ```
 
 標準レコードをstagingへ投入済みの場合は、追加で次を実行する。
 
 ```bash
-npm run release:smoke -- --read-only --base-url "$CODIP_STAGING_BASE_URL" --expect-standard-records
+npm run release:smoke -- --read-only --base-url "https://civilopendata.mirai-dx-platform.com" --expect-standard-records
 ```
 
 `--expect-seed-standard-record` は使い捨てCI/preview DBのseed検証用である。実stagingで本物の標準レコードを扱う場合は、特定seed IDに依存しない `--expect-standard-records` のみを使う。
@@ -147,6 +182,11 @@ npm run release:smoke -- --read-only --base-url "$CODIP_STAGING_BASE_URL" --expe
 | `db:pg:check-drift` 結果 |  |
 | `db:pg:check-postgis-ddl` 結果 |  |
 | `release:validate-env:production-target` 結果 |  |
+| `release:production-evidence -- --strict` 結果 |  |
+| Cloudflare alert / logs 証跡 |  |
+| Neon monitoring 証跡 |  |
+| backup / restore 証跡 |  |
+| smoke監視スケジュール |  |
 | `/api/ready` 結果 |  |
 | `release:smoke` 結果 |  |
 | rollback owner |  |

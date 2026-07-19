@@ -5,7 +5,11 @@ import { resetRateLimitForTests } from "@/lib/rate-limit";
 const dataSourceFindManyMock = vi.hoisted(() => vi.fn());
 const dataSourceCountMock = vi.hoisted(() => vi.fn());
 const dataSourceFindUniqueMock = vi.hoisted(() => vi.fn());
+const dataSourceFindFirstMock = vi.hoisted(() => vi.fn());
+const dataSourceCreateMock = vi.hoisted(() => vi.fn());
 const dataSourceUpdateMock = vi.hoisted(() => vi.fn());
+const providerFindUniqueMock = vi.hoisted(() => vi.fn());
+const auditLogCreateMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/db", () => ({
   prisma: {
@@ -13,16 +17,27 @@ vi.mock("@/lib/db", () => ({
       findMany: dataSourceFindManyMock,
       count: dataSourceCountMock,
       findUnique: dataSourceFindUniqueMock,
+      findFirst: dataSourceFindFirstMock,
+      create: dataSourceCreateMock,
       update: dataSourceUpdateMock,
     },
+    provider: {
+      findUnique: providerFindUniqueMock,
+    },
     // route の PUT は $transaction(async tx => ...) を使う。テストでは tx に
-    // 同じ update mock を渡してコールバックを実行する
+    // 同じ create/update mock を渡してコールバックを実行する
     $transaction: (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({ dataSource: { update: dataSourceUpdateMock } }),
+      fn({
+        dataSource: {
+          create: dataSourceCreateMock,
+          update: dataSourceUpdateMock,
+        },
+        auditLog: { create: auditLogCreateMock },
+      }),
   },
 }));
 
-import { GET as sourcesGET } from "@/app/api/sources/route";
+import { GET as sourcesGET, POST as sourcesPOST } from "@/app/api/sources/route";
 import { PUT as sourcePUT } from "@/app/api/sources/[id]/route";
 
 afterEach(() => {
@@ -31,6 +46,26 @@ afterEach(() => {
 });
 
 describe("sources API route", () => {
+  const ADMIN_TOKEN = "unit-test-admin-token-1234567890123456";
+
+  function adminPost(body: unknown) {
+    return new NextRequest("http://localhost/api/sources", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-codip-admin-token": ADMIN_TOKEN,
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
+  function stubAdminEnv() {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("CODIP_ADMIN_TOKEN", ADMIN_TOKEN);
+    vi.stubEnv("CODIP_TRUST_PROXY_AUTH", "false");
+    vi.stubEnv("CODIP_ALLOW_INSECURE_ADMIN", "false");
+  }
+
   it("does not use internal notes as public search fields", async () => {
     dataSourceFindManyMock.mockResolvedValueOnce([]);
     dataSourceCountMock.mockResolvedValueOnce(0);
@@ -51,6 +86,60 @@ describe("sources API route", () => {
         },
       }),
     );
+  });
+
+  it("records data source creation audit event in the same transaction", async () => {
+    stubAdminEnv();
+    providerFindUniqueMock.mockResolvedValueOnce({ id: "prov-1", name: "テスト提供元" });
+    dataSourceFindFirstMock.mockResolvedValueOnce(null);
+    dataSourceCreateMock.mockResolvedValueOnce({
+      id: "src-1",
+      name: "新規ソース",
+      nameEn: null,
+      description: "説明",
+      category: "statistics",
+      dataFormat: "JSON",
+      accessType: "API",
+      officialUrl: "https://example.jp/data",
+      endpointUrl: null,
+      updateFrequency: null,
+      license: null,
+      requiresApiKey: false,
+      apiKeyEnvName: null,
+      trustLevel: 3,
+      status: "active",
+      providerId: "prov-1",
+      internalNotes: null,
+      createdAt: new Date("2026-07-19T00:00:00.000Z"),
+      updatedAt: new Date("2026-07-19T00:00:00.000Z"),
+      provider: { id: "prov-1", name: "テスト提供元" },
+      tags: [],
+    });
+
+    const response = await sourcesPOST(
+      adminPost({
+        name: "新規ソース",
+        description: "説明",
+        category: "statistics",
+        dataFormat: "JSON",
+        accessType: "API",
+        officialUrl: "https://example.jp/data",
+        providerId: "prov-1",
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(dataSourceCreateMock).toHaveBeenCalledTimes(1);
+    expect(auditLogCreateMock).toHaveBeenCalledWith({
+      data: {
+        actor: "管理者",
+        action: "データソース登録",
+        target: "新規ソース",
+        detail: "新規登録",
+        level: "info",
+      },
+    });
+    vi.unstubAllEnvs();
   });
 });
 
@@ -122,6 +211,15 @@ describe("sources PUT route: requiresApiKey→HTTPS 不変条件のマージ後�
 
     expect(response.status).toBe(200);
     expect(dataSourceUpdateMock).toHaveBeenCalledTimes(1);
+    expect(auditLogCreateMock).toHaveBeenCalledWith({
+      data: {
+        actor: "管理者",
+        action: "データソース更新",
+        target: "既存ソース",
+        detail: "内容を更新",
+        level: "info",
+      },
+    });
     vi.unstubAllEnvs();
   });
 

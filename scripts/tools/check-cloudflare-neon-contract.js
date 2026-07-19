@@ -7,9 +7,16 @@ const root = process.cwd();
 const envExample = fs.readFileSync(path.join(root, ".env.example"), "utf8");
 const runbookPath = path.join(root, "docs/runbooks/cloudflare-neon-staging.md");
 const runbook = fs.existsSync(runbookPath) ? fs.readFileSync(runbookPath, "utf8") : "";
+const productionRunbookPath = path.join(root, "docs/runbooks/cloudflare-production.md");
+const productionRunbook = fs.existsSync(productionRunbookPath) ? fs.readFileSync(productionRunbookPath, "utf8") : "";
 const docs13 = fs.readFileSync(path.join(root, "docs/13-deployment-and-operations.md"), "utf8");
 const docs16 = fs.readFileSync(path.join(root, "docs/16-release-readiness-checklist.md"), "utf8");
+const rollbackRunbook = fs.readFileSync(path.join(root, "docs/runbooks/rollback.md"), "utf8");
 const packageJson = fs.readFileSync(path.join(root, "package.json"), "utf8");
+const wrangler = fs.readFileSync(path.join(root, "wrangler.jsonc"), "utf8");
+const accessVars = fs.readFileSync(path.join(root, "infra/cloudflare/terraform.tfvars.example"), "utf8");
+const dbLoader = fs.readFileSync(path.join(root, "src/lib/db.ts"), "utf8");
+const pgSchema = fs.readFileSync(path.join(root, "prisma/postgresql/schema.prisma"), "utf8");
 
 const errors = [];
 
@@ -22,8 +29,20 @@ requireText(".env.example", envExample, "CODIP_DEPLOY_TARGET");
 requireText(".env.example", envExample, "CODIP_HYPERDRIVE_BINDING");
 requireText(".env.example", envExample, "CODIP_NEON_BRANCH");
 requireText(".env.example", envExample, "CODIP_MIGRATION_DATABASE_URL");
+requireText(".env.example", envExample, "civilopendata.mirai-dx-platform.com");
+requireText(".env.example", envExample, "CODIP_CLOUDFLARE_ACCESS_EVIDENCE");
+requireText(".env.example", envExample, "CODIP_CLOUDFLARE_ALERT_POLICY");
+requireText(".env.example", envExample, "CODIP_NEON_MONITORING_EVIDENCE");
+requireText(".env.example", envExample, "CODIP_BACKUP_RESTORE_EVIDENCE");
+requireText("wrangler.jsonc", wrangler, "civilopendata.mirai-dx-platform.com");
+requireText("wrangler.jsonc", wrangler, "\"custom_domain\": true");
+requireText("wrangler.jsonc", wrangler, "\"workers_dev\": false");
+requireText("wrangler.jsonc", wrangler, "\"observability\"");
+requireText("wrangler.jsonc", wrangler, "\"enabled\": true");
+requireText("infra/cloudflare terraform vars", accessVars, "application_domain     = \"civilopendata.mirai-dx-platform.com\"");
 
 for (const token of [
+  "civilopendata.mirai-dx-platform.com",
   "Cloudflare Hyperdrive",
   "CODIP_HYPERDRIVE_BINDING",
   "CODIP_MIGRATION_DATABASE_URL",
@@ -34,20 +53,65 @@ for (const token of [
   "npm run db:pg:check-drift",
   "npm run db:pg:check-postgis-ddl",
   "npm run release:smoke",
+  "npm run release:production-evidence",
+  "CODIP_CLOUDFLARE_ACCESS_EVIDENCE",
+  "CODIP_CLOUDFLARE_ALERT_POLICY",
+  "CODIP_NEON_MONITORING_EVIDENCE",
+  "CODIP_BACKUP_RESTORE_EVIDENCE",
   "GHCR image digest",
   "rollback owner",
+  "backup / restore",
 ]) {
   requireText("cloudflare-neon-staging runbook", runbook, token);
 }
 
+for (const token of [
+  "civilopendata.mirai-dx-platform.com",
+  "DNS、Custom Domain、Access、Secrets、Hyperdrive、Neon本番接続を無断で変更しない",
+  "REPLACE_WITH_PRODUCTION_HYPERDRIVE_ID",
+  "release:validate-env:production-target",
+  "release:production-evidence -- --strict",
+  "release:check-production-placeholders -- --env production",
+  "npm run cf:deploy:production",
+  "release:smoke -- --read-only",
+  "Cloudflare logs / alert policy evidence",
+  "Neon monitoring evidence",
+  "Backup / restore evidence",
+  "Rollback owner / rollback target",
+]) {
+  requireText("cloudflare-production runbook", productionRunbook, token);
+}
+
+requireText("rollback runbook", rollbackRunbook, "docs/runbooks/cloudflare-production.md");
+requireText("wrangler.jsonc", wrangler, "docs/runbooks/cloudflare-production.md");
 requireText("docs/13", docs13, "docker-supply-chain");
+requireText("docs/13", docs13, "docs/runbooks/cloudflare-production.md");
 requireText("docs/13", docs13, "release:validate-env:production-target");
+requireText("docs/13", docs13, "CODIP_CLOUDFLARE_ACCESS_EVIDENCE");
 requireText("docs/13", docs13, "SBOM");
 requireText("docs/13", docs13, "provenance");
 requireText("docs/16", docs16, "release:validate-env:production-target");
+requireText("docs/16", docs16, "release:production-evidence");
+requireText("docs/16", docs16, "Access証跡");
+requireText("docs/16", docs16, "監視・アラート証跡");
+requireText("docs/16", docs16, "バックアップ・リストア証跡");
+requireText("docs/16", docs16, "release:check-production-placeholders");
+requireText("docs/16", docs16, "release:check-cloudflare-build-artifact");
 requireText("docs/16", docs16, "image digest");
 requireText("docs/16", docs16, "Neon branch");
 requireText("package.json", packageJson, "release:validate-env:production-target");
+requireText("package.json", packageJson, "release:production-evidence");
+requireText("package.json", packageJson, "release:production-evidence -- --strict");
+requireText("package.json", packageJson, "release:check-production-placeholders");
+requireText("package.json", packageJson, "release:check-cloudflare-build-artifact");
+requireText("package.json", packageJson, "cf:deploy:production");
+requireText("package.json", packageJson, "--env production");
+requireText("package.json", packageJson, "@prisma/adapter-pg");
+requireText("package.json", packageJson, "@opennextjs/cloudflare");
+requireText("postgresql schema", pgSchema, "provider        = \"prisma-client-js\"");
+requireText("db loader", dbLoader, "PrismaPg");
+requireText("db loader", dbLoader, "getCloudflareContext");
+requireText("db loader", dbLoader, "connectionString");
 
 if (errors.length > 0) {
   for (const error of errors) console.error(`[cloudflare-neon-contract][error] ${error}`);

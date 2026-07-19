@@ -7,14 +7,16 @@
 | Local | 開発 | Next.js, SQLite |
 | 現行共有Preview | 関係者検証 | Node.jsコンテナ、SQLiteまたはPostgreSQL/PostGIS compose、Cloudflare Access相当の前段保護 |
 | 将来Staging | Cloudflare/Neon検証 | Cloudflare Workers (`@opennextjs/cloudflare`)、Access、Neon PostgreSQL/PostGIS staging branch |
-| Production目標 | 本番 | Cloudflare Workers (`@opennextjs/cloudflare`)、Access、Neon PostgreSQL/PostGIS、Cloudflare Cron Triggers |
+| Production目標 | 本番 | Cloudflare Workers (`@opennextjs/cloudflare`)、Access、Neon PostgreSQL/PostGIS、Cloudflare Cron Triggers、`https://civilopendata.mirai-dx-platform.com` |
 
 ## 2. デプロイ方針
 
-MVPではローカル、CI、Docker previewで品質を確認する。Cloudflare WorkersとNeon/PostGISは本番目標構成であり、`wrangler.jsonc`、`open-next.config.ts`、`infra/cloudflare/` (Terraformテンプレート) は導入済みで、`npm run cf:build` / `cf:preview` / `cf:deploy` / `cf:typegen` から実行できる。ただし以下の2点は未解決のアプリケーションコード側の制約であり、Workers本番切替前に解消が必須 (詳細はIssue #18):
+MVPではローカル、CI、Docker previewで品質を確認する。2026-07-19 時点の共有previewは `http://192.168.0.185:3100/` で稼働し、`/api/health`、`/api/ready`、`/api/dashboard`、`/api/sources`、`/api/openapi` のread-only smokeは成功している。Cloudflare WorkersとNeon/PostGISは本番目標構成であり、production FQDNは `civilopendata.mirai-dx-platform.com` とする。`wrangler.jsonc`、`open-next.config.ts`、`infra/cloudflare/` (Terraformテンプレート) は導入済みで、`npm run cf:build` / `cf:preview` / `cf:deploy` / `cf:typegen` から実行できる。アプリケーションコード側では、SSRF事前DNS検証をWorkers互換の `resolve4` / `resolve6` へ更新し、PostgreSQL Prisma Clientに `@prisma/adapter-pg` を導入した。Prisma 6.19系ではdriver adapterにpreview flagは不要であり、deprecated warningを避けるため `previewFeatures = ["driverAdapters"]` は設定しない。Workers実行時は `CODIP_HYPERDRIVE_BINDING` (既定 `HYPERDRIVE`) のCloudflare Hyperdrive bindingから `connectionString` を取得できる場合にそれを優先し、Node.js/Docker/CIでは `DATABASE_URL` を使う。
 
-- `src/lib/url-guard.ts` / `src/lib/http-client.ts` のSSRFガード・DNSピン留めが `dns.lookup()` に依存しており、Workers `nodejs_compat` では未実装 (fail-closedのため脆弱性化はしないが、外部URL取得機能がWorkers上で動作しない)
-- `prisma/postgresql/schema.prisma` に `driverAdapters` preview featureが未設定のため、Prisma ClientがCloudflare Hyperdrive bindingを消費できない (`wrangler.jsonc` の `hyperdrive` bindingは宣言のみで現状は不活性)
+ただし以下は未解決のアプリケーションコード/実リソース側の制約であり、Workers本番切替前に解消または証跡化が必須:
+
+- `src/lib/url-guard.ts` の事前DNS検証は `resolve4` / `resolve6` へ変更済み。接続時ピン留めはNode.js/Undici Agentで実施する。Cloudflare Workersでは公式仕様上 `dns.lookup` が未実装で、同等の接続時ピン留めを保証できないため、`src/lib/http-client.ts` はWorkers runtimeを検知した場合に外部URL取得を `unsupported_runtime` として明示的に停止する
+- `wrangler.jsonc` の production custom domain は `civilopendata.mirai-dx-platform.com` に固定済み。production `workers_dev=false` により本番の `*.workers.dev` 直公開経路は使わない。本番化手順は `docs/runbooks/cloudflare-production.md` を入口とする。ただし Hyperdrive ID は placeholder であり、Cloudflare Worker / Hyperdrive / Access / Custom Domain / Neon project の実リソース作成とSecret登録は人間承認後に行う
 
 Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、Cloudflareが現在推奨するNext.jsデプロイ経路が `@opennextjs/cloudflare` アダプタ経由のWorkersであり、レガシーの `@cloudflare/next-on-pages` ではないため。取得処理は将来Cloudflare Cron TriggersとWorkersへ分離する。
 
@@ -34,22 +36,31 @@ Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、C
 | `CODIP_FETCH_LOG_RETENTION_DAYS` | Optional | 取得ログ保持日数。既定90日 |
 | `CODIP_SAMPLE_RETENTION_DAYS` | Optional | サンプルレスポンス保持日数。既定30日 |
 | `CODIP_ADMIN_TOKEN` | Preview/Production | 管理操作APIの保護トークン。32文字以上の十分ランダムな値 |
+| `CODIP_DISABLE_TOKEN_AUTH` | Proxy auth時 | `true` の場合、直接トークンヘッダーと、tokenから導出される署名済み管理セッションCookieの両方を無効化する。preview/productionでは有効なproxy auth guardが必須 |
 | `CODIP_ALLOW_INSECURE_ADMIN` | Local only | ローカル開発でのみ管理操作を無認証許可する明示フラグ |
 | `CODIP_TRUST_PROXY_AUTH` | Optional | Cloudflare Access等の認証済みプロキシを信頼する場合のみ `true` |
 | `CODIP_TRUST_PROXY_HEADERS` | Optional | 信頼済みプロキシ配下でのみ、レート制限にForwarded系IPヘッダーを使う |
 | `CODIP_TRUST_PROXY_SECRET` | Proxy auth時 | プロキシから `x-codip-proxy-secret` として送る共有シークレット |
 | `CODIP_ADMIN_EMAILS` | Proxy auth時 | 管理者として許可するメールアドレス |
 | `CODIP_ADMIN_EMAIL_DOMAINS` | Proxy auth時 | 管理者として許可するメールドメイン |
-| `CODIP_HYPERDRIVE_BINDING` | Future Cloudflare | RuntimeからNeonへ接続するCloudflare Hyperdrive binding名 |
+| `CODIP_HYPERDRIVE_BINDING` | Cloudflare | RuntimeからNeonへ接続するCloudflare Hyperdrive binding名。未設定時は `HYPERDRIVE` |
 | `CODIP_NEON_BRANCH` | Staging/Production evidence | Neon branch名を証跡として記録 |
 | `CODIP_MIGRATION_DATABASE_URL` | Migration | Hyperdriveを経由しないNeon direct endpoint。CI/CD secretで管理 |
+| `CODIP_CLOUDFLARE_ACCESS_EVIDENCE` | Staging/Production evidence | Cloudflare Access application domain、policy名、allowlist summary、proxy secret設定済み証跡 |
+| `CODIP_MONITORING_CONTACTS` | Staging/Production evidence | 監視通知先またはon-callグループ名。`production-evidence` では値を出さず設定有無のみ記録 |
+| `CODIP_CLOUDFLARE_ALERT_POLICY` | Staging/Production evidence | Cloudflare alert policy名、閾値概要、通知テスト時刻の証跡 |
+| `CODIP_CLOUDFLARE_LOGS_EVIDENCE` | Staging/Production evidence | Workers Logs / Traces の確認クエリ、error count、対象deploy idの証跡 |
+| `CODIP_NEON_MONITORING_EVIDENCE` | Staging/Production evidence | Neon branch、容量、接続数、slow query、PITR window確認証跡 |
+| `CODIP_SMOKE_MONITORING_SCHEDULE` | Staging/Production evidence | read-only smoke監視の実行頻度、直近成功時刻、失敗時担当 |
+| `CODIP_ROLLBACK_OWNER` | Staging/Production evidence | rollback判断者または当番ロール |
+| `CODIP_BACKUP_RESTORE_EVIDENCE` | Staging/Production evidence | Neon PITR履歴ウィンドウ、restore rehearsalまたはrollback drill、復旧確認担当の証跡 |
 | `ESTAT_APP_ID` | Optional | e-Stat API利用時のアプリケーションID |
 
 ## 2.1a Cloudflare Workers IaC構成
 
 | ファイル | 内容 |
 | --- | --- |
-| `wrangler.jsonc` | Workers実行構成。`env.preview`/`env.production` named environment、Hyperdrive binding宣言 (idはプレースホルダー、`wrangler hyperdrive create` の払い出し値へ人間が置換) |
+| `wrangler.jsonc` | Workers実行構成。`env.preview`/`env.production` named environment、production custom domain `civilopendata.mirai-dx-platform.com`、Hyperdrive binding宣言 (idはプレースホルダー、`wrangler hyperdrive create` の払い出し値へ人間が置換) |
 | `open-next.config.ts` | `@opennextjs/cloudflare` の最小ビルド設定 |
 | `infra/cloudflare/` | Cloudflare Access保護のTerraformテンプレート (v5 provider、`cloudflare_zero_trust_access_application`/`_policy`)。適用 (`terraform apply`) は人間が実行 |
 
@@ -86,7 +97,7 @@ Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、C
 | e2e | Playwright Chromium |
 | SAST | CodeQL |
 
-CIではpreview検証に加え、SSL付きPostgreSQL URLの合成値で `npm run release:validate-env:production` を実行し、production環境変数検査ロジックの形状を確認する。これは実Neon/本番Secretsの検証ではないため、stagingまたはproduction deploy前には、対象環境のSecrets/Variablesを読み込んだジョブで `npm run release:validate-env:production-target` を実行し、その結果をリリース証跡へ記録する。この実ターゲット検証は `CODIP_DEPLOY_TARGET`、実HTTPS `CODIP_BASE_URL`、Cloudflare Hyperdrive binding、Neon branch、migration direct URL、外部PostgreSQL SSLを必須にし、example/ci/placeholder/local値を拒否する。Docker imageの起動時も `node scripts/tools/validate-env.js --mode ${CODIP_ENV_MODE:-production}` を先に実行する。本番コンテナは `runner` stage を使い、`npm ci --omit=dev` により開発依存を含めない。migrationとseedはone-off release jobで実行し、共有previewの単一インスタンス検証時だけ `preview-runner` stage と `CODIP_RUN_MIGRATIONS_ON_START=true` を明示する。CIの `docker-preview` job では、preview-runnerでPostgreSQL/PostGISへmigration/seedを適用した後、production `runner` imageを `CODIP_ENV_MODE=production` で起動し、`/api/ready` と `release:smoke` を実行する。`docker-image-security` job はproduction runner imageをpush前にTrivyで固定可能なHigh/Critical CVE検査にかける。main push時の `docker-supply-chain` job は主要ゲート成功後にGHCRへproduction runner imageをpushし、BuildxのSBOM attestationと `mode=max` provenanceを付与する。GitHub ActionsはタグではなくコミットSHAへ固定し、`release:check-github-actions-contract` で再混入を検出する。
+CIではpreview検証に加え、SSL付きPostgreSQL URLの合成値で `npm run release:validate-env:production` を実行し、production環境変数検査ロジックの形状を確認する。これは実Neon/本番Secretsの検証ではないため、stagingまたはproduction deploy前には、対象環境のSecrets/Variablesを読み込んだジョブで `npm run release:validate-env:production-target` を実行し、その結果をリリース証跡へ記録する。この実ターゲット検証は `CODIP_DEPLOY_TARGET`、実HTTPS `CODIP_BASE_URL`、Cloudflare Hyperdrive binding、Neon branch、migration direct URL、外部PostgreSQL SSLを必須にし、example/ci/placeholder/local値を拒否する。`CODIP_DEPLOY_TARGET=production` の場合、`CODIP_BASE_URL` は `https://civilopendata.mirai-dx-platform.com` と完全一致する必要があり、誤ったpreview/stagingサブドメインをproduction証跡として通さない。Docker imageの起動時も `node scripts/tools/validate-env.js --mode ${CODIP_ENV_MODE:-production}` を先に実行する。本番コンテナは `runner` stage を使い、`npm ci --omit=dev` により開発依存を含めない。migrationとseedはone-off release jobで実行し、共有previewの単一インスタンス検証時だけ `preview-runner` stage と `CODIP_RUN_MIGRATIONS_ON_START=true` を明示する。CIの `docker-preview` job では、preview-runnerでPostgreSQL/PostGISへmigration/seedを適用した後、production `runner` imageを `CODIP_ENV_MODE=production` で起動し、`/api/ready` と `release:smoke` を実行する。`docker-image-security` job はproduction runner imageをpush前にTrivyで固定可能なHigh/Critical CVE検査にかける。main push時の `docker-supply-chain` job は主要ゲート成功後にGHCRへproduction runner imageをpushし、BuildxのSBOM attestationと `mode=max` provenanceを付与する。GitHub ActionsはタグではなくコミットSHAへ固定し、`release:check-github-actions-contract` で再混入を検出する。
 
 ## 2.3 記録済みリリース証跡
 
@@ -152,6 +163,10 @@ Prisma schemaはSQLite用 `prisma/schema.prisma` とPostgreSQL用 `prisma/postgr
 
 デプロイ直後は、画面表示に加えて `/api/ready` を確認し、DB migrationと接続設定が正しく反映されていることを確認する。`release:smoke` は各HTTPリクエストにタイムアウトを設け、CI側の `curl` も `--connect-timeout` / `--max-time` を指定する。staging/production相当の実ターゲットへ向ける場合は `--read-only` を付け、管理トークン付きの書き込み系negative testは使い捨てCI/preview DBでのみ実行する。
 
+Cloudflare Workers本番では、データソース接続確認・サンプル取得・外部標高APIなどの外部URL取得系は、接続時DNSピン留めを同等に保証できる実装または専用egress設計が入るまで `unsupported_runtime` として停止する。これはSSRF防御を弱めないための安全側制御であり、台帳閲覧、検索、後続API、DB read/write、監視APIとは切り分けて扱う。
+
+2026-07-19 の共有preview確認では、ブラウザトップ画面表示、コンソールerror/warn 0件、`/api/fetch-logs` 未認証401、`/api/admin/audit-events` GET 405 を確認した。これはread-only一般画面は公開、運用ログ・管理系は認証/許可メソッドで保護する現行方針と一致する。
+
 既存DBへ `officialUrl` 一意制約を適用する前に、必ず `npm run db:check-duplicates` を実行する。重複がある場合は、どちらを正本にするかを人が判断し、削除または統合してからmigrationを適用する。
 
 ## 3. 運用監視
@@ -181,6 +196,18 @@ Prisma schemaはSQLite用 `prisma/schema.prisma` とPostgreSQL用 `prisma/postgr
 | 品質再計算 | 20 req/min/IP | Cloudflare Access配下に限定 |
 
 アプリ内制限は単一プロセスのメモリで管理するため、複数インスタンス本番ではCloudflare側の制限を正とする。
+
+## 3.2 監査ログ記録保証
+
+監査ログの保証方式は [ADR 0002](adr/0002-audit-log-guarantee.md) を正本とする。
+データソース登録・更新・削除、タグ追加・削除、接続確認、サンプル取得、品質再計算、設定変更は、主操作のDB永続化と `audit_logs` 作成を同一transactionへ含める。
+接続確認とサンプル取得では、外部fetchはtransaction外で完了させ、DB保存と監査記録だけを短いtransactionで束ねる。
+
+クライアント起点イベント (監査ログエクスポート、APIキー操作) は `/api/admin/audit-events` へ同期POSTし、監査INSERT失敗時は 503 `audit_record_failed` を返す。
+ただし、ブラウザ内のファイル出力やAPIキー入力自体はサーバー側で巻き戻せないため、503が出た場合は運用ログとIssueで追跡する。
+管理セッション開始・終了の監査は、可用性優先でベストエフォート `recordAudit()` とし、ログイン/ログアウト自体は監査書き込み失敗で止めない。
+
+非同期ジョブ、Cron、Queue、batch ingestなど長時間処理が主操作になる場合は、同一transactionではなくoutbox + retry + alertへ移行する。
 
 ## 4. 障害対応
 

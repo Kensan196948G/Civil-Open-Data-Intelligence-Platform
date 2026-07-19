@@ -24,13 +24,16 @@ Civil Open Data Intelligence Platform（CODIP）は、土木建設関連の公�
 | 計画 | [14-roadmap.md](14-roadmap.md) | フェーズ0から5までの開発計画 |
 | 用語 | [15-glossary.md](15-glossary.md) | 用語と略語 |
 | リリース | [16-release-readiness-checklist.md](16-release-readiness-checklist.md) | デプロイ直前のテスト、監視、セキュリティ、運用確認 |
+| リリース履歴 | [release-notes.md](release-notes.md) | リリース後確認、安定化履歴、残課題 |
 
 ## Runbook
 
 | ファイル | 用途 |
 | --- | --- |
 | [runbooks/database-deployment.md](runbooks/database-deployment.md) | SQLite preview運用、バックアップ、PostgreSQL/PostGIS移行前チェック |
+| [runbooks/cloudflare-production.md](runbooks/cloudflare-production.md) | `civilopendata.mirai-dx-platform.com` 本番化、DNS/Access/Secrets/Hyperdrive/証跡ゲート |
 | [runbooks/cloudflare-neon-staging.md](runbooks/cloudflare-neon-staging.md) | Cloudflare/Neon stagingのmigration、smoke、rollback、証跡 |
+| [runbooks/monitoring.md](runbooks/monitoring.md) | 監視・アラート・リリース後確認の初動手順 |
 | [runbooks/rollback.md](runbooks/rollback.md) | 障害時の切り戻し手順 (判断フロー、Workers、GHCR、Neon PITR、Prisma、SQLite、復旧後検証) |
 
 ## テンプレート
@@ -44,3 +47,4 @@ Civil Open Data Intelligence Platform（CODIP）は、土木建設関連の公�
 | ファイル | 判断内容 |
 | --- | --- |
 | [adr/0001-repository-and-product-scope.md](adr/0001-repository-and-product-scope.md) | Global Civil API CatalogをCODIPの台帳モジュールとして吸収する判断 |
+| [adr/0002-audit-log-guarantee.md](adr/0002-audit-log-guarantee.md) | 監査ログ記録保証を同一transaction / 同期API / 将来outbox条件に分ける判断 |

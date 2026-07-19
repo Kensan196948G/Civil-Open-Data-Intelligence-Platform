@@ -12,6 +12,7 @@ const PLACEHOLDER_PATTERNS = [
   /production-admin-token/i,
   /preview-admin-token/i,
 ];
+const PRODUCTION_BASE_HOSTNAME = "civilopendata.mirai-dx-platform.com";
 
 function fail(errors, message) {
   errors.push(message);
@@ -95,6 +96,8 @@ function main() {
     fail(errors, "CODIP_BASE_URL must be the real https:// target URL");
   } else if (["localhost", "127.0.0.1", "::1", "example.com"].includes(parsedBaseUrl.hostname)) {
     fail(errors, `CODIP_BASE_URL must not point to ${parsedBaseUrl.hostname}`);
+  } else if (deployTarget === "production" && parsedBaseUrl.hostname !== PRODUCTION_BASE_HOSTNAME) {
+    fail(errors, `Production CODIP_BASE_URL must be https://${PRODUCTION_BASE_HOSTNAME}`);
   }
   if (baseUrl && hasPlaceholder(baseUrl)) {
     fail(errors, "CODIP_BASE_URL contains a placeholder value");
@@ -108,8 +111,27 @@ function main() {
 
   const adminToken = env.CODIP_ADMIN_TOKEN?.trim() ?? "";
   const proxySecret = env.CODIP_TRUST_PROXY_SECRET?.trim() ?? "";
+  const disableTokenAuth = env.CODIP_DISABLE_TOKEN_AUTH?.trim().toLowerCase() ?? "";
+  const trustProxyAuth = env.CODIP_TRUST_PROXY_AUTH?.trim().toLowerCase() ?? "";
+  const adminEmails = env.CODIP_ADMIN_EMAILS?.trim() ?? "";
+  const adminDomains = env.CODIP_ADMIN_EMAIL_DOMAINS?.trim() ?? "";
   if (adminToken && hasPlaceholder(adminToken)) fail(errors, "CODIP_ADMIN_TOKEN contains a placeholder value");
   if (proxySecret && hasPlaceholder(proxySecret)) fail(errors, "CODIP_TRUST_PROXY_SECRET contains a placeholder value");
+
+  if (deployTarget === "production") {
+    if (disableTokenAuth !== "true") {
+      fail(errors, "Production target requires CODIP_DISABLE_TOKEN_AUTH=true");
+    }
+    if (trustProxyAuth !== "true") {
+      fail(errors, "Production target requires CODIP_TRUST_PROXY_AUTH=true");
+    }
+    if (!proxySecret) {
+      fail(errors, "Production target requires CODIP_TRUST_PROXY_SECRET");
+    }
+    if (!adminEmails && !adminDomains) {
+      fail(errors, "Production target requires CODIP_ADMIN_EMAILS or CODIP_ADMIN_EMAIL_DOMAINS");
+    }
+  }
 
   for (const key of [
     "CODIP_ALLOW_INSECURE_ADMIN",

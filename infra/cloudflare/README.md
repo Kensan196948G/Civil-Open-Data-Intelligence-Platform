@@ -2,6 +2,8 @@
 
 CODIP の preview/production Worker を Cloudflare Access で保護するための Terraform テンプレート。
 
+Production Access application の対象FQDNは `civilopendata.mirai-dx-platform.com` とする。
+
 ## 前提
 
 - Terraform >= 1.8
@@ -22,6 +24,8 @@ terraform init
 terraform plan
 terraform apply
 ```
+
+`terraform.tfvars.example` は production の `civilopendata.mirai-dx-platform.com` をサンプルとしている。Access allowlist (`allowed_emails` / `allowed_email_domains`) は実際に運用するメールアドレスまたはメールドメインへ必ず置換する。previewを別に作る場合は、同じzone配下の別サブドメインを人間承認後に決め、DNS/Access変更の証跡をRunbookへ追記する。
 
 ## 構成
 

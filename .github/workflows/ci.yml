@@ -74,6 +74,7 @@ jobs:
           npm run release:check-doc-api-contract
           npm run release:check-openapi-coverage
           npm run release:check-docker-contract
+          npm run release:check-audit-contract
           npm run release:check-cloudflare-contract
           npm run release:check-github-actions-contract
 
@@ -156,6 +157,14 @@ jobs:
       CODIP_TRUST_PROXY_SECRET: ${{ secrets.CODIP_TRUST_PROXY_SECRET }}
       CODIP_ADMIN_EMAILS: ${{ vars.CODIP_ADMIN_EMAILS }}
       CODIP_ADMIN_EMAIL_DOMAINS: ${{ vars.CODIP_ADMIN_EMAIL_DOMAINS }}
+      CODIP_CLOUDFLARE_ACCESS_EVIDENCE: ${{ vars.CODIP_CLOUDFLARE_ACCESS_EVIDENCE }}
+      CODIP_MONITORING_CONTACTS: ${{ vars.CODIP_MONITORING_CONTACTS }}
+      CODIP_CLOUDFLARE_ALERT_POLICY: ${{ vars.CODIP_CLOUDFLARE_ALERT_POLICY }}
+      CODIP_CLOUDFLARE_LOGS_EVIDENCE: ${{ vars.CODIP_CLOUDFLARE_LOGS_EVIDENCE }}
+      CODIP_NEON_MONITORING_EVIDENCE: ${{ vars.CODIP_NEON_MONITORING_EVIDENCE }}
+      CODIP_SMOKE_MONITORING_SCHEDULE: ${{ vars.CODIP_SMOKE_MONITORING_SCHEDULE }}
+      CODIP_ROLLBACK_OWNER: ${{ vars.CODIP_ROLLBACK_OWNER }}
+      CODIP_BACKUP_RESTORE_EVIDENCE: ${{ vars.CODIP_BACKUP_RESTORE_EVIDENCE }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
@@ -169,6 +178,18 @@ jobs:
 
       - name: Validate real production target env
         run: npm run release:validate-env:production-target
+
+      - name: Record production target evidence
+        run: npm run release:production-evidence -- --strict
+
+      - name: Reject unresolved Cloudflare placeholders
+        run: npm run release:check-production-placeholders -- --env "$CODIP_DEPLOY_TARGET"
+
+      - name: Build Cloudflare Worker artifact
+        run: npm run cf:build
+
+      - name: Verify Cloudflare Worker artifact
+        run: npm run release:check-cloudflare-build-artifact
 
       - name: Verify target PostGIS DDL
         run: npm run db:pg:check-postgis-ddl

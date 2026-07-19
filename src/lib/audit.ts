@@ -27,22 +27,29 @@ export type AuditEventInput = {
   level?: AuditLevel;
 };
 
+export function auditLogCreateData(event: AuditEventInput) {
+  return {
+    actor: event.actor ?? "管理者",
+    action: event.action,
+    target: event.target,
+    detail: event.detail,
+    level: event.level ?? "info",
+  };
+}
+
 /**
  * 監査イベントを1件記録する。記録失敗は主処理を失敗させない
- * (可用性優先。失敗自体はサーバーログへ残す)。
- * 主操作との同一トランザクション化 / outbox 方式による記録保証は Issue #46 で扱う
- * (設定変更のみ setOperationSetting が同一トランザクションで記録済み)。
+ * (可用性優先。失敗自体はサーバーログへ残す)。管理セッション開始・終了など、
+ * 監査失敗で主処理を止めないイベントでのみ使う。
+ *
+ * 主要mutationは auditLogCreateData() を使い、主操作と audit_logs 作成を
+ * 同一Prisma transactionに含める。保証範囲とoutbox移行条件は
+ * docs/adr/0002-audit-log-guarantee.md を参照。
  */
 export async function recordAudit(event: AuditEventInput): Promise<void> {
   try {
     await prisma.auditLog.create({
-      data: {
-        actor: event.actor ?? "管理者",
-        action: event.action,
-        target: event.target,
-        detail: event.detail,
-        level: event.level ?? "info",
-      },
+      data: auditLogCreateData(event),
     });
   } catch (error) {
     console.error(`[audit] failed to record event: ${event.action}`, error);
