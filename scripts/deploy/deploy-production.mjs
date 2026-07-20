@@ -168,22 +168,6 @@ async function main() {
   const proxySecret =
     process.env.CODIP_TRUST_PROXY_SECRET?.trim() || randomBytes(32).toString("hex");
 
-  if (withSecrets) {
-    step("set Worker secrets (values never printed)");
-    run(
-      "npx",
-      ["wrangler", "secret", "put", "CODIP_TRUST_PROXY_SECRET", "--env", "production"],
-      {},
-      { input: proxySecret },
-    );
-    run(
-      "npx",
-      ["wrangler", "secret", "put", "CODIP_ADMIN_EMAILS", "--env", "production"],
-      {},
-      { input: adminEmails },
-    );
-  }
-
   step("ensure DNS record (zone route target)");
   await ensureDnsRecord(cfToken);
 
@@ -232,6 +216,25 @@ async function main() {
     DATABASE_URL: neon.pooledUri,
     CODIP_MIGRATION_DATABASE_URL: neon.directUri,
   });
+
+  if (withSecrets) {
+    // After the first deploy so the Worker exists (`wrangler secret put` cannot
+    // target a missing Worker non-interactively). Until secrets land, admin
+    // surfaces stay fail-closed; each secret put releases a new version.
+    step("set Worker secrets (values never printed)");
+    run(
+      "npx",
+      ["wrangler", "secret", "put", "CODIP_TRUST_PROXY_SECRET", "--env", "production"],
+      {},
+      { input: proxySecret },
+    );
+    run(
+      "npx",
+      ["wrangler", "secret", "put", "CODIP_ADMIN_EMAILS", "--env", "production"],
+      {},
+      { input: adminEmails },
+    );
+  }
 
   console.log("\n[deploy-production] done. Next: release:smoke --read-only against production.");
 }
