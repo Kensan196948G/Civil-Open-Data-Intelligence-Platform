@@ -52,6 +52,20 @@ npm run release:production-evidence -- --strict
 `CODIP_BACKUP_RESTORE_EVIDENCE` は人間向けの証跡名だけを検査する。PITR window短縮や `pg_dump` 未実行を機械的に落とすため、production/stagingの定期バックアップジョブはSecretを含まないJSONを `CODIP_NEON_BACKUP_EVIDENCE_JSON` として渡し、次のゲートを実行する。
 
 ```bash
+npm run release:create-neon-backup-evidence -- \
+  --project-id falling-dawn-93620497 \
+  --branch production \
+  --history-window-hours 24 \
+  --pg-dump-artifact secure-artifact://codip/neon/20260720T063000Z.dump \
+  --pg-dump-at 2026-07-20T06:30:00Z \
+  --restore-drill-at 2026-07-19T06:30:00Z \
+  --owner release-manager \
+  --pretty
+```
+
+または、定期ジョブが生成した非Secret JSONを次のように渡す。
+
+```bash
 export CODIP_NEON_BACKUP_EVIDENCE_JSON='{
   "checkedAt": "2026-07-20T07:00:00Z",
   "projectId": "falling-dawn-93620497",
@@ -67,7 +81,7 @@ export CODIP_NEON_BACKUP_EVIDENCE_JSON='{
 npm run release:check-neon-backup-evidence
 ```
 
-既定では `historyWindowHours >= 24`、`lastPgDumpAt` が24時間以内、`lastRestoreDrillAt` が30日以内、各statusが `success` の場合だけ成功する。接続文字列、Neon API token、DB passwordはこのJSONへ入れない。誤って混入したSecret風文字列は出力時にredactされるが、証跡保存前に破棄して再発行する。
+既定では `historyWindowHours >= 24`、`lastPgDumpAt` が24時間以内、`lastRestoreDrillAt` が30日以内、各statusが `success` の場合だけ成功する。接続文字列、Neon API token、DB passwordはこのJSONへ入れない。誤って混入したSecret風文字列は出力時にredactされるが、証跡保存前に破棄して再発行する。`release:create-neon-backup-evidence` もSecret風のartifact識別子を拒否する。
 
 ## 2. ポストリリース状態確認
 

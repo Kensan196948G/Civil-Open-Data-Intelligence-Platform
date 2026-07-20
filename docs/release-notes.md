@@ -26,6 +26,7 @@
 | Cloudflare | `wrangler.jsonc` のproduction varsに `CODIP_DISABLE_TOKEN_AUTH=true` を固定し、Cloudflare Access/proxy auth配下で直接token経路を閉じる設定を契約チェック対象に追加 |
 | Cloudflare monitoring | `npm run release:post-release-status` を追加。`civilopendata.mirai-dx-platform.com` のDNS/health、応答時間、`/api/ready` DB状態、共有previewを読み取り専用で証跡化し、`--strict-production` では本番未接続やslow responseを失敗扱いにする |
 | Cloudflare 522 diagnosis | `release:post-release-status` に `Production Route Diagnosis` を追加。Cloudflare edge header付き522を、Worker route/deploy/logs確認へ誘導する |
+| Neon backup evidence | `npm run release:create-neon-backup-evidence` を追加。`pg_dump` artifact metadataまたはartifact IDから非Secret証跡JSONを生成し、既存の鮮度ゲートへ渡せるようにした |
 | Neon backup evidence | `npm run release:check-neon-backup-evidence` を追加。Secretを含まない `CODIP_NEON_BACKUP_EVIDENCE_JSON` からPITR window、pg_dump 24h鮮度、restore drill 30日鮮度を検査する |
 | CI証跡 | PR #49 のCloudflare target反映commit `040c7bc` に対して CI #82 / CodeQL #64 が success。verify、e2e、postgresql-compat、docker-preview、docker-image-security が全てsuccess |
 | Dependency maintenance | PR #52で `undici` 8.7.0、`@eslint/eslintrc` 3.3.6、`@types/node` 22.20.1、`autoprefixer` 10.5.4、`eslint` 9.39.5、`tailwindcss` 3.4.19、`tsx` 4.23.1、`vitest` 3.2.7、`wrangler` 4.112.0へ更新 |
@@ -54,5 +55,5 @@
 | P1 | Cloudflare本番522継続 | Worker route/deployment/logs、DNS proxied `AAAA 100::`、Secrets、Access、Hyperdrive実行時接続を承認済みCloudflare認証で確認し、復旧またはrollback判断をIssue #18へ証跡化 |
 | P2 | Issue #46 監査記録の原子性 | 主要な台帳・タグ・接続確認・サンプル取得・品質再計算は同一transaction化済み。クライアント起点イベントは記録失敗を503化済み。残りは将来の長時間外部処理増加時にoutbox方式を採用するかの設計判断 |
 | P2 | 本番Evidence自動取得 | `production-evidence` はSecret非表示の入力状態と手動貼付欄まで。Cloudflare/Neon APIからの実ログ自動収集は認証・権限確認後に追加 |
-| P2 | Issue #63 Neon pg_dump定期ジョブ登録 | 鮮度ゲートは追加済み。実Secretを持つCI/CDまたは運用端末での `pg_dump` スケジュール、artifact保管先、restore drill自動証跡化は継続 |
+| P2 | Issue #63 Neon pg_dump定期ジョブ登録 | 鮮度ゲートと非Secret証跡JSON生成は追加済み。実Secretを持つCI/CDまたは運用端末での `pg_dump` スケジュール、暗号化artifact保管先、restore drill実行自動化は継続 |
 | P2 | De-dockerization #35 | CI/branch protection/docsを確認し、Docker依存ゲートを段階的に置換 |
