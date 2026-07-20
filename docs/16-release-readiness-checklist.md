@@ -318,7 +318,8 @@ Cloudflare / Neon への実デプロイは、以下の**人間承認必須**の�
 
 | # | 作業 | 承認が必要な理由 |
 | --- | --- | --- |
-| 1 | Neon project / branch の作成 | 課金発生・リソース作成 |
+| 1 | Neon **production 用 branch** の新規作成 (project 自体は既存 `falling-dawn-93620497`。§5.1 参照) | 課金発生・リソース作成、人間承認必須 |
+| - | (対比参考) **非本番 preview branch** の作成・検証 (例: 今回作成した `preview-20260720`) | `.claude/CLAUDE.md` §27.2 特則により CTO 自律実行可。ただし branch 削除・既存データ削除等の破壊的操作は人間承認必須 |
 | 2 | `wrangler hyperdrive create` と `wrangler.jsonc` の id 置換 | 課金発生・リソース作成 |
 | 3 | `wrangler secret put` による秘密情報登録 | Secrets の登録 |
 | 4 | Issue #18 の残件解消 (実Hyperdrive/Neon証跡、外部URL取得egress設計) | `resolve4` / `resolve6` 事前検証、Node接続時DNSピン留め、Workers runtime安全停止、`@prisma/adapter-pg` 導入は完了。実Cloudflare/Neon targetでのDB接続証跡は本番切替の前提条件 |
@@ -484,3 +485,162 @@ Codex 指摘修正 (`51bdda5`) は CodeRabbit 未レビューのコード変更�
 | Cloudflare Workersは目標構成で、現行共有previewはNode.jsコンテナ中心 | staging導入時に `wrangler` / adapter / Access / Hyperdrive の実設定証跡を追加 |
 | 標準レコード本体と原本保存基盤はstaging未投入 | `/api/v1` のPostGIS読取パスとCI用標準レコードsmokeは実装済み。実データ投入、原本保存先、移行手順はstaging導入時に追加 |
 | Cloudflare/Neon staging smokeはrunbook準備済みで実環境証跡は未記録 | 初回staging deploy時に `/api/ready`、`/api/sources`、migration、rollback ownerを記録 |
+
+### 2026-07-20 自律 CTO 再検証 + Neon実リソース実態確認 (Phase 1)
+
+2026-07-18 時点の本チェックリスト (§本番化の前提、上記「新規発見と対応」#2) は
+「CODIP の Neon project 不在」と記録していた。本セッションで Neon MCP
+(`list_projects`) を直接照会した際、project が存在すること (project id
+`falling-dawn-93620497`、表示名 `Civil-Open-Data-Intelligence-Platform`) を確認し、
+一度は「2026-07-18 時点から存在していた」と本節に記録した。
+
+**2026-07-20 追加検証による訂正:** その後 `describe_project` で branch 単位の
+`created_at` を直接照会したところ、primary/default branch (`main`,
+`br-solitary-breeze-afr5lrq4`) の作成日時は **`2026-07-19T14:56:19Z`** であることが
+判明した。Neon では project 作成時に primary branch が同時に払い出されるため、
+project 自体もこの時刻前後に作成されたとみなせる。すなわち **「2026-07-18 時点で
+存在していた」という上記の記録は誤りであり、2026-07-18 時点の「project 不在」記録の
+方が実態に近かった可能性が高い**。project がいつ・誰によって作成されたかの一次証跡
+(監査ログ等) までは本セッションの範囲では確認していないため、「2026-07-19 に存在を
+確認した」以上の断定はしない。過去の記録 (誤って「当時から存在」とした本節の初稿を
+含む) は監査証跡としてそのまま残し、本段落で訂正する。
+
+#### 今回実施した Neon 実リソース検証
+
+| # | 実施内容 | 結果 |
+| --- | --- | --- |
+| 1 | `list_projects` で CODIP の Neon project 存在確認 | ✅ 存在 (`falling-dawn-93620497`) |
+| 2 | main branch の `_prisma_migrations` を `run_sql` で直接照会 | ✅ 両 migration (`20260713113000_init`, `20260718213759_add_audit_logs_and_app_settings`) が `rolled_back_at=null` で適用済み |
+| 3 | `create_branch` で preview branch `preview-20260720` (`br-billowing-thunder-afbnces5`) を作成 | ✅ 作成成功。copy-on-write で main の migration 状態をそのまま継承 |
+| 4 | preview branch 上で `_prisma_migrations` checksum を main と比較 | ✅ 完全一致 |
+| 5 | `get_database_tables` で preview branch のテーブル一覧確認 | ✅ アプリ 10 テーブル + PostGIS 管理ビュー (`geography_columns`, `geometry_columns`) + `spatial_ref_sys` を確認。PostGIS 3.5 / PostgreSQL 17.10 (aarch64) 稼働 |
+| 6 | Prisma `driverAdapters` previewFeatures 要否を Context7 で一次情報確認 | ✅ Prisma 6.15.0 で `generateClient.ts` からチェックが撤廃済み。導入済み `^6.19.3` では `schema.prisma` へのフラグ記載は不要と確定 (誤ったコメントだった `wrangler.jsonc:27` を修正) |
+
+すべて Neon MCP (`run_sql`/`get_database_tables`/`create_branch`) 経由で実行し、
+生の接続文字列は Bash・会話へ一切露出させていない (`.claude/CLAUDE.md` §27.2 の
+「Neon操作は完全自動化」特則の範囲内。破壊的操作は含まない)。
+
+#### 本番化の前提 (§本番化の前提) への影響
+
+- 表項目 1「Neon production 用 branch の新規作成」のうち、**project は既存**であり
+  project 自体の新規作成は不要。表の対比参考行のとおり、非本番 preview branch 作成
+  (今回の `preview-20260720` 等) は `.claude/CLAUDE.md` §27.2 特則により CTO 自律実行範囲。
+  人間承認が必要なのは、本番用 branch を新規に切る場合や破壊的操作 (branch 削除、
+  既存データ削除) に限られる。
+- Hyperdrive 経由の「接続時 DNS ピン留め」実証 (Issue #18 残件) は、Hyperdrive config
+  自体が未作成のため**引き続き未実施**。今回の検証は Neon MCP 直結によるスキーマ・
+  migration 適用状態の確認であり、Cloudflare Workers ランタイムからの接続経路とは別物であるため
+  混同しないこと。
+- 本番化の前提リストの残り 5 項目 (Hyperdrive 作成、Secrets 登録、Issue #18 残件の
+  Hyperdrive実証部分、terraform apply、production deploy) は変更なく人間承認必須のまま。
+
+対応する `state.json` の `blocked_issues` / `open_findings` も本節にあわせて更新した。
+
+#### 追記: ローカル Verify 一式 + Cloudflare 非本番 preview 実デプロイ試行 (同日)
+
+上記 Neon 検証に続き、本セッションでは以下を実施した。
+
+| # | 実施内容 | 結果 |
+| --- | --- | --- |
+| 1 | `npm run lint` | ✅ PASS (エラー 0 件) |
+| 2 | `npx tsc --noEmit` | ✅ PASS (型エラー 0 件) |
+| 3 | `npm run test` (vitest) | ✅ PASS (27 test files / 289 tests 全成功) |
+| 4 | `npm run build` (`prisma generate` + `next build`) | ✅ PASS (16 ルート全生成成功) |
+| 5 | `npm run release:check-production-placeholders` | ❌ FAIL (exit 1) — `env.production.hyperdrive.HYPERDRIVE id` が placeholder のままであることを検知。**意図通りの挙動**であり、production deploy を未然にブロックするガードが正しく機能していることを確認 |
+| 6 | `npm run cf:build` (`opennextjs-cloudflare build`) | ✅ PASS — `.open-next/worker.js` を最新コードで再生成 |
+| 7 | `npm run release:check-cloudflare-build-artifact` | ✅ PASS (exit 0) |
+| 8 | `npx wrangler deploy --env preview` (goal必須の実デプロイ試行) | 🛑 **BLOCKED** — 詳細は下記 |
+
+**#8 の詳細:** `wrangler deploy --env preview` は `opennextjs-cloudflare deploy` に処理を委譲するが、
+その `getPlatformProxy` 初期化フェーズ (`applyHyperdriveEnvVars`) で Hyperdrive binding の
+local connection string 解決を必須としており、以下の `UserError` で Worker アップロード処理に
+到達する前に失敗する。
+
+```text
+UserError: When developing locally, you should use a local Postgres connection string to emulate
+Hyperdrive functionality. Please setup Postgres locally and set the value of the
+'CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE' variable or "HYPERDRIVE"'s
+"localConnectionString" to the Postgres connection string.
+```
+
+`--dry-run` では同エラーを回避でき、binding 構成 (`env.HYPERDRIVE`, `env.ASSETS`,
+`env.CODIP_*` 環境変数) が意図通りであることは確認済み。つまり **wrangler.jsonc の設定自体に
+誤りはない**。
+
+**`--dry-run` の検証範囲の限界:** `--dry-run` が確認できるのは Worker の構文・binding 構成の
+妥当性までであり、**Worker を実際に Cloudflare へアップロードした後の経路 (post-upload path)
+は検証しない**。したがって `--dry-run` の成功は「`wrangler deploy` (アップロードを伴う実デプロイ)
+も成功する」ことを保証しない。加えて、本セッション時点で `wrangler.jsonc` の
+`env.preview.hyperdrive[0].id` は `REPLACE_WITH_STAGING_HYPERDRIVE_ID` の placeholder のまま
+であり (意図的な未確定状態であり構文エラーではない)、これ自体が実 Hyperdrive リソースへの
+到達を妨げる一因になっている。
+
+**原因の技術的正確性 (2026-07-20 Cloudflare 公式ドキュメント照会による追記):**
+上記の失敗を「Hyperdrive config が Cloudflare 側に実在しないことのみが原因」と単純化するのは
+不正確である。Cloudflare 公式ドキュメント (`getPlatformProxy` API reference) には
+「Hyperdrive binding が返す `connectionString`/`host` は `workerd` プロセス外では有効な意味を
+持たない passthrough 値である」と明記されている。`opennextjs-cloudflare deploy` はビルド
+パイプラインの一部としてローカル Node.js プロセス上で `getPlatformProxy` 経由の解決を行う
+ため、この制約に該当する。したがって実際には次の 2 要因が組み合わさっている。
+
+1. Hyperdrive config が Cloudflare 側に実在しない (`wrangler.jsonc` は id が placeholder のまま)。
+2. たとえ (1) を解消し実在の Hyperdrive id を設定しても、`opennextjs-cloudflare` のビルド/
+   デプロイパイプラインがローカルから `getPlatformProxy` を経由して Hyperdrive binding を
+   解決しようとする限り、`connectionString` は passthrough 値のままで実 DB 接続には使えず、
+   `localConnectionString` (または `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE`)
+   の設定が別途必要になる可能性が高い。
+
+(2) は Cloudflare 公式ドキュメントの記述からの論理的推定であり、Hyperdrive config 作成後の
+実地再検証では確認していない。**Hyperdrive config 作成だけで本エラーが解消すると断定しない
+こと。**
+
+**結論:** goal が要求する「Cloudflare 非本番 preview への実デプロイ」は、Hyperdrive config
+作成 (`.claude/CLAUDE.md` §8.6 により人間承認必須の課金リソース) なしには技術的に実行不可能で
+あることを実地検証で確定した。これにより「デプロイ後の Access・主要画面・API・DB・ログ・
+secret 露出確認」は前提のデプロイが BLOCKED のため **NOT RUN** とする。回避策
+(`CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` にNeon接続文字列を設定して
+ローカルエミュレーションする等) は、実際の Cloudflare Hyperdrive 経由の接続を検証したことに
+ならず実態を偽ることになるため採用しなかった。Hyperdrive config 作成後、上記 (2) を含めて
+本手順を再実行する。
+
+**本節時点の総合判定:** ローカル Verify (lint/typecheck/test/build) は全て意図通り PASS。
+一方、production 向けガードである `npm run release:check-production-placeholders` は
+**FAIL (exit 1)** であり (production Hyperdrive id が placeholder のままであることを検知する
+意図通りの挙動)、Cloudflare 非本番 preview への実デプロイも `wrangler deploy --env preview` が
+**BLOCKED** された。この 2 点により、goal が要求する「デプロイ後の Access・主要画面・API・DB・
+ログ・secret 露出確認」を含む integration・security・CI (デプロイ後)・review の各確認は前提を
+満たせず **NOT RUN** とする。
+
+以上から、本節時点の最終判定は **NOT STABLE** とする。`release:check-production-placeholders`
+が FAIL であること、および Cloudflare preview deploy が BLOCKED されたことの両方を理由として、
+**Hyperdrive config 作成等の人間承認必須ステップ (§本番化の前提) が完了するまで、production
+への merge/deploy は許可されない**。本 PR 自体 (ドキュメント整合・実装修正・ローカル検証) は
+通常の CI ゲート (lint/typecheck/test/build/CodeQL) を満たしており、コード変更としての通常
+merge 可否は `.claude/CLAUDE.md` §16 の唯一の承認ゲート (マージ判定 Y/N) に委ねる。ただし、
+その Y 判断は「production への実デプロイ」を含意しない — production デプロイは別途 Hyperdrive
+config 作成後、本チェックリストの再検証を経て判断する。実装・ローカル検証の範囲では Phase 1 の
+完了条件を満たすが、goal が明示的に必須とする「デプロイ後確認」を含めた完全な Phase 1 完了は、
+Hyperdrive config 作成という人間承認ステップの完了を待つ必要がある。
+
+#### 追記2: origin/main rebase 後の再検証 (同日)
+
+上記検証の完了後、`release/production-cutover-20260719` ブランチが `origin/main` から
+9 コミット遅れており (このセッションの変更対象と同じ 3 ファイルへ並行して変更が入っていた)、
+`git rebase origin/main` で追随したためコミット済み HEAD の SHA が変化した。
+グローバル CLAUDE.md §15「head SHA が変化した場合は、影響する検証を再実行する」に従い、
+`npm ci` で依存関係 (Wrangler 4.110.0 → 4.112.0 含む) を同期したうえで Verify 一式を再実行した。
+
+| # | 実施内容 | rebase 前 | rebase 後 | 判定 |
+| --- | --- | --- | --- | --- |
+| 1 | lint | PASS | PASS | ✅ 変化なし |
+| 2 | typecheck | PASS | PASS | ✅ 変化なし |
+| 3 | test | 27 files / 289 tests PASS | 28 files / 297 tests PASS | ✅ origin/main 側 (PR #61 等) で追加されたテストを含めて全成功 |
+| 4 | build | 16 ルート PASS | 32 ルート PASS | ✅ origin/main 側で追加された API route 等を含めて成功 |
+| 5 | release:check-production-placeholders | FAIL (意図通り) | FAIL (意図通り) | ✅ 変化なし |
+| 6 | cf:build | PASS | PASS | ✅ 変化なし |
+| 7 | release:check-cloudflare-build-artifact | PASS | PASS | ✅ 変化なし |
+| 8 | `wrangler deploy --env preview` | BLOCKED (Hyperdrive UserError) | BLOCKED (同一 UserError、Wrangler 4.112.0) | ✅ 再現性確認。Wrangler バージョン更新では解消しない設計上の制約であることを確認 |
+
+**結論:** rebase による依存関係・コードベースの更新後も、上記の結論 (Hyperdrive config 未作成に
+よる preview デプロイ BLOCKED) は完全に再現し、変化しなかった。origin/main 側の並行作業
+(テスト・ルート数の増加) はこのブランチの変更と非重複であり、コンフリクトなく統合できている。
