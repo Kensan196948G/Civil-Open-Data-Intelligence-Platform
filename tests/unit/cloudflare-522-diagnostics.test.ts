@@ -119,9 +119,10 @@ describe("cloudflare-522-diagnostics", () => {
     expect(report.ok).toBe(true);
     expect(report.wranglerResults.map((result) => result.label)).toEqual(["deployments status", "deployments list"]);
     expect(runner).toHaveBeenCalledTimes(2);
-    expect(runner.mock.calls[0][1]).toContain("deployments");
-    expect(runner.mock.calls[0][1]).toContain("status");
-    expect(runner.mock.calls[1][1]).toContain("list");
+    const calls = runner.mock.calls as unknown as [string, string[]][];
+    expect(calls[0][1]).toContain("deployments");
+    expect(calls[0][1]).toContain("status");
+    expect(calls[1][1]).toContain("list");
     expect(runner.mock.calls.flat().join(" ")).not.toMatch(/deploy\s|secret|dns|delete|rollback/i);
   });
 });
