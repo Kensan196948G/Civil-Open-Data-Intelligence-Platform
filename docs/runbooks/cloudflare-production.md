@@ -78,6 +78,11 @@ cmd /c "pushd \\192.168.0.185\kensan\Projects\Mirai-DX-Project\Civil-Open-Data-I
 # (secretsは初回deploy後に登録。それまで管理系はfail-closed全拒否)
 source ~/.bashrc && node scripts/deploy/deploy-production.mjs --with-secrets
 
+# workerdを起動できないホスト向け (hard ulimit -v によりminiflare/V8 sandboxが
+# 起動不能な環境): 同一のゲート群を個別実行後、wrangler deployで直接デプロイする。
+# 本プロジェクトはR2/KVキャッシュbindingを持たないため両経路は等価。
+source ~/.bashrc && node scripts/deploy/deploy-production.mjs --with-secrets --wrangler-direct
+
 # 個別実行する場合 (evidence/DB URLは環境変数で与える)
 npm run cf:deploy:production
 ```
