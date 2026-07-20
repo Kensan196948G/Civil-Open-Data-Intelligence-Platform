@@ -48,7 +48,7 @@ function writeWrangler(root: string, hyperdriveId: string, previewHyperdriveId =
         "production": {
           "workers_dev": false,
           "routes": [
-            { "pattern": "civilopendata.mirai-dx-platform.com", "custom_domain": true }
+            { "pattern": "civilopendata.mirai-dx-platform.com/*", "zone_name": "mirai-dx-platform.com" }
           ],
           "hyperdrive": [
             { "binding": "HYPERDRIVE", "id": "${hyperdriveId}" }

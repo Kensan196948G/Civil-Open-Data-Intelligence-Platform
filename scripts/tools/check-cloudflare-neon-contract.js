@@ -37,7 +37,7 @@ requireText(".env.example", envExample, "CODIP_CLOUDFLARE_ALERT_POLICY");
 requireText(".env.example", envExample, "CODIP_NEON_MONITORING_EVIDENCE");
 requireText(".env.example", envExample, "CODIP_BACKUP_RESTORE_EVIDENCE");
 requireText("wrangler.jsonc", wrangler, "civilopendata.mirai-dx-platform.com");
-requireText("wrangler.jsonc", wrangler, "\"custom_domain\": true");
+requireText("wrangler.jsonc", wrangler, "\"zone_name\": \"mirai-dx-platform.com\"");
 requireText("wrangler.jsonc", wrangler, "\"workers_dev\": false");
 requireText("wrangler.jsonc", wrangler, "\"observability\"");
 requireText("wrangler.jsonc", wrangler, "\"enabled\": true");
@@ -74,13 +74,13 @@ for (const token of [
 for (const token of [
   "civilopendata.mirai-dx-platform.com",
   "DNS、Custom Domain、Access、Secrets、Hyperdrive、Neon本番接続を無断で変更しない",
-  "REPLACE_WITH_PRODUCTION_HYPERDRIVE_ID",
+  "scripts/deploy/create-hyperdrive.mjs",
   "release:validate-env:production-target",
   "release:production-evidence -- --strict",
   "release:check-production-placeholders -- --env production",
   "npm run cf:deploy:production",
   "release:smoke -- --read-only",
-  "New subdomain / Custom Domain gate",
+  "New subdomain / routing gate",
   "Hostname conflict",
   "Cloudflare zone status",
   "Cloudflare API / Neon APIへ接続してCustom Domain",

@@ -4,8 +4,15 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const TARGETS = new Map([
-  ["staging", { wranglerEnv: "preview", host: null }],
-  ["production", { wranglerEnv: "production", host: "civilopendata.mirai-dx-platform.com" }],
+  ["staging", { wranglerEnv: "preview", host: null, zone: null }],
+  [
+    "production",
+    {
+      wranglerEnv: "production",
+      host: "civilopendata.mirai-dx-platform.com",
+      zone: "mirai-dx-platform.com",
+    },
+  ],
 ]);
 
 const PLACEHOLDER_RE = /REPLACE_WITH|placeholder|change[-_]?this|example/i;
@@ -57,11 +64,21 @@ function validateTarget(root, targetName) {
   if (targetName === "production") {
     if (envConfig?.workers_dev !== false) fail(errors, "env.production.workers_dev must be false");
 
-    const route = envConfig?.routes?.find((item) => item?.pattern === target.host);
+    // Accept either binding mechanism for the production hostname:
+    // - Custom Domain (`custom_domain: true`, requires the account-level Workers
+    //   Custom Domains API scope), or
+    // - zone route (`zone_name` + `<host>/*` pattern + proxied DNS record; the
+    //   mechanism currently in use — see docs/runbooks/cloudflare-production.md §1.1).
+    const route = envConfig?.routes?.find(
+      (item) => item?.pattern === target.host || item?.pattern === `${target.host}/*`,
+    );
     if (!route) {
       fail(errors, `env.production.routes must include ${target.host}`);
-    } else if (route.custom_domain !== true) {
-      fail(errors, `env.production route ${target.host} must set custom_domain=true`);
+    } else if (route.custom_domain !== true && route.zone_name !== target.zone) {
+      fail(
+        errors,
+        `env.production route ${target.host} must set custom_domain=true or zone_name=${target.zone}`,
+      );
     }
 
     if (envConfig?.vars?.CODIP_BASE_URL !== `https://${target.host}`) {

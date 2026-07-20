@@ -59,8 +59,16 @@ describe("tool scripts", () => {
   });
 
   it("rejects unresolved production Cloudflare placeholders", () => {
+    // The repo wrangler.jsonc now carries the real production Hyperdrive ID, so
+    // build a fixture that reverts resolved ids back to placeholders.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "codip-placeholder-reject-test-"));
+    const wrangler = fs
+      .readFileSync(path.join(process.cwd(), "wrangler.jsonc"), "utf8")
+      .replace(/"id": "[0-9a-f]{32}"/g, '"id": "REPLACE_WITH_PRODUCTION_HYPERDRIVE_ID"');
+    fs.writeFileSync(path.join(tmp, "wrangler.jsonc"), wrangler);
+
     const result = spawnSync(process.execPath, [placeholderScript, "--env", "production"], {
-      cwd: process.cwd(),
+      cwd: tmp,
       env: { PATH: process.env.PATH ?? "", NODE_ENV: "test" },
       encoding: "utf8",
     });
