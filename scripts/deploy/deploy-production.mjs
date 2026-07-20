@@ -18,6 +18,14 @@
 //                    Access header injection is configured, rotate both sides
 //                    together.
 //   --skip-deploy    run checks + DNS/secrets only, skip `cf:deploy:production`.
+//   --wrangler-direct  run the same release gates individually, then deploy with
+//                    `wrangler deploy --env production` instead of the OpenNext
+//                    wrapper. Needed on hosts where workerd cannot start
+//                    (the wrapper boots miniflare just to read env; workerd's V8
+//                    sandbox requires a large virtual address space reservation
+//                    and fails under a hard `ulimit -v`). Equivalent for this
+//                    project: no R2/KV incremental-cache bindings exist, so the
+//                    wrapper adds no cache-population step over plain wrangler.
 //
 // Usage: source ~/.bashrc && node scripts/deploy/deploy-production.mjs --with-secrets
 
@@ -35,6 +43,7 @@ const BASE_URL = `https://${PRODUCTION_HOST}`;
 
 const withSecrets = process.argv.includes("--with-secrets");
 const skipDeploy = process.argv.includes("--skip-deploy");
+const wranglerDirect = process.argv.includes("--wrangler-direct");
 
 function requiredEnv(name) {
   const value = process.env[name]?.trim();
@@ -176,7 +185,11 @@ async function main() {
     return;
   }
 
-  step("cf:deploy:production (validate-env -> evidence -> placeholders -> build -> artifact check -> deploy)");
+  step(
+    wranglerDirect
+      ? "release gates + wrangler deploy --env production (workerd-free path)"
+      : "cf:deploy:production (validate-env -> evidence -> placeholders -> build -> artifact check -> deploy)",
+  );
   const evidenceDefaults = {
     CODIP_CLOUDFLARE_ACCESS_EVIDENCE:
       "Cloudflare Access未設定 (ユーザー手動設定を予定)。管理系はCODIP_TRUST_PROXY_SECRET必須のfail-closed全拒否で公開。Access設定後にsecret rotationを実施",
@@ -202,7 +215,7 @@ async function main() {
     ]),
   );
 
-  run("npm", ["run", "cf:deploy:production"], {
+  const deployEnv = {
     ...evidenceEnv,
     CODIP_DEPLOY_TARGET: "production",
     CODIP_ENV_MODE: "production",
@@ -215,7 +228,24 @@ async function main() {
     CODIP_ADMIN_EMAILS: adminEmails,
     DATABASE_URL: neon.pooledUri,
     CODIP_MIGRATION_DATABASE_URL: neon.directUri,
-  });
+    // Local-emulation placeholder only: the OpenNext wrapper boots miniflare to
+    // read env before deploying and requires this var for the Hyperdrive
+    // binding. Never used by the deployed Worker.
+    CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE:
+      "postgresql://codip:codip@localhost:5432/codip",
+  };
+
+  if (wranglerDirect) {
+    // Same gate chain as cf:deploy:production, then plain wrangler deploy.
+    run("npm", ["run", "release:validate-env:production-target"], deployEnv);
+    run("npm", ["run", "release:production-evidence", "--", "--strict"], deployEnv);
+    run("npm", ["run", "release:check-production-placeholders", "--", "--env", "production"], deployEnv);
+    run("npm", ["run", "cf:build"], deployEnv);
+    run("npm", ["run", "release:check-cloudflare-build-artifact"], deployEnv);
+    run("npx", ["wrangler", "deploy", "--env", "production"], deployEnv);
+  } else {
+    run("npm", ["run", "cf:deploy:production"], deployEnv);
+  }
 
   if (withSecrets) {
     // After the first deploy so the Worker exists (`wrangler secret put` cannot
