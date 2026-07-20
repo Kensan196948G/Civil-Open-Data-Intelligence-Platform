@@ -167,7 +167,7 @@ flowchart TD
 | API | `/api/health` 200、`/api/ready` 200、`/api/dashboard` 200、`/api/sources` 200、`/api/openapi` 200 |
 | 管理保護 | `/api/fetch-logs` は未認証401、`/api/admin/audit-events` のGETは405 |
 | DB | `/api/ready` 200でアプリからDB接続を確認。共有previewは正本Neonではなくローカル/preview DB |
-| Cloudflare/Neon | production targetは `civilopendata.mirai-dx-platform.com`。`wrangler.jsonc` と `infra/cloudflare/` は準備済み。Hyperdrive IDはplaceholderで、DNS/Access/Secret/Neon実リソースは人間承認後に確定 |
+| Cloudflare/Neon | production targetは `civilopendata.mirai-dx-platform.com`。DNSはCloudflareへ解決済みだが、本番APIは522で未正常。Worker route/deployment/logs、Access、Secretsの実リソース証跡は承認済みCloudflare認証で確認する |
 
 ### 🔧 2026-07-19 安定化改善
 
@@ -213,29 +213,28 @@ flowchart TD
 | --- | --- |
 | Cloudflare Hyperdrive | 🟢 作成済み `codip-production` (caching disabled、`scripts/deploy/create-hyperdrive.mjs` で払い出し、`wrangler.jsonc` に実ID反映済み) |
 | Neon production | 🟢 既存 project `falling-dawn-93620497` の default branch を本番として使用 (PostGIS、migration適用済み、pre-release backup branch取得済み) |
-| Worker `codip` | ⚪ 未デプロイ (マージ承認後に `scripts/deploy/deploy-production.mjs` で実行) |
-| DNS record | ⚪ 未作成 (デプロイパイプラインが冪等に作成) |
-| Worker Secrets | ⚪ 未登録 (`--with-secrets` でデプロイ時に登録。値は非表示) |
-| Cloudflare Access | ⚪ 未設定 (ユーザー手動作業。設定完了までは管理系がfail-closed全拒否で安全側) |
+| Worker `codip` | ⚠️ 要確認。本番URLはCloudflare edgeへ到達するが `/api/health` / `/api/ready` は522。承認済み認証で `wrangler deployments list --env production` と Workers Logs / route を確認する |
+| DNS record | 🟡 Cloudflare A/AAAAへ解決済み。zone route方式の proxied `AAAA 100::` が意図通りかはCloudflare Dashboard / Wranglerで証跡化する |
+| Worker Secrets | ⚠️ 要確認。値は出力せず、Secrets登録有無だけを承認済みCloudflare認証で確認する |
+| Cloudflare Access | ⚠️ 要確認。未設定またはproxy secret未整備の場合、管理系はfail-closed全拒否として扱う |
 
-残る本番化ステップは以下のとおりで、マージ承認 (`Y`) の範囲内で実行されます。Access設定 (`infra/cloudflare/` の `terraform apply` 相当) のみユーザー手動です。
+現時点の最優先ステップは本番522の復旧判断である。DNSやSecretsを変更する前に、Cloudflare route/deployment/logsを読み取り確認し、証跡をIssue #18へ記録する。
 
 | # | 作業 | 実行者 |
 | --- | --- | --- |
-| 1 | `scripts/deploy/deploy-production.mjs --with-secrets` (migrate status → DNS → deploy → Secrets登録) | マージ承認後に自律実行 |
-| 2 | `release:smoke -- --read-only` + `release:post-release-status` による本番確認 | マージ承認後に自律実行 |
-| 3 | Cloudflare Access application/policy の設定と `CODIP_TRUST_PROXY_SECRET` rotation | 人間 (ユーザー) |
-| 4 | Issue #18 の実Cloudflare/Neon証跡 (Workers実行時のDB接続・SSRFガード挙動) | デプロイ後に記録 |
+| 1 | `release:post-release-status` の `Production Route Diagnosis` を保存 | CTO/運用 |
+| 2 | `wrangler deployments list --env production`、`wrangler tail codip --env production --status error`、Cloudflare Dashboardのroute/DNSを確認 | 承認済みCloudflare認証を持つ作業者 |
+| 3 | Worker routeが未接続なら、承認済みCI/CDまたはRunbook経路でroute/deployを復旧。DNS/Secrets変更は証跡確認後に限定 | CTO判断 + 承認済み作業者 |
+| 4 | Cloudflare Access application/policy と `CODIP_TRUST_PROXY_SECRET` 登録状態を確認し、管理系fail-closedを維持 | 人間 (ユーザー) / 承認済み作業者 |
 
 ### ⚠️ 残課題
 
 - **Cloudflare Workers ランタイム互換**: [Issue #18](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/18)。SSRF事前DNS検証は `dns.promises.resolve4` / `resolve6` へ変更済み。接続時DNSピン留めはNode.js/Undiciで継続し、Cloudflare Workersでは同等保証ができないため外部URL取得を `unsupported_runtime` で安全停止する。PostgreSQL Prisma Clientは `@prisma/adapter-pg` によりHyperdrive `connectionString` を消費できる構成へ変更済み。残りは実Cloudflare/Neon証跡
 - **main branch protection**: 現在は有効。required checksは `verify` / `e2e` / `postgresql-compat` / `docker-preview` / `docker-image-security` / `analyze`、strict=true、admin enforcement=true。今後はrequired review数やCode Ownersの要否を運用成熟度に合わせて判断する
-- **Cloudflare/Neon実ターゲット証跡未取得**: DNS、Custom Domain、Access、Secrets、Hyperdrive、Neon branch、production smoke、監視/バックアップ証跡は人間承認後に取得
+- **Cloudflare本番522継続**: `civilopendata.mirai-dx-platform.com` はCloudflareへ解決済みだが、`/api/health` と `/api/ready` が522。Worker route/deployment/logs、Secrets、Access、Hyperdrive実行時接続の証跡を確認するまで本番正常稼働とは判定しない
 - **Neon pg_dump定期ジョブ未登録**: [Issue #63](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/63)。鮮度ゲートは実装済み。実Secretを持つCI/CDまたは運用端末でのpg_dumpスケジュール、artifact保管先、restore drill証跡化は継続
 
-🔒 **本番リリース・本番デプロイは未実施**。リリース直前の完成状態まで整え、承認待ちで停止しています。
-切り戻し手順は [`docs/runbooks/rollback.md`](docs/runbooks/rollback.md) を参照してください。
+🔒 **本番URLはCloudflareへ到達済みだが、522のため本番正常稼働は未達**。復旧判断は [`docs/runbooks/cloudflare-production.md`](docs/runbooks/cloudflare-production.md) の522手順と [`docs/runbooks/rollback.md`](docs/runbooks/rollback.md) に従います。
 
 ---
 

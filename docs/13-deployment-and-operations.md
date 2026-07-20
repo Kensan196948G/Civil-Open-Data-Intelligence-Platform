@@ -16,7 +16,7 @@ MVPではローカル、CI、Docker previewで品質を確認する。2026-07-19
 ただし以下は未解決のアプリケーションコード/実リソース側の制約であり、Workers本番切替前に解消または証跡化が必須:
 
 - `src/lib/url-guard.ts` の事前DNS検証は `resolve4` / `resolve6` へ変更済み。接続時ピン留めはNode.js/Undici Agentで実施する。Cloudflare Workersでは公式仕様上 `dns.lookup` が未実装で、同等の接続時ピン留めを保証できないため、`src/lib/http-client.ts` はWorkers runtimeを検知した場合に外部URL取得を `unsupported_runtime` として明示的に停止する
-- `wrangler.jsonc` の production custom domain は `civilopendata.mirai-dx-platform.com` に固定済み。production `workers_dev=false` により本番の `*.workers.dev` 直公開経路は使わない。本番化手順は `docs/runbooks/cloudflare-production.md` を入口とする。ただし Hyperdrive ID は placeholder であり、Cloudflare Worker deploy / Hyperdrive 作成 / Access / Custom Domain 接続の実リソース作成とSecret登録は人間承認後に行う (Neon project `falling-dawn-93620497` は既存。2026-07-20 に Neon MCP で実地確認済み、詳細は `docs/16-release-readiness-checklist.md` §5.1)
+- `wrangler.jsonc` の production route は `civilopendata.mirai-dx-platform.com/*` に固定済み。production `workers_dev=false` により本番の `*.workers.dev` 直公開経路は使わない。2026-07-20時点で本番hostnameはCloudflareへ解決するが、`/api/health` / `/api/ready` は522であり、Worker route/deployment/logs、Secrets、Access、Hyperdrive実行時接続の証跡確認が完了するまで本番正常稼働とは判定しない。本番化・復旧手順は `docs/runbooks/cloudflare-production.md` を入口とする (Neon project `falling-dawn-93620497` は既存。2026-07-20 に Neon MCP で実地確認済み、詳細は `docs/16-release-readiness-checklist.md` §5.1)
 
 Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、Cloudflareが現在推奨するNext.jsデプロイ経路が `@opennextjs/cloudflare` アダプタ経由のWorkersであり、レガシーの `@cloudflare/next-on-pages` ではないため。取得処理は将来Cloudflare Cron TriggersとWorkersへ分離する。
 
@@ -60,7 +60,7 @@ Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、C
 
 | ファイル | 内容 |
 | --- | --- |
-| `wrangler.jsonc` | Workers実行構成。`env.preview`/`env.production` named environment、production custom domain `civilopendata.mirai-dx-platform.com`、Hyperdrive binding宣言 (idはプレースホルダー、`wrangler hyperdrive create` の払い出し値へ人間が置換) |
+| `wrangler.jsonc` | Workers実行構成。`env.preview`/`env.production` named environment、production route `civilopendata.mirai-dx-platform.com/*`、Hyperdrive binding宣言 (productionは実ID反映済み。Secrets値は含めない) |
 | `open-next.config.ts` | `@opennextjs/cloudflare` の最小ビルド設定 |
 | `infra/cloudflare/` | Cloudflare Access保護のTerraformテンプレート (v5 provider、`cloudflare_zero_trust_access_application`/`_policy`)。適用 (`terraform apply`) は人間が実行 |
 
