@@ -207,13 +207,13 @@ flowchart TD
 
 ### 🏗️ 本番インフラの状態
 
-2026-07-18 時点で **Cloudflare / Neon の実リソースは未作成**です (Worker `codip` 不在、Hyperdrive config 0 件、CODIP の Neon project 不在)。CODIP はまだ一度もデプロイされていません。本番化には以下が順に必要で、**いずれも人間の承認・実行が前提**です。
+2026-07-20 時点で **Cloudflare WorkerおよびNeon本番用リソースは未作成**です (Worker `codip` 不在、Hyperdrive config 0 件、CODIP用Neon productionブランチ未作成)。Neon project自体は既存(2026-07-18作成、実地検証済み)ですが、production/preview branchの新規作成・Hyperdrive設定はまだです。CODIP はまだ一度もデプロイされていません。本番化には以下が順に必要で、**いずれも人間の承認・実行が前提**です。
 
 2026-07-19 にCloudflare本番サブドメインを `civilopendata.mirai-dx-platform.com` として確定しました。`wrangler.jsonc` には Workers Custom Domain (`routes[].custom_domain=true`) と production `workers_dev=false` を設定済みですが、Cloudflare側のCustom Domain/DNS/Access/Secrets/Hyperdrive/Neon実リソース作成は未実行です。
 
 | # | 作業 | 承認が必要な理由 |
 | --- | --- | --- |
-| 1 | Neon project / branch の作成 | 課金発生・リソース作成 |
+| 1 | Neon production branch の作成 (project自体は既存) | 課金発生・リソース作成 |
 | 2 | `wrangler hyperdrive create` と `wrangler.jsonc` の id 置換 | 課金発生・リソース作成 |
 | 3 | `wrangler secret put` による秘密情報登録 | Secrets の登録 |
 | 4 | Issue #18 の実Cloudflare/Neon証跡 | Workers 上の外部URL取得は接続時DNSピン留め不可のため `unsupported_runtime` で安全停止。DB接続はHyperdrive adapter構成で実ターゲット証跡待ち |
