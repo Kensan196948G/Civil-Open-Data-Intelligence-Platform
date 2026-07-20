@@ -147,6 +147,7 @@ flowchart TD
 | verify | 🟢 pass | lint、型、単体、契約、build、smoke |
 | e2e | 🟢 pass | Playwright CI browser |
 | postgresql-compat | 🟢 pass | PostGIS migration、seed、`/api/v1` standard_records smoke |
+| node-preview | 🟡 追加済み | Docker非依存の `next start` + `release:smoke`。#35 のbranch protection差し替え候補 |
 | docker-preview | 🟢 pass | preview-runner migration/seed、production runner smoke |
 | docker-image-security | 🟢 pass | Trivy High/Critical CVE check |
 | production-target-env | ⚪ skipped | `workflow_dispatch` で実staging/production Secretsを読む手動ゲート |
@@ -233,6 +234,7 @@ flowchart TD
 - **main branch protection**: 現在は有効。required checksは `verify` / `e2e` / `postgresql-compat` / `docker-preview` / `docker-image-security` / `analyze`、strict=true、admin enforcement=true。今後はrequired review数やCode Ownersの要否を運用成熟度に合わせて判断する
 - **Cloudflare本番522継続**: `civilopendata.mirai-dx-platform.com` はCloudflareへ解決済みだが、`/api/health` と `/api/ready` が522。Worker route/deployment/logs、Secrets、Access、Hyperdrive実行時接続の証跡を確認するまで本番正常稼働とは判定しない
 - **Neon pg_dump定期ジョブ未登録**: [Issue #63](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/63)。鮮度ゲートは実装済み。実Secretを持つCI/CDまたは運用端末でのpg_dumpスケジュール、artifact保管先、restore drill証跡化は継続
+- **De-dockerization移行中**: [Issue #35](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/35)。Docker jobはbranch protection互換のため残し、先にDocker非依存の `node-preview` CIゲートを追加して差し替え先を育てる
 
 🔒 **本番URLはCloudflareへ到達済みだが、522のため本番正常稼働は未達**。復旧判断は [`docs/runbooks/cloudflare-production.md`](docs/runbooks/cloudflare-production.md) の522手順と [`docs/runbooks/rollback.md`](docs/runbooks/rollback.md) に従います。
 

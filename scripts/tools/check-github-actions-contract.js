@@ -24,6 +24,8 @@ requireText("CI workflow", ci, "permissions:\n  contents: read");
 requireText("CI workflow", ci, "pull-requests: read");
 requireText("CI workflow", ci, "workflow_dispatch:");
 requireText("CI workflow", ci, "production-target-env:");
+requireText("CI workflow", ci, "node-preview:");
+requireText("CI workflow", ci, "Direct Node preview release smoke");
 requireText("CI workflow", ci, "npm run release:validate-env:production-target");
 requireText("CI workflow", ci, "npm run release:check-audit-contract");
 requireText("CI workflow", ci, "npm run typecheck");

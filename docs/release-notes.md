@@ -20,6 +20,7 @@
 | Windows scripts | `DATABASE_URL=...` 形式のnpm scriptsをWindows互換ラッパーへ変更。`npm run build` がWindows/UNC環境でも実行可能になった |
 | Docs | README、運用設計、監視runbook、Cloudflare/Neon runbook、リリースノートを更新 |
 | CI/契約 | Windows/UNCでOpenAPI route coverageが全APIをmissing扱いするパス正規化不具合を修正 |
+| CI/De-dockerization | GitHub Actionsに `node-preview` jobを追加。Dockerを使わずSQLite preview DBをmigrate/seedし、`next start` + `release:smoke` で直接起動経路を検証する。Docker job削除前のbranch protection差し替え候補 |
 | Cloudflare | production FQDNを `civilopendata.mirai-dx-platform.com` に固定し、Workers Custom Domain、Access Terraform例、Cloudflare/Neon Runbook、契約チェックへ反映 |
 | Cloudflare | `docs/runbooks/cloudflare-production.md` を追加し、DNS/Access/Secrets/Hyperdrive/production evidenceの停止条件を本番専用Runbookとして分離 |
 | Cloudflare | 新規サブドメイン `civilopendata` の初回Custom Domain gateを追加。DNS未解決、hostname衝突、zone active、Access境界、証明書/validation証跡を確認するまでDNS変更・deployを停止する |
@@ -56,4 +57,4 @@
 | P2 | Issue #46 監査記録の原子性 | 主要な台帳・タグ・接続確認・サンプル取得・品質再計算は同一transaction化済み。クライアント起点イベントは記録失敗を503化済み。残りは将来の長時間外部処理増加時にoutbox方式を採用するかの設計判断 |
 | P2 | 本番Evidence自動取得 | `production-evidence` はSecret非表示の入力状態と手動貼付欄まで。Cloudflare/Neon APIからの実ログ自動収集は認証・権限確認後に追加 |
 | P2 | Issue #63 Neon pg_dump定期ジョブ登録 | 鮮度ゲートと非Secret証跡JSON生成は追加済み。実Secretを持つCI/CDまたは運用端末での `pg_dump` スケジュール、暗号化artifact保管先、restore drill実行自動化は継続 |
-| P2 | De-dockerization #35 | CI/branch protection/docsを確認し、Docker依存ゲートを段階的に置換 |
+| P2 | De-dockerization #35 | `node-preview` 代替CIゲートを追加済み。green実績確認後、branch protectionを `docker-preview` から `node-preview` へ差し替え、Docker job/docsを段階撤去 |
