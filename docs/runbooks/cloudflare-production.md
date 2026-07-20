@@ -74,7 +74,8 @@ cmd /c "pushd \\192.168.0.185\kensan\Projects\Mirai-DX-Project\Civil-Open-Data-I
 本番deployは承認済みCI/CD経路、または承認済み作業者の端末でのみ実行する。標準経路は secrets-safe なパイプラインスクリプトである。
 
 ```bash
-# 標準経路: Neon URI解決(in-process) -> migrate status -> secrets -> DNS -> cf:deploy:production
+# 標準経路: Neon URI解決(in-process) -> migrate status -> DNS -> cf:deploy:production -> secrets
+# (secretsは初回deploy後に登録。それまで管理系はfail-closed全拒否)
 source ~/.bashrc && node scripts/deploy/deploy-production.mjs --with-secrets
 
 # 個別実行する場合 (evidence/DB URLは環境変数で与える)

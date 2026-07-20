@@ -222,7 +222,7 @@ flowchart TD
 
 | # | 作業 | 実行者 |
 | --- | --- | --- |
-| 1 | `scripts/deploy/deploy-production.mjs --with-secrets` (migrate status → Secrets → DNS → deploy) | マージ承認後に自律実行 |
+| 1 | `scripts/deploy/deploy-production.mjs --with-secrets` (migrate status → DNS → deploy → Secrets登録) | マージ承認後に自律実行 |
 | 2 | `release:smoke -- --read-only` + `release:post-release-status` による本番確認 | マージ承認後に自律実行 |
 | 3 | Cloudflare Access application/policy の設定と `CODIP_TRUST_PROXY_SECRET` rotation | 人間 (ユーザー) |
 | 4 | Issue #18 の実Cloudflare/Neon証跡 (Workers実行時のDB接続・SSRFガード挙動) | デプロイ後に記録 |

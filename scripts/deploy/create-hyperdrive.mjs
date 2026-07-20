@@ -63,7 +63,18 @@ async function main() {
   const configName = process.env.CODIP_HYPERDRIVE_NAME?.trim() || DEFAULT_HYPERDRIVE_NAME;
 
   // Idempotency: reuse an existing config of the same name.
-  const existing = await cfRequest(cfToken, accountId, "GET", "/hyperdrive/configs");
+  // The list API paginates (default per_page=20), so walk every page.
+  const existing = [];
+  for (let page = 1; ; page += 1) {
+    const batch = await cfRequest(
+      cfToken,
+      accountId,
+      "GET",
+      `/hyperdrive/configs?page=${page}&per_page=100`,
+    );
+    existing.push(...batch);
+    if (batch.length < 100) break;
+  }
   const found = existing.find((c) => c.name === configName);
   if (found) {
     console.log(`[create-hyperdrive] reusing existing config "${configName}"`);
