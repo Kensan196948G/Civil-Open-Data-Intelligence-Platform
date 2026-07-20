@@ -89,6 +89,8 @@ npm run cf:deploy:production
 
 `cf:deploy:production` は target env、production evidence、placeholder、Cloudflare build artifact をすべて検査してから `deploy --env production` へ進む。いずれかが失敗した場合は、本番変更を行わず、不足証跡を §5 Evidence に記録する。
 
+直接経路 (`--wrangler-direct`) の変更証跡 (PR #67): 制約の実測は「`ulimit -Hv`=20000000 (hard、root無しで引き上げ不可)、miniflare起動時に `Fatal process out of memory: SegmentedTable::InitializeTable`」。ゲート群 (validate-env / evidence --strict / placeholders / cf:build / artifact check) はPR #66デプロイ試行時に全PASS実績あり。`wrangler deploy` 単体の実環境検証は初回本番デプロイをもって証跡化し、結果を §5 Evidence へ記録する。失敗時は §4 と [rollback.md](rollback.md) に従う (初回デプロイはroute無効化/DNSレコード削除で公開停止)。
+
 ## 4. Smoke and rollback
 
 ```bash
