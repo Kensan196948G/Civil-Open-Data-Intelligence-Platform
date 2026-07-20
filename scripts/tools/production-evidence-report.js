@@ -160,7 +160,11 @@ function inspectWrangler(root, target) {
     return result;
   }
   const targetEnv = wrangler.env?.[target.wranglerEnv];
-  const targetRoute = target.hostname ? targetEnv?.routes?.find((route) => route?.pattern === target.hostname) : null;
+  const targetRoute = target.hostname
+    ? targetEnv?.routes?.find(
+        (route) => route?.pattern === target.hostname || route?.pattern === `${target.hostname}/*`,
+      )
+    : null;
   const targetHyperdrive = Array.isArray(targetEnv?.hyperdrive) ? targetEnv.hyperdrive : [];
   const hyperdriveId = targetHyperdrive.find((binding) => binding?.binding === "HYPERDRIVE")?.id ?? targetHyperdrive[0]?.id ?? "";
   const checks = [
@@ -186,7 +190,13 @@ function inspectWrangler(root, target) {
       1,
       0,
       ["production route", "Wrangler production route configured", Boolean(targetRoute), target.hostname, "production host missing"],
-      ["custom_domain", "Wrangler custom domain enabled", targetRoute?.custom_domain === true, "true", "not true"],
+      [
+        "route binding",
+        "Wrangler production route binding resolved",
+        targetRoute?.custom_domain === true || Boolean(targetRoute?.zone_name),
+        "custom_domain or zone route",
+        "custom_domain/zone_name missing",
+      ],
       ["workers_dev", "Wrangler workers_dev disabled", targetEnv?.workers_dev === false, "false", "not false"],
     );
   }

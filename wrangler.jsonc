@@ -2,8 +2,10 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   // CODIP: Cloudflare Workers 実行構成 (Next.js on Workers via @opennextjs/cloudflare)
   // 実デプロイの前提: docs/13-deployment-and-operations.md §2, docs/runbooks/cloudflare-production.md を参照。
-  // Production custom domain: civilopendata.mirai-dx-platform.com
-  // 既知の未解決制約 (実デプロイ前に必須): 実Cloudflare/Neonリソース、Secrets、DNS/Accessは人間承認後に確定する。
+  // Production hostname: civilopendata.mirai-dx-platform.com (zone route + proxied DNS record方式)
+  // 決定記録 (2026-07-20): 現行APIトークンはaccount-level Workers Custom Domains APIのスコープが
+  // 付与されておらず (error 10000)、付与済みのZone Workers Routes + Zone DNSスコープで完結する
+  // zone route方式を採用した。Custom Domain方式への移行はスコープ付与後にIssueで扱う。
   "name": "codip",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-07-13",
@@ -22,8 +24,9 @@
     "CODIP_TRUST_PROXY_AUTH": "true",
     "CODIP_TRUST_PROXY_HEADERS": "true"
   },
-  // Hyperdrive: id はプレースホルダー。`wrangler hyperdrive create <name> --connection-string="$CODIP_MIGRATION_DATABASE_URL"`
-  // を実ターゲットのNeon direct endpointに対して実行し、払い出されたIDへ置き換える (人間が実施)。
+  // Hyperdrive: production の実IDは scripts/deploy/create-hyperdrive.mjs (secrets-safe) で払い出した
+  // `codip-production` (Neon direct endpoint、caching disabled)。default/preview envは未使用のため
+  // プレースホルダーのまま (staging整備時に同スクリプトで払い出す)。
   // Prisma Client 側は @prisma/adapter-pg (driver adapter) を導入済み (src/lib/db.ts)。
   // Prisma 6.15+ では driverAdapters の previewFeatures 指定は撤廃済みのため schema.prisma に記載不要。
   "hyperdrive": [
@@ -51,8 +54,8 @@
       "workers_dev": false,
       "routes": [
         {
-          "pattern": "civilopendata.mirai-dx-platform.com",
-          "custom_domain": true
+          "pattern": "civilopendata.mirai-dx-platform.com/*",
+          "zone_name": "mirai-dx-platform.com"
         }
       ],
       "vars": {
@@ -66,7 +69,7 @@
       "hyperdrive": [
         {
           "binding": "HYPERDRIVE",
-          "id": "REPLACE_WITH_PRODUCTION_HYPERDRIVE_ID"
+          "id": "1da7b81807374ec190addf146717d275"
         }
       ]
     }
