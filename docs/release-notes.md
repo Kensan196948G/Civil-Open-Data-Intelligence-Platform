@@ -30,6 +30,7 @@
 | Cloudflare 522 evidence | `release:cloudflare-522-diagnostics` を追加。既定はCloudflareへ接続せず、`wrangler.jsonc` のproduction route/Hyperdrive/observability契約と、承認済み認証で実行する `deployments status/list`・tail・Dashboard証跡をMarkdown化する |
 | Neon backup evidence | `npm run release:create-neon-backup-evidence` を追加。`pg_dump` artifact metadataまたはartifact IDから非Secret証跡JSONを生成し、既存の鮮度ゲートへ渡せるようにした |
 | Neon backup evidence | `npm run release:check-neon-backup-evidence` を追加。Secretを含まない `CODIP_NEON_BACKUP_EVIDENCE_JSON` からPITR window、pg_dump 24h鮮度、restore drill 30日鮮度を検査する |
+| Neon scheduled backup | `.github/workflows/neon-backup.yml` を追加。毎日03:17 JSTにNeon `pg_dump` を暗号化artifact化して非Secret証跡JSONを生成し、Secret未設定・restore drill未記録・鮮度NGではfail-closedにする |
 | CI証跡 | PR #49 のCloudflare target反映commit `040c7bc` に対して CI #82 / CodeQL #64 が success。verify、e2e、postgresql-compat、docker-preview、docker-image-security が全てsuccess |
 | Dependency maintenance | PR #52で `undici` 8.7.0、`@eslint/eslintrc` 3.3.6、`@types/node` 22.20.1、`autoprefixer` 10.5.4、`eslint` 9.39.5、`tailwindcss` 3.4.19、`tsx` 4.23.1、`vitest` 3.2.7、`wrangler` 4.112.0へ更新 |
 | CI証跡 | dependency更新後のmain commit `1d66e48` に対して CI `29693346265` / CodeQL `29693346235` が success。verify、e2e、postgresql-compat、docker-preview、docker-image-security、docker-supply-chain が全てsuccess |
@@ -57,5 +58,5 @@
 | P1 | Cloudflare本番522継続 | Worker route/deployment/logs、DNS proxied `AAAA 100::`、Secrets、Access、Hyperdrive実行時接続を承認済みCloudflare認証で確認し、復旧またはrollback判断をIssue #18へ証跡化 |
 | P2 | Issue #46 監査記録の原子性 | 主要な台帳・タグ・接続確認・サンプル取得・品質再計算は同一transaction化済み。クライアント起点イベントは記録失敗を503化済み。残りは将来の長時間外部処理増加時にoutbox方式を採用するかの設計判断 |
 | P2 | 本番Evidence自動取得 | `production-evidence` はSecret非表示の入力状態と手動貼付欄まで。Cloudflare/Neon APIからの実ログ自動収集は認証・権限確認後に追加 |
-| P2 | Issue #63 Neon pg_dump定期ジョブ登録 | 鮮度ゲートと非Secret証跡JSON生成は追加済み。実Secretを持つCI/CDまたは運用端末での `pg_dump` スケジュール、暗号化artifact保管先、restore drill実行自動化は継続 |
+| P2 | Issue #63 Neon pg_dump定期ジョブ登録 | GitHub Actions定期jobは追加済み。`CODIP_NEON_PGDUMP_DATABASE_URL` / `CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE` Secret登録、restore drill日時、初回成功artifactの証跡化が残る |
 | P2 | De-dockerization #35 | `node-preview` 代替CIゲートを追加済み。green実績確認後、branch protectionを `docker-preview` から `node-preview` へ差し替え、Docker job/docsを段階撤去 |

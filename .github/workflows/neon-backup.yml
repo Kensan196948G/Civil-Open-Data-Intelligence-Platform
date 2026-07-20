@@ -1,0 +1,147 @@
+name: Neon Backup
+
+on:
+  schedule:
+    # Daily 03:17 JST. The job fails closed when required Secrets/Variables
+    # are missing so backup drift becomes visible in Actions.
+    - cron: "17 18 * * *"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Non-secret branch label for backup evidence"
+        required: false
+        type: string
+        default: "production"
+      history_window_hours:
+        description: "Observed Neon PITR history window in hours"
+        required: false
+        type: string
+        default: "24"
+      restore_drill_at:
+        description: "Latest restore drill timestamp (ISO 8601)"
+        required: false
+        type: string
+      owner:
+        description: "Backup evidence owner or role"
+        required: false
+        type: string
+        default: "release-manager"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-backup-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  pg-dump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # Dedicated read-only or least-privilege dump URL. Never echo this value.
+      NEON_DATABASE_URL: ${{ secrets.CODIP_NEON_PGDUMP_DATABASE_URL }}
+      CODIP_BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE }}
+      CODIP_NEON_PROJECT_ID: ${{ vars.CODIP_NEON_PROJECT_ID }}
+      CODIP_NEON_BRANCH: ${{ github.event.inputs.branch || vars.CODIP_NEON_BRANCH }}
+      CODIP_NEON_HISTORY_WINDOW_HOURS: ${{ github.event.inputs.history_window_hours || vars.CODIP_NEON_HISTORY_WINDOW_HOURS }}
+      CODIP_LAST_RESTORE_DRILL_AT: ${{ github.event.inputs.restore_drill_at || vars.CODIP_LAST_RESTORE_DRILL_AT }}
+      CODIP_BACKUP_OWNER: ${{ github.event.inputs.owner || vars.CODIP_BACKUP_OWNER }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install pg_dump client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client
+          pg_dump --version
+
+      - name: Validate backup inputs
+        shell: bash
+        run: |
+          echo "::add-mask::$NEON_DATABASE_URL"
+          echo "::add-mask::$CODIP_BACKUP_ENCRYPTION_PASSPHRASE"
+          missing=()
+          [ -n "${NEON_DATABASE_URL:-}" ] || missing+=("secrets.CODIP_NEON_PGDUMP_DATABASE_URL")
+          [ -n "${CODIP_BACKUP_ENCRYPTION_PASSPHRASE:-}" ] || missing+=("secrets.CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE")
+          [ -n "${CODIP_LAST_RESTORE_DRILL_AT:-}" ] || missing+=("inputs.restore_drill_at or vars.CODIP_LAST_RESTORE_DRILL_AT")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '::error::Missing required Neon backup configuration: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
+      - name: Create Neon pg_dump artifact
+        id: dump
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$NEON_DATABASE_URL"
+          echo "::add-mask::$CODIP_BACKUP_ENCRYPTION_PASSPHRASE"
+          umask 077
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          backup_dir="$RUNNER_TEMP/neon-backups"
+          mkdir -p "$backup_dir"
+          dump_path="$backup_dir/codip-neon-${stamp}.dump"
+          encrypted_path="${dump_path}.gpg"
+          artifact_name="codip-neon-pgdump-${stamp}.dump.gpg"
+          pg_dump --format=custom --no-owner --no-privileges --file "$dump_path" "$NEON_DATABASE_URL"
+          test -s "$dump_path"
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$CODIP_BACKUP_ENCRYPTION_PASSPHRASE" \
+            --symmetric --cipher-algo AES256 \
+            --output "$encrypted_path" "$dump_path"
+          test -s "$encrypted_path"
+          shred -u "$dump_path" || rm -f "$dump_path"
+          chmod 600 "$encrypted_path"
+          {
+            echo "artifact_path=$encrypted_path"
+            echo "artifact_name=$artifact_name"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create non-secret backup evidence
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          project_id="${CODIP_NEON_PROJECT_ID:-falling-dawn-93620497}"
+          branch="${CODIP_NEON_BRANCH:-production}"
+          history_window_hours="${CODIP_NEON_HISTORY_WINDOW_HOURS:-24}"
+          owner="${CODIP_BACKUP_OWNER:-release-manager}"
+          evidence_path="$RUNNER_TEMP/neon-backup-evidence.json"
+          npm run release:create-neon-backup-evidence -- \
+            --project-id "$project_id" \
+            --branch "$branch" \
+            --history-window-hours "$history_window_hours" \
+            --pg-dump-file "${{ steps.dump.outputs.artifact_path }}" \
+            --pg-dump-artifact "github-actions-artifact://${{ steps.dump.outputs.artifact_name }}" \
+            --restore-drill-at "$CODIP_LAST_RESTORE_DRILL_AT" \
+            --owner "$owner" \
+            --pretty > "$evidence_path"
+          npm run release:check-neon-backup-evidence -- --evidence-file "$evidence_path"
+          echo "evidence_path=$evidence_path" >> "$GITHUB_OUTPUT"
+
+      - name: Upload pg_dump artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ${{ steps.dump.outputs.artifact_name }}
+          path: ${{ steps.dump.outputs.artifact_path }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload non-secret backup evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: neon-backup-evidence
+          path: ${{ steps.evidence.outputs.evidence_path }}
+          if-no-files-found: error
+          retention-days: 30

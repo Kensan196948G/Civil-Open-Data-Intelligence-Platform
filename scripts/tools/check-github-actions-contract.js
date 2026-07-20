@@ -10,6 +10,7 @@ function readNormalized(relativePath) {
 
 const ci = readNormalized(".github/workflows/ci.yml");
 const codeql = readNormalized(".github/workflows/codeql.yml");
+const neonBackup = readNormalized(".github/workflows/neon-backup.yml");
 const packageJson = readNormalized("package.json");
 
 const errors = [];
@@ -61,6 +62,26 @@ requireText("CI workflow", ci, "fetch-depth: 0");
 requireText("CI workflow", ci, "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020");
 requireText("CI workflow", ci, "gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7");
 requireText("CI workflow", ci, "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
+requireText("Neon backup workflow", neonBackup, "name: Neon Backup");
+requireText("Neon backup workflow", neonBackup, "schedule:");
+requireText("Neon backup workflow", neonBackup, "workflow_dispatch:");
+requireText("Neon backup workflow", neonBackup, "permissions:\n  contents: read");
+requireText("Neon backup workflow", neonBackup, "persist-credentials: false");
+requireText("Neon backup workflow", neonBackup, "secrets.CODIP_NEON_PGDUMP_DATABASE_URL");
+requireText("Neon backup workflow", neonBackup, "secrets.CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE");
+requireText("Neon backup workflow", neonBackup, "::add-mask::$NEON_DATABASE_URL");
+requireText("Neon backup workflow", neonBackup, "::add-mask::$CODIP_BACKUP_ENCRYPTION_PASSPHRASE");
+requireText("Neon backup workflow", neonBackup, "pg_dump --format=custom --no-owner --no-privileges --file");
+requireText("Neon backup workflow", neonBackup, "gpg --batch --yes --pinentry-mode loopback");
+requireText("Neon backup workflow", neonBackup, "shred -u \"$dump_path\" || rm -f \"$dump_path\"");
+requireText("Neon backup workflow", neonBackup, "npm run release:create-neon-backup-evidence");
+requireText("Neon backup workflow", neonBackup, "npm run release:check-neon-backup-evidence");
+requireText("Neon backup workflow", neonBackup, "github-actions-artifact://");
+requireText("Neon backup workflow", neonBackup, "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
+requireText("Neon backup workflow", neonBackup, "retention-days: 14");
+if (neonBackup.includes("pull_request:")) {
+  errors.push("Neon backup workflow must not run on pull_request");
+}
 requireText("node-preview job", nodePreviewJob, "persist-credentials: false");
 requireText("node-preview job", nodePreviewJob, "Prepare SQLite preview database");
 requireText("node-preview job", nodePreviewJob, "npm run db:generate");
@@ -87,13 +108,13 @@ const forbiddenPatterns = [
 ];
 
 for (const pattern of forbiddenPatterns) {
-  if (ci.includes(pattern) || codeql.includes(pattern)) {
+  if (ci.includes(pattern) || codeql.includes(pattern) || neonBackup.includes(pattern)) {
     errors.push(`GitHub workflows must not contain ${pattern}`);
   }
 }
 
 const unpinnedActions = [
-  ...`${ci}\n${codeql}`.matchAll(/uses:\s+[^@\s]+\/[^@\s]+@([^\s#]+)/g),
+  ...`${ci}\n${codeql}\n${neonBackup}`.matchAll(/uses:\s+[^@\s]+\/[^@\s]+@([^\s#]+)/g),
 ]
   .map((match) => match[1])
   .filter((ref) => !/^[0-9a-f]{40}$/i.test(ref));
