@@ -241,6 +241,53 @@ jobs:
           path: test-results/
           retention-days: 7
 
+  node-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: "file:./dev.db"
+      CODIP_ENV_MODE: "preview"
+      CODIP_ACCEPT_SQLITE_PREVIEW: "true"
+      CODIP_ADMIN_TOKEN: "ci-node-preview-admin-token-123456789"
+      CODIP_ALLOWED_ORIGINS: "http://127.0.0.1:3110"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare SQLite preview database
+        run: |
+          npm run db:generate
+          npx prisma migrate deploy
+          npx prisma db seed
+
+      - name: Build production app
+        run: npm run build
+
+      - name: Direct Node preview release smoke
+        run: |
+          trap 'if [ -f /tmp/codip-node-preview.pid ]; then kill "$(cat /tmp/codip-node-preview.pid)" 2>/dev/null || true; fi' EXIT
+          npm run start:checked -- --hostname 127.0.0.1 --port 3110 > /tmp/codip-node-preview.log 2>&1 &
+          echo $! > /tmp/codip-node-preview.pid
+          for _ in {1..90}; do
+            if curl --connect-timeout 3 --max-time 10 -fsS http://127.0.0.1:3110/api/ready >/tmp/codip-node-preview-ready.json; then
+              cat /tmp/codip-node-preview-ready.json
+              npm run release:smoke -- --base-url http://127.0.0.1:3110
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/codip-node-preview.log || true
+          exit 1
+
   postgresql-compat:
     runs-on: ubuntu-latest
     timeout-minutes: 25
