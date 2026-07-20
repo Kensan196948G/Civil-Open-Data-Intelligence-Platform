@@ -27,6 +27,7 @@
 | Cloudflare | `wrangler.jsonc` のproduction varsに `CODIP_DISABLE_TOKEN_AUTH=true` を固定し、Cloudflare Access/proxy auth配下で直接token経路を閉じる設定を契約チェック対象に追加 |
 | Cloudflare monitoring | `npm run release:post-release-status` を追加。`civilopendata.mirai-dx-platform.com` のDNS/health、応答時間、`/api/ready` DB状態、共有previewを読み取り専用で証跡化し、`--strict-production` では本番未接続やslow responseを失敗扱いにする |
 | Cloudflare 522 diagnosis | `release:post-release-status` に `Production Route Diagnosis` を追加。Cloudflare edge header付き522を、Worker route/deploy/logs確認へ誘導する |
+| Cloudflare 522 evidence | `release:cloudflare-522-diagnostics` を追加。既定はCloudflareへ接続せず、`wrangler.jsonc` のproduction route/Hyperdrive/observability契約と、承認済み認証で実行する `deployments status/list`・tail・Dashboard証跡をMarkdown化する |
 | Neon backup evidence | `npm run release:create-neon-backup-evidence` を追加。`pg_dump` artifact metadataまたはartifact IDから非Secret証跡JSONを生成し、既存の鮮度ゲートへ渡せるようにした |
 | Neon backup evidence | `npm run release:check-neon-backup-evidence` を追加。Secretを含まない `CODIP_NEON_BACKUP_EVIDENCE_JSON` からPITR window、pg_dump 24h鮮度、restore drill 30日鮮度を検査する |
 | CI証跡 | PR #49 のCloudflare target反映commit `040c7bc` に対して CI #82 / CodeQL #64 が success。verify、e2e、postgresql-compat、docker-preview、docker-image-security が全てsuccess |

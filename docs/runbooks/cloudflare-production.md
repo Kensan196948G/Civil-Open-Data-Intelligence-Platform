@@ -98,7 +98,7 @@ CODIP_ADMIN_TOKEN="$CODIP_ADMIN_TOKEN" \
 npm run release:smoke -- --read-only --base-url "https://civilopendata.mirai-dx-platform.com"
 ```
 
-本番URLが `522` の場合は `npm run release:post-release-status -- --production-url https://civilopendata.mirai-dx-platform.com --max-response-ms 5000` の `Production Route Diagnosis` を先に確認する。Cloudflare edge header付きの `522` は、DNSはCloudflareへ到達しているが、Worker route/deploymentが対象hostを処理していない、またはrouteよりorigin解決が優先されている疑いとして扱う。承認済みCloudflare認証情報で `wrangler deployments list --env production`、`wrangler tail codip --env production --status error`、Dashboardのzone route (`civilopendata.mirai-dx-platform.com/*`) とDNS (`proxied AAAA 100::`) を確認し、証跡を §5 へ記録する。DNSやSecretsの変更はこの確認後に限定する。
+本番URLが `522` の場合は `npm run release:post-release-status -- --production-url https://civilopendata.mirai-dx-platform.com --max-response-ms 5000` の `Production Route Diagnosis` を先に確認する。Cloudflare edge header付きの `522` は、DNSはCloudflareへ到達しているが、Worker route/deploymentが対象hostを処理していない、またはrouteよりorigin解決が優先されている疑いとして扱う。続いて `npm run release:cloudflare-522-diagnostics` で Cloudflare に接続しない read-only 証跡チェックリストを作成する。承認済みCloudflare認証情報がある担当者のみ `npm run release:cloudflare-522-diagnostics -- --execute-wrangler` で `deployments status/list` を実行し、`wrangler tail codip --env production --status error`、Dashboardのzone route (`civilopendata.mirai-dx-platform.com/*`) とDNS (`proxied AAAA 100::`) を確認し、証跡を §5 へ記録する。DNSやSecretsの変更はこの確認後に限定する。
 
 失敗時の復旧判断は [rollback.md](rollback.md) と [cloudflare-neon-staging.md](cloudflare-neon-staging.md) §5 に従う。DB破壊、認証不全、重大なデータ不整合の疑いがある場合は追加変更より復旧を優先する。
 
