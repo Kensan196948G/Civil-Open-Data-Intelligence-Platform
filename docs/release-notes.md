@@ -25,6 +25,7 @@
 | Cloudflare | 新規サブドメイン `civilopendata` の初回Custom Domain gateを追加。DNS未解決、hostname衝突、zone active、Access境界、証明書/validation証跡を確認するまでDNS変更・deployを停止する |
 | Cloudflare | `wrangler.jsonc` のproduction varsに `CODIP_DISABLE_TOKEN_AUTH=true` を固定し、Cloudflare Access/proxy auth配下で直接token経路を閉じる設定を契約チェック対象に追加 |
 | Cloudflare monitoring | `npm run release:post-release-status` を追加。`civilopendata.mirai-dx-platform.com` のDNS/health、応答時間、`/api/ready` DB状態、共有previewを読み取り専用で証跡化し、`--strict-production` では本番未接続やslow responseを失敗扱いにする |
+| Neon backup evidence | `npm run release:check-neon-backup-evidence` を追加。Secretを含まない `CODIP_NEON_BACKUP_EVIDENCE_JSON` からPITR window、pg_dump 24h鮮度、restore drill 30日鮮度を検査する |
 | CI証跡 | PR #49 のCloudflare target反映commit `040c7bc` に対して CI #82 / CodeQL #64 が success。verify、e2e、postgresql-compat、docker-preview、docker-image-security が全てsuccess |
 | Dependency maintenance | PR #52で `undici` 8.7.0、`@eslint/eslintrc` 3.3.6、`@types/node` 22.20.1、`autoprefixer` 10.5.4、`eslint` 9.39.5、`tailwindcss` 3.4.19、`tsx` 4.23.1、`vitest` 3.2.7、`wrangler` 4.112.0へ更新 |
 | CI証跡 | dependency更新後のmain commit `1d66e48` に対して CI `29693346265` / CodeQL `29693346235` が success。verify、e2e、postgresql-compat、docker-preview、docker-image-security、docker-supply-chain が全てsuccess |
@@ -52,4 +53,5 @@
 | P1 | Cloudflare/Neon実リソース未確定 | 人間承認後に Worker、Hyperdrive、Access、Secrets、Neon branch を作成し証跡化 |
 | P2 | Issue #46 監査記録の原子性 | 主要な台帳・タグ・接続確認・サンプル取得・品質再計算は同一transaction化済み。クライアント起点イベントは記録失敗を503化済み。残りは将来の長時間外部処理増加時にoutbox方式を採用するかの設計判断 |
 | P2 | 本番Evidence自動取得 | `production-evidence` はSecret非表示の入力状態と手動貼付欄まで。Cloudflare/Neon APIからの実ログ自動収集は認証・権限確認後に追加 |
+| P2 | Issue #63 Neon pg_dump定期ジョブ登録 | 鮮度ゲートは追加済み。実Secretを持つCI/CDまたは運用端末での `pg_dump` スケジュール、artifact保管先、restore drill自動証跡化は継続 |
 | P2 | De-dockerization #35 | CI/branch protection/docsを確認し、Docker依存ゲートを段階的に置換 |

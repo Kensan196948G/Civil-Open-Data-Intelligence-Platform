@@ -21,6 +21,7 @@
     "release:validate-env:production": "node scripts/tools/validate-env.js --mode production",
     "release:validate-env:production-target": "node scripts/tools/validate-production-target-env.js",
     "release:production-evidence": "node scripts/tools/production-evidence-report.js",
+    "release:check-neon-backup-evidence": "node scripts/tools/check-neon-backup-evidence.js",
     "release:post-release-status": "node scripts/tools/post-release-status.js",
     "release:smoke": "node scripts/tools/release-smoke.js",
     "release:gate": "node scripts/tools/release-gate.js",

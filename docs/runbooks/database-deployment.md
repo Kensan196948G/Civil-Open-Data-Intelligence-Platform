@@ -106,6 +106,16 @@ CODIP_ADMIN_TOKEN="$CODIP_ADMIN_TOKEN" npm run release:smoke -- --base-url http:
 | 接続方式 | Cloudflare Workersの場合はHyperdrive等の接続プールを検討 |
 | 秘密情報 | `DATABASE_URL` はGitHub Secretsまたはデプロイ環境変数で管理 |
 
+## 4.1 Neon pg_dumpバックアップ証跡
+
+本番NeonはPITRだけに依存しない。定期ジョブは `pg_dump` をSecret管理されたCI/CDまたは運用端末で実行し、接続文字列をログへ出さずに暗号化済みartifactへ保存する。リポジトリ側ではDBへ接続せず、ジョブが生成した非Secret証跡だけを検査する。
+
+```bash
+npm run release:check-neon-backup-evidence
+```
+
+最低限の証跡項目は `checkedAt`、`projectId`、`branch`、`historyWindowHours`、`lastPgDumpAt`、`lastPgDumpStatus`、`lastPgDumpArtifact`、`lastRestoreDrillAt`、`restoreDrillStatus`、`owner` とする。`lastPgDumpArtifact` はartifact名、保管先ID、または内部チケットIDに限定し、PostgreSQL URL、password、Neon API tokenを含めない。既定ゲートは `pg_dump` が24時間を超えて古い場合、PITR windowが24時間未満の場合、restore drillが30日を超えて古い場合に失敗する。
+
 ## 5. 移行順序
 
 1. SQLite previewで台帳・認証・監視APIを確認する。
