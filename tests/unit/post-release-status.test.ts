@@ -36,9 +36,11 @@ const {
     },
   ) => Promise<{
     productionConnected: boolean;
+    productionEndpointUnhealthy: boolean;
     previewHealthy: boolean;
     ready: boolean;
     productionDns: { ok: boolean; error: string };
+    productionProbes: { path: string; status: number; ok: boolean; state: string }[];
   }>;
   renderReport: (report: unknown) => string;
   fetchWithTimeout: (
@@ -126,6 +128,35 @@ describe("post-release-status", () => {
 
     expect(report.ready).toBe(false);
     expect(renderReport(report)).toContain("hold production cutover");
+  });
+
+  it("probes and flags production endpoint failures even when local DNS resolution is inconclusive", async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      if (url.includes("civilopendata.mirai-dx-platform.com")) {
+        return new Response("522: Connection timed out", { status: 522 });
+      }
+      return new Response("{}", { status: 200 });
+    });
+
+    const report = await buildReport(baseArgs, {
+      resolver: {
+        resolve4: async () => {
+          throw Object.assign(new Error("resolver refused"), { code: "ECONNREFUSED" });
+        },
+        resolve6: async () => {
+          throw Object.assign(new Error("resolver refused"), { code: "ECONNREFUSED" });
+        },
+      },
+      fetcher,
+    });
+
+    expect(report.productionDns.ok).toBe(false);
+    expect(report.productionProbes).toHaveLength(2);
+    expect(report.productionProbes[0].status).toBe(522);
+    expect(report.productionConnected).toBe(false);
+    expect(report.productionEndpointUnhealthy).toBe(true);
+    expect(report.ready).toBe(false);
+    expect(renderReport(report)).toContain("investigate production route/origin health");
   });
 
   it("marks production connected only when DNS and read-only probes succeed", async () => {
