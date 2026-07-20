@@ -12,8 +12,9 @@
 | FQDN | `civilopendata.mirai-dx-platform.com` |
 | URL | `https://civilopendata.mirai-dx-platform.com` |
 | Worker | `codip` (`wrangler.jsonc`) |
-| Routing | Workers Custom Domain (`routes[].custom_domain=true`, production `workers_dev=false`) |
-| DB | Neon PostgreSQL/PostGIS via Cloudflare Hyperdrive |
+| Routing | Zone route (`routes[].pattern=civilopendata.mirai-dx-platform.com/*` + `zone_name`) + proxied AAAA `100::` DNSレコード、production `workers_dev=false` |
+| DB | Neon PostgreSQL/PostGIS via Cloudflare Hyperdrive (`codip-production`, ID `1da7b81807374ec190addf146717d275`, caching disabled) |
+| Neon | project `falling-dawn-93620497` (Civil-Open-Data-Intelligence-Platform, PG17, aws-us-west-2) default branch |
 | Secrets | Cloudflare/GitHub Secrets only. Do not commit secret values |
 
 ## 1. Stop conditions
@@ -22,28 +23,30 @@
 
 | Gate | 合格条件 |
 | --- | --- |
-| Production Hyperdrive | `wrangler.jsonc` の `REPLACE_WITH_PRODUCTION_HYPERDRIVE_ID` を承認済みの実IDへ置換済み |
+| Production Hyperdrive | `wrangler.jsonc` production env のHyperdrive IDが実ID (`scripts/deploy/create-hyperdrive.mjs` で払い出し) へ置換済み |
 | Target env | `CODIP_DEPLOY_TARGET=production`、`CODIP_BASE_URL=https://civilopendata.mirai-dx-platform.com`、Neon branch、Hyperdrive binding、migration direct URL、認証設定が実値 |
 | Evidence | Cloudflare Access、logs、alert policy、Neon monitoring、backup/restore、rollback owner、smoke schedule の証跡が揃っている |
 | Migration | Neon本番branchでPostGIS preflight、`prisma migrate status/deploy`、drift checkが成功 |
 | Smoke | `release:smoke --read-only` が本番URLに対して成功 |
 | Rollback | 直前Worker version、Neon復旧手段、担当者、判断時刻を記録済み |
 
-## 1.1 New subdomain / Custom Domain gate
+## 1.1 New subdomain / routing gate
 
-`civilopendata` は `mirai-dx-platform.com` 配下の新規サブドメインとして扱う。Cloudflare公式docsでは、Workers Custom DomainはアクティブなCloudflare zoneとWorkerが前提で、同じhostnameに既存CNAMEがある場合は作成できない。従って、初回接続前に次を確認する。
+`civilopendata` は `mirai-dx-platform.com` 配下の新規サブドメインとして扱う。
+
+**決定記録 (2026-07-20)**: 当初計画はWorkers Custom Domain (`custom_domain=true`) だったが、現行APIトークンにはaccount-levelのWorkers Custom Domains APIスコープがなく (`/accounts/{id}/workers/domains` がerror 10000)、付与済みのZone Workers Routes + Zone DNSスコープで完結する **zone route方式** (route pattern + proxied AAAA `100::` レコード) へ変更した。TLSはUniversal SSLが第1階層サブドメインをカバーする。Custom Domain方式への移行はトークンへのスコープ付与後にIssueで扱う。この変更は `~/.claude/CLAUDE.md` §27.1の特則 (ユーザー指定サブドメインの追加DNSレコード作成 + Worker紐付け) の範囲内である。
 
 | Check | 合格条件 |
 | --- | --- |
 | Zone ownership | Cloudflare zone `mirai-dx-platform.com` が対象accountでactive |
 | Hostname conflict | `civilopendata.mirai-dx-platform.com` に既存CNAME / Worker route / Pages custom domain / Access application の衝突がない |
-| Local DNS before change | `Resolve-DnsName civilopendata.mirai-dx-platform.com` が未解決、または未接続状態として記録済み |
-| Worker route | `wrangler.jsonc` production env が `routes[].pattern=civilopendata.mirai-dx-platform.com`、`custom_domain=true`、`workers_dev=false` |
-| Custom Domain action | 承認済み作業者が Cloudflare Dashboard / Wrangler / 承認済みCI/CD のいずれかでWorker Custom Domainを追加する |
-| DNS after action | Cloudflareが作成・要求したDNS recordと証明書/validation statusをEvidenceへ記録 |
-| Access boundary | Custom Domain有効化後、管理系導線がCloudflare Access + `CODIP_TRUST_PROXY_SECRET` + allowlistで保護されている |
+| Local DNS before change | `civilopendata.mirai-dx-platform.com` が未解決、または未接続状態として記録済み |
+| Worker route | `wrangler.jsonc` production env が `routes[].pattern=civilopendata.mirai-dx-platform.com/*`、`zone_name=mirai-dx-platform.com`、`workers_dev=false` |
+| DNS record | proxied AAAA `100::` を `scripts/deploy/deploy-production.mjs` が冪等に作成 (既存レコードがあれば変更しない) |
+| DNS after action | 作成したDNS recordとTLS (Universal SSL) statusをEvidenceへ記録 |
+| Access boundary | 公開後、管理系導線がCloudflare Access + `CODIP_TRUST_PROXY_SECRET` + allowlistで保護されるまでは、fail-closed全拒否状態を維持する |
 
-このゲートが未充足の場合は、DNS recordを手動で追加しない。候補は `civilopendata.mirai-dx-platform.com` として本Runbookに記録し、実変更は承認済みCloudflare操作へ移す。
+このゲートが未充足の場合は、DNS recordを追加しない。候補は `civilopendata.mirai-dx-platform.com` として本Runbookに記録し、実変更は承認済みCloudflare操作へ移す。
 
 ## 2. Required checks
 
@@ -68,9 +71,13 @@ cmd /c "pushd \\192.168.0.185\kensan\Projects\Mirai-DX-Project\Civil-Open-Data-I
 
 ## 3. Deploy command
 
-本番deployは承認済みCI/CD経路、または承認済み作業者の端末でのみ実行する。
+本番deployは承認済みCI/CD経路、または承認済み作業者の端末でのみ実行する。標準経路は secrets-safe なパイプラインスクリプトである。
 
 ```bash
+# 標準経路: Neon URI解決(in-process) -> migrate status -> secrets -> DNS -> cf:deploy:production
+source ~/.bashrc && node scripts/deploy/deploy-production.mjs --with-secrets
+
+# 個別実行する場合 (evidence/DB URLは環境変数で与える)
 npm run cf:deploy:production
 ```
 

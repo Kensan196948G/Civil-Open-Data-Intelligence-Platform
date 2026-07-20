@@ -28,6 +28,7 @@
 | CI証跡 | PR #49 のCloudflare target反映commit `040c7bc` に対して CI #82 / CodeQL #64 が success。verify、e2e、postgresql-compat、docker-preview、docker-image-security が全てsuccess |
 | Dependency maintenance | PR #52で `undici` 8.7.0、`@eslint/eslintrc` 3.3.6、`@types/node` 22.20.1、`autoprefixer` 10.5.4、`eslint` 9.39.5、`tailwindcss` 3.4.19、`tsx` 4.23.1、`vitest` 3.2.7、`wrangler` 4.112.0へ更新 |
 | CI証跡 | dependency更新後のmain commit `1d66e48` に対して CI `29693346265` / CodeQL `29693346235` が success。verify、e2e、postgresql-compat、docker-preview、docker-image-security、docker-supply-chain が全てsuccess |
+| Cloudflare deployment | routingを zone route方式 (`pattern` + `zone_name` + proxied AAAA `100::`) へ変更 (決定記録: `docs/runbooks/cloudflare-production.md` §1.1)。Hyperdrive `codip-production` (caching disabled) を `scripts/deploy/create-hyperdrive.mjs` で作成し実IDを `wrangler.jsonc` へ反映。secrets-safeな本番デプロイパイプライン `scripts/deploy/deploy-production.mjs` を追加 |
 
 ### 確認URL
 
@@ -41,7 +42,7 @@
 | `/api/openapi` | 200 |
 | `/api/fetch-logs` | 401。未認証で保護 |
 | `/api/admin/audit-events` | 405。GET不可 |
-| `https://civilopendata.mirai-dx-platform.com` | `release:post-release-status` の対象。現時点では `Resolve-DnsName` 未解決。Cloudflare Custom Domain / DNS / Access / Hyperdrive / Secrets / Neon実リソース作成は人間承認待ち |
+| `https://civilopendata.mirai-dx-platform.com` | `release:post-release-status` の対象。DNS record / Worker deploy / Secrets登録はマージ承認 (`Y`) 後に `scripts/deploy/deploy-production.mjs` が実行。Hyperdriveは作成済み。Cloudflare Accessのみユーザー手動 (未設定間は管理系fail-closed) |
 
 ### 残課題
 

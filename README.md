@@ -207,18 +207,25 @@ flowchart TD
 
 ### 🏗️ 本番インフラの状態
 
-2026-07-20 時点で **Cloudflare WorkerおよびNeon本番用リソースは未作成**です (Worker `codip` 不在、Hyperdrive config 0 件、CODIP用Neon productionブランチ未作成)。Neon project自体は既存 (2026-07-19作成、2026-07-20にNeon MCPで実地検証済み) で、非本番のpreview branch (`preview-20260720`) も検証用に作成済みですが、production branchの作成とHyperdrive設定はまだです。CODIP はまだ一度もデプロイされていません。本番化には以下が順に必要で、**いずれも人間の承認・実行が前提**です。
+2026-07-20 更新: Cloudflare本番サブドメインは `civilopendata.mirai-dx-platform.com` で確定済みです。routingは zone route方式 (`routes[].pattern=<FQDN>/*` + `zone_name` + proxied AAAA `100::`) を採用し、決定記録は `docs/runbooks/cloudflare-production.md` §1.1 を正とします。
 
-2026-07-19 にCloudflare本番サブドメインを `civilopendata.mirai-dx-platform.com` として確定しました。`wrangler.jsonc` には Workers Custom Domain (`routes[].custom_domain=true`) と production `workers_dev=false` を設定済みですが、Cloudflare側のCustom Domain/DNS/Access/Secrets/Hyperdrive/Neon実リソース作成は未実行です。
+| リソース | 状態 |
+| --- | --- |
+| Cloudflare Hyperdrive | 🟢 作成済み `codip-production` (caching disabled、`scripts/deploy/create-hyperdrive.mjs` で払い出し、`wrangler.jsonc` に実ID反映済み) |
+| Neon production | 🟢 既存 project `falling-dawn-93620497` の default branch を本番として使用 (PostGIS、migration適用済み、pre-release backup branch取得済み) |
+| Worker `codip` | ⚪ 未デプロイ (マージ承認後に `scripts/deploy/deploy-production.mjs` で実行) |
+| DNS record | ⚪ 未作成 (デプロイパイプラインが冪等に作成) |
+| Worker Secrets | ⚪ 未登録 (`--with-secrets` でデプロイ時に登録。値は非表示) |
+| Cloudflare Access | ⚪ 未設定 (ユーザー手動作業。設定完了までは管理系がfail-closed全拒否で安全側) |
 
-| # | 作業 | 承認が必要な理由 |
+残る本番化ステップは以下のとおりで、マージ承認 (`Y`) の範囲内で実行されます。Access設定 (`infra/cloudflare/` の `terraform apply` 相当) のみユーザー手動です。
+
+| # | 作業 | 実行者 |
 | --- | --- | --- |
-| 1 | Neon production branch の作成 (project自体は既存) | 課金発生・リソース作成 |
-| 2 | `wrangler hyperdrive create` と `wrangler.jsonc` の id 置換 | 課金発生・リソース作成 |
-| 3 | `wrangler secret put` による秘密情報登録 | Secrets の登録 |
-| 4 | Issue #18 の実Cloudflare/Neon証跡 | Workers 上の外部URL取得は接続時DNSピン留め不可のため `unsupported_runtime` で安全停止。DB接続はHyperdrive adapter構成で実ターゲット証跡待ち |
-| 5 | `infra/cloudflare/` の `terraform apply` | 本番アクセス制御の変更 |
-| 6 | `wrangler deploy --env production` | 本番デプロイ |
+| 1 | `scripts/deploy/deploy-production.mjs --with-secrets` (migrate status → Secrets → DNS → deploy) | マージ承認後に自律実行 |
+| 2 | `release:smoke -- --read-only` + `release:post-release-status` による本番確認 | マージ承認後に自律実行 |
+| 3 | Cloudflare Access application/policy の設定と `CODIP_TRUST_PROXY_SECRET` rotation | 人間 (ユーザー) |
+| 4 | Issue #18 の実Cloudflare/Neon証跡 (Workers実行時のDB接続・SSRFガード挙動) | デプロイ後に記録 |
 
 ### ⚠️ 残課題
 
