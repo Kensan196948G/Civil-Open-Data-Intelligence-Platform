@@ -31,6 +31,11 @@
 
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import {
+  WORKER_ROUTE_PLACEHOLDER_CONTENT,
+  WORKER_ROUTE_PLACEHOLDER_TYPE,
+  planWorkerRouteDnsRecord,
+} from "./cloudflare-dns-record-policy.mjs";
 
 const NEON_API = "https://console.neon.tech/api/v2";
 const CF_API = "https://api.cloudflare.com/client/v4";
@@ -139,17 +144,21 @@ async function ensureDnsRecord(token) {
     "GET",
     `/zones/${zone.id}/dns_records?name=${PRODUCTION_HOST}`,
   );
-  if (records.length > 0) {
-    console.log(`[deploy-production] DNS record for ${PRODUCTION_HOST} already exists (${records[0].type}, proxied=${records[0].proxied})`);
+  const plan = planWorkerRouteDnsRecord(records, PRODUCTION_HOST);
+  if (plan.action === "reuse") {
+    console.log(`[deploy-production] ${plan.message}`);
     return;
   }
+  if (plan.action === "block") {
+    throw new Error(`${plan.message}. Stop before deploy; verify DNS/route ownership in Cloudflare.`);
+  }
 
-  // Proxied placeholder origin (100::) — standard Cloudflare practice for
-  // hostnames served entirely by a Worker route.
+  // Proxied placeholder origin (100::) for hostnames served entirely by a
+  // Worker route. If a different record already exists, stop above.
   await cfRequest(token, "POST", `/zones/${zone.id}/dns_records`, {
-    type: "AAAA",
+    type: WORKER_ROUTE_PLACEHOLDER_TYPE,
     name: PRODUCTION_HOST,
-    content: "100::",
+    content: WORKER_ROUTE_PLACEHOLDER_CONTENT,
     proxied: true,
     comment: "CODIP Worker route target (managed via scripts/deploy/deploy-production.mjs)",
   });
