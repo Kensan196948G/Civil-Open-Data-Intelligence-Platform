@@ -207,7 +207,7 @@ flowchart TD
 
 ### 🏗️ 本番インフラの状態
 
-2026-07-20 時点で **Cloudflare WorkerおよびNeon本番用リソースは未作成**です (Worker `codip` 不在、Hyperdrive config 0 件、CODIP用Neon productionブランチ未作成)。Neon project自体は既存(2026-07-18作成、実地検証済み)ですが、production/preview branchの新規作成・Hyperdrive設定はまだです。CODIP はまだ一度もデプロイされていません。本番化には以下が順に必要で、**いずれも人間の承認・実行が前提**です。
+2026-07-20 時点で **Cloudflare WorkerおよびNeon本番用リソースは未作成**です (Worker `codip` 不在、Hyperdrive config 0 件、CODIP用Neon productionブランチ未作成)。Neon project自体は既存 (2026-07-19作成、2026-07-20にNeon MCPで実地検証済み) で、非本番のpreview branch (`preview-20260720`) も検証用に作成済みですが、production branchの作成とHyperdrive設定はまだです。CODIP はまだ一度もデプロイされていません。本番化には以下が順に必要で、**いずれも人間の承認・実行が前提**です。
 
 2026-07-19 にCloudflare本番サブドメインを `civilopendata.mirai-dx-platform.com` として確定しました。`wrangler.jsonc` には Workers Custom Domain (`routes[].custom_domain=true`) と production `workers_dev=false` を設定済みですが、Cloudflare側のCustom Domain/DNS/Access/Secrets/Hyperdrive/Neon実リソース作成は未実行です。
 
