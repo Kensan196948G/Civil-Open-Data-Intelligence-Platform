@@ -20,12 +20,21 @@ function requireText(label, source, needle) {
   }
 }
 
+function requireJobBlock(source, jobName) {
+  const match = source.match(new RegExp(`\\n  ${jobName}:\\n[\\s\\S]*?(?=\\n  [a-zA-Z0-9_-]+:\\n|\\n?$)`));
+  if (!match) {
+    errors.push(`CI workflow missing ${jobName} job`);
+    return "";
+  }
+  return match[0];
+}
+
+const nodePreviewJob = requireJobBlock(ci, "node-preview");
+
 requireText("CI workflow", ci, "permissions:\n  contents: read");
 requireText("CI workflow", ci, "pull-requests: read");
 requireText("CI workflow", ci, "workflow_dispatch:");
 requireText("CI workflow", ci, "production-target-env:");
-requireText("CI workflow", ci, "node-preview:");
-requireText("CI workflow", ci, "Direct Node preview release smoke");
 requireText("CI workflow", ci, "npm run release:validate-env:production-target");
 requireText("CI workflow", ci, "npm run release:check-audit-contract");
 requireText("CI workflow", ci, "npm run typecheck");
@@ -52,6 +61,17 @@ requireText("CI workflow", ci, "fetch-depth: 0");
 requireText("CI workflow", ci, "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020");
 requireText("CI workflow", ci, "gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7");
 requireText("CI workflow", ci, "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
+requireText("node-preview job", nodePreviewJob, "persist-credentials: false");
+requireText("node-preview job", nodePreviewJob, "Prepare SQLite preview database");
+requireText("node-preview job", nodePreviewJob, "npm run db:generate");
+requireText("node-preview job", nodePreviewJob, "npx prisma migrate deploy");
+requireText("node-preview job", nodePreviewJob, "npx prisma db seed");
+requireText("node-preview job", nodePreviewJob, "Build production app");
+requireText("node-preview job", nodePreviewJob, "npm run build");
+requireText("node-preview job", nodePreviewJob, "Direct Node preview release smoke");
+requireText("node-preview job", nodePreviewJob, "npm run start:checked -- --hostname 127.0.0.1 --port 3110");
+requireText("node-preview job", nodePreviewJob, "http://127.0.0.1:3110/api/ready");
+requireText("node-preview job", nodePreviewJob, "npm run release:smoke -- --base-url http://127.0.0.1:3110");
 requireText("CodeQL workflow", codeql, "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0");
 requireText("CodeQL workflow", codeql, "github/codeql-action/init@1ad29ea4a422cce9a242a9fae469541dcd08addc");
 requireText("CodeQL workflow", codeql, "github/codeql-action/analyze@1ad29ea4a422cce9a242a9fae469541dcd08addc");
