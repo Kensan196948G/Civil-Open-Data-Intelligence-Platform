@@ -233,7 +233,7 @@ flowchart TD
 - **Cloudflare Workers ランタイム互換**: [Issue #18](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/18)。SSRF事前DNS検証は `dns.promises.resolve4` / `resolve6` へ変更済み。接続時DNSピン留めはNode.js/Undiciで継続し、Cloudflare Workersでは同等保証ができないため外部URL取得を `unsupported_runtime` で安全停止する。PostgreSQL Prisma Clientは `@prisma/adapter-pg` によりHyperdrive `connectionString` を消費できる構成へ変更済み。残りは実Cloudflare/Neon証跡
 - **main branch protection**: 現在は有効。required checksは `verify` / `e2e` / `postgresql-compat` / `docker-preview` / `docker-image-security` / `analyze`、strict=true、admin enforcement=true。今後はrequired review数やCode Ownersの要否を運用成熟度に合わせて判断する
 - **Cloudflare本番522継続**: `civilopendata.mirai-dx-platform.com` はCloudflareへ解決済みだが、`/api/health` と `/api/ready` が522。Worker route/deployment/logs、Secrets、Access、Hyperdrive実行時接続の証跡を確認するまで本番正常稼働とは判定しない
-- **Neon pg_dump定期ジョブ未登録**: [Issue #63](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/63)。鮮度ゲートは実装済み。実Secretを持つCI/CDまたは運用端末でのpg_dumpスケジュール、artifact保管先、restore drill証跡化は継続
+- **Neon pg_dump定期ジョブの本番証跡未完了**: [Issue #63](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/63)。`.github/workflows/neon-backup.yml` は追加済み。`CODIP_NEON_PGDUMP_DATABASE_URL` / `CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE` Secret、restore drill日時、初回成功artifactの証跡化は継続
 - **De-dockerization移行中**: [Issue #35](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/35)。Docker jobはbranch protection互換のため残し、先にDocker非依存の `node-preview` CIゲートを追加して差し替え先を育てる
 
 🔒 **本番URLはCloudflareへ到達済みだが、522のため本番正常稼働は未達**。復旧判断は [`docs/runbooks/cloudflare-production.md`](docs/runbooks/cloudflare-production.md) の522手順と [`docs/runbooks/rollback.md`](docs/runbooks/rollback.md) に従います。
@@ -322,6 +322,7 @@ cmd /c "pushd \\192.168.0.185\kensan\Projects\Mirai-DX-Project\Civil-Open-Data-I
 | `npm run release:production-evidence -- --strict` | 実Cloudflare/Neon target、Wrangler本番構成、監視・アラート、バックアップ・リストアの証跡MarkdownをSecret値なしで出力し、未充足Evidenceを検知 |
 | `npm run release:create-neon-backup-evidence` | `pg_dump` artifactのファイルmetadataまたはartifact IDから、Secretを含まないNeon backup証跡JSONを生成 |
 | `npm run release:check-neon-backup-evidence` | `CODIP_NEON_BACKUP_EVIDENCE_JSON` からPITR window、pg_dump 24h鮮度、restore drill 30日鮮度を非Secretで検査 |
+| `.github/workflows/neon-backup.yml` | 毎日03:17 JSTにNeon `pg_dump` を暗号化artifact化し、非Secret証跡JSONを生成。Secret未設定・restore drill未記録ならfail-closed |
 | `npm run release:post-release-status -- --strict-production --max-response-ms 5000` | 本番DNS/health/DB ready/応答時間が未達なら失敗させる本番化後の監視ゲート |
 | `npm run release:check-production-placeholders -- --env production` | 実デプロイ前にproduction Hyperdrive ID等の未解決placeholderを拒否 |
 | `npm run release:check-cloudflare-build-artifact` | `npm run cf:build` 後に `.open-next/worker.js` と `.open-next/assets` が揃っていることを確認 |

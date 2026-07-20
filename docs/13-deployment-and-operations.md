@@ -258,11 +258,12 @@ Cloudflare Workers本番では、データソース接続確認・サンプル�
 > - `pg_dump` バックアップ証跡: 実行日時・対象 branch・成否を本チェックリスト
 >   (`docs/16-release-readiness-checklist.md`) または `state.json` の検証記録に残す
 >
-> 整備済み: `npm run release:check-neon-backup-evidence` で、Secretを含まない
-> `CODIP_NEON_BACKUP_EVIDENCE_JSON` からPITR window、`pg_dump` 鮮度、
-> restore drill鮮度を検査する
-> 残作業: 実Neon Secretを持つCI/CDまたは運用端末側の定期 `pg_dump` ジョブ登録と
-> artifact保管先の確定
+> 整備済み: `.github/workflows/neon-backup.yml` で、GitHub Actions上の定期
+> `pg_dump` artifactとSecretを含まない証跡JSONを生成する。`npm run
+> release:check-neon-backup-evidence` は `CODIP_NEON_BACKUP_EVIDENCE_JSON`
+> またはworkflow生成JSONからPITR window、`pg_dump` 鮮度、restore drill鮮度を検査する
+> 残作業: `CODIP_NEON_PGDUMP_DATABASE_URL` / `CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE`
+> Secret登録、restore drill日時のVariables/dispatch入力、初回成功artifactの証跡化
 > Issue化: [#63](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/63)
 
 ## 6. ログ保持期限

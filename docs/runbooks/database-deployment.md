@@ -108,7 +108,21 @@ CODIP_ADMIN_TOKEN="$CODIP_ADMIN_TOKEN" npm run release:smoke -- --base-url http:
 
 ## 4.1 Neon pg_dumpバックアップ証跡
 
-本番NeonはPITRだけに依存しない。定期ジョブは `pg_dump` をSecret管理されたCI/CDまたは運用端末で実行し、接続文字列をログへ出さずに暗号化済みartifactへ保存する。リポジトリ側ではDBへ接続せず、ジョブが生成した非Secret証跡だけを検査する。
+本番NeonはPITRだけに依存しない。定期ジョブは `.github/workflows/neon-backup.yml` で `pg_dump` をSecret管理されたGitHub Actions上で実行し、接続文字列をログへ出さずに暗号化artifactへ保存する。リポジトリ側の検証コマンドはDBへ接続せず、ジョブが生成した非Secret証跡だけを検査する。
+
+### 4.1.1 GitHub Actions定期pg_dump
+
+`.github/workflows/neon-backup.yml` は毎日03:17 JSTに実行され、次を行う。
+
+| 項目 | 内容 |
+| --- | --- |
+| Secret | `CODIP_NEON_PGDUMP_DATABASE_URL` と `CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE`。専用dumpロールまたは最小権限URLを登録し、どちらもログではmaskする |
+| Variables/Input | `CODIP_NEON_PROJECT_ID`、`CODIP_NEON_BRANCH`、`CODIP_NEON_HISTORY_WINDOW_HOURS`、`CODIP_LAST_RESTORE_DRILL_AT`、`CODIP_BACKUP_OWNER` |
+| Artifact | custom format dumpをGPG AES256で暗号化した `codip-neon-pgdump-<UTC>.dump.gpg` を14日保持。復号Secretを持つ本番運用者に限定する |
+| Evidence | `neon-backup-evidence` artifactを30日保持。Secretを含めず、PITR window、dump鮮度、restore drill鮮度を検査する |
+| Fail closed | dump URL Secret未設定、暗号化Secret未設定、restore drill日時未記録、dump/暗号化失敗、証跡鮮度NGではworkflowを失敗させる |
+
+初回運用時は `workflow_dispatch` で `restore_drill_at` を明示し、成功したActions run URLとartifact名をIssue #63へ記録する。Secretや接続文字列はIssue、README、ログへ貼らない。
 
 ```bash
 npm run release:create-neon-backup-evidence -- \
@@ -123,7 +137,7 @@ npm run release:create-neon-backup-evidence -- \
 npm run release:check-neon-backup-evidence
 ```
 
-`release:create-neon-backup-evidence` はDBへ接続せず、dumpファイルの存在、サイズ、mtime、運用者が入力したPITR/restore drill情報から非Secret JSONを生成する。dump内容は読まない。Secret-bearingな `pg_dump` 実行、暗号化、artifact uploadは承認済みCI/CDまたは運用端末で行い、生成されたJSONだけを `CODIP_NEON_BACKUP_EVIDENCE_JSON` または `--evidence-file` へ渡す。
+`release:create-neon-backup-evidence` はDBへ接続せず、dumpファイルの存在、サイズ、mtime、運用者が入力したPITR/restore drill情報から非Secret JSONを生成する。dump内容は読まない。Secret-bearingな `pg_dump` 実行とartifact uploadは承認済みGitHub Actionsまたは運用端末で行い、生成されたJSONだけを `CODIP_NEON_BACKUP_EVIDENCE_JSON` または `--evidence-file` へ渡す。
 
 最低限の証跡項目は `checkedAt`、`projectId`、`branch`、`historyWindowHours`、`lastPgDumpAt`、`lastPgDumpStatus`、`lastPgDumpArtifact`、`lastRestoreDrillAt`、`restoreDrillStatus`、`owner` とする。`lastPgDumpArtifact` はartifact名、保管先ID、または内部チケットIDに限定し、PostgreSQL URL、password、Neon API tokenを含めない。既定ゲートは `pg_dump` が24時間を超えて古い場合、PITR windowが24時間未満の場合、restore drillが30日を超えて古い場合に失敗する。
 
