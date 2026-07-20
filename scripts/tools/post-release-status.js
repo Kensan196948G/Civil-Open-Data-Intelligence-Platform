@@ -87,6 +87,20 @@ async function resolveHost(hostname, resolver = dns) {
   if (aaaa.status === "fulfilled") result.aaaa = aaaa.value;
   result.ok = result.a.length > 0 || result.aaaa.length > 0;
 
+  if (!result.ok && typeof resolver.lookup === "function") {
+    try {
+      const records = await resolver.lookup(hostname, { all: true });
+      for (const record of records) {
+        if (record.family === 4) result.a.push(record.address);
+        if (record.family === 6) result.aaaa.push(record.address);
+      }
+      result.ok = result.a.length > 0 || result.aaaa.length > 0;
+      if (result.ok) result.error = "";
+    } catch {
+      // Keep the resolve4/resolve6 error below; lookup is only a monitoring fallback.
+    }
+  }
+
   if (!result.ok) {
     const errors = [a, aaaa]
       .filter((item) => item.status === "rejected")
@@ -243,24 +257,31 @@ function renderReport(report) {
 async function buildReport(args, deps = {}) {
   const productionHost = hostForDisplay(args.productionUrl);
   const productionDns = await resolveHost(productionHost, deps.resolver);
-  const productionProbes = productionDns.ok
+  const productionProbes = productionHost
     ? await probeUrl(args.productionUrl, PRODUCTION_PATHS, {
         fetcher: deps.fetcher,
         timeoutMs: args.timeoutMs,
         maxResponseMs: args.maxResponseMs,
       })
-    : [{ path: "(skipped)", ok: false, responseTimeMs: null, state: "dns unresolved" }];
+    : [{ path: "(skipped)", ok: false, responseTimeMs: null, status: 0, state: "missing production hostname" }];
   const previewProbes = await probeUrl(args.previewUrl, PREVIEW_PATHS, {
     fetcher: deps.fetcher,
     timeoutMs: args.timeoutMs,
     maxResponseMs: args.maxResponseMs,
   });
 
-  const productionConnected = productionDns.ok && productionProbes.every((probe) => probe.ok);
+  const productionProbesHealthy = productionProbes.every((probe) => probe.ok);
+  const productionHasHttpResponse = productionProbes.some((probe) => typeof probe.status === "number" && probe.status > 0);
+  const productionConnected = productionDns.ok && productionProbesHealthy;
+  const productionEndpointUnhealthy = productionHasHttpResponse && !productionProbesHealthy;
   const previewHealthy = previewProbes.every((probe) => probe.ok);
-  const ready = (args.strictProduction ? productionConnected : true) && (args.allowPreviewDown || previewHealthy);
+  const ready =
+    (args.strictProduction ? productionConnected : !productionEndpointUnhealthy) &&
+    (args.allowPreviewDown || previewHealthy);
   const decision = args.strictProduction
     ? "hold production cutover until DNS/custom domain and health probes are ready"
+    : productionEndpointUnhealthy
+      ? "investigate production route/origin health before declaring cutover healthy"
     : "production is not connected yet; continue preview monitoring and keep DNS changes gated";
 
   return {
@@ -273,6 +294,7 @@ async function buildReport(args, deps = {}) {
     productionProbes,
     previewProbes,
     productionConnected,
+    productionEndpointUnhealthy,
     previewHealthy,
     ready,
     decision,
