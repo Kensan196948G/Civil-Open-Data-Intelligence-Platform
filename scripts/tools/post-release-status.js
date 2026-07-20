@@ -124,6 +124,11 @@ async function fetchWithTimeout(url, { fetcher = globalThis.fetch, timeoutMs = D
     });
     const responseTimeMs = Date.now() - startedAt;
     const body = await response.text().catch(() => "");
+    const headers = Object.fromEntries(
+      ["server", "cf-ray", "cf-cache-status", "content-type"]
+        .map((name) => [name, response.headers.get(name)])
+        .filter(([, value]) => Boolean(value)),
+    );
     return {
       url,
       ok: response.status >= 200 && response.status < 300,
@@ -131,6 +136,7 @@ async function fetchWithTimeout(url, { fetcher = globalThis.fetch, timeoutMs = D
       responseTimeMs,
       state: `${response.status}`,
       bodyPreview: body.slice(0, 4096),
+      headers,
     };
   } catch (error) {
     return {
@@ -140,6 +146,7 @@ async function fetchWithTimeout(url, { fetcher = globalThis.fetch, timeoutMs = D
       responseTimeMs: Date.now() - startedAt,
       state: error?.name === "AbortError" ? "timeout" : error?.code || error?.message || "request failed",
       bodyPreview: "",
+      headers: {},
     };
   } finally {
     clearTimeout(timeout);
@@ -186,6 +193,70 @@ function inspectProbe(pathname, result, maxResponseMs) {
     databaseState,
     state: `${result.state}; ${details.join("; ")}`,
   };
+}
+
+function isCloudflareEdgeResponse(probe) {
+  const server = String(probe.headers?.server ?? "").toLowerCase();
+  return server.includes("cloudflare") || Boolean(probe.headers?.["cf-ray"]);
+}
+
+function diagnoseProductionIssue(report) {
+  if (report.productionConnected) {
+    return [["Production route", "OK", "DNS and read-only probes are healthy."]];
+  }
+
+  const probes = report.productionProbes || [];
+  const statuses = [...new Set(probes.map((probe) => probe.status).filter(Boolean))];
+  const has522 = probes.some((probe) => probe.status === 522);
+  const edgeResponses = probes.filter(isCloudflareEdgeResponse);
+
+  if (has522 && edgeResponses.length > 0) {
+    return [
+      [
+        "Cloudflare edge reached",
+        "ATTENTION",
+        "Responses include Cloudflare edge headers; DNS reaches Cloudflare, but requests time out before the application responds.",
+      ],
+      [
+        "Likely next check",
+        "ATTENTION",
+        "Verify the production Worker route is deployed and attached to civilopendata.mirai-dx-platform.com/* before the proxied 100:: placeholder is treated as an origin.",
+      ],
+      [
+        "Safe commands",
+        "ACTION",
+        "Use approved Cloudflare credentials: wrangler deployments list --env production; wrangler tail codip --env production --status error; confirm the zone route and DNS record in the dashboard.",
+      ],
+    ];
+  }
+
+  if (has522) {
+    return [
+      [
+        "HTTP 522",
+        "ATTENTION",
+        "Cloudflare returned 522. Check origin/Worker route health and collect cf-ray/error details from Cloudflare logs.",
+      ],
+    ];
+  }
+
+  if (statuses.length > 0) {
+    return [
+      [
+        "Production probe status",
+        "ATTENTION",
+        `Production returned ${statuses.join(", ")}. Check route, Access policy, Worker logs, and /api/ready payload.`,
+      ],
+    ];
+  }
+
+  return [
+    [
+      "Production connectivity",
+      "ATTENTION",
+      "No production HTTP response was received. Check DNS propagation, proxy status, and network reachability.",
+    ],
+  ];
 }
 
 async function probeUrl(baseUrl, paths, options) {
@@ -236,6 +307,12 @@ function renderReport(report) {
     "| --- | ---: | --- |",
     ...report.productionProbes.map((probe) => `| \`${probe.path || probe.url}\` | ${renderResponseTime(probe.responseTimeMs)} | ${status(probe.ok, "not ready")} (${probe.state}) |`),
     "",
+    "## Production Route Diagnosis",
+    "",
+    "| Check | State | Detail |",
+    "| --- | --- | --- |",
+    ...report.productionDiagnosis.map(([check, state, detail]) => `| ${check} | ${state} | ${detail} |`),
+    "",
     "## Shared Preview Probes",
     "",
     "| Path | Response | State |",
@@ -284,7 +361,7 @@ async function buildReport(args, deps = {}) {
       ? "investigate production route/origin health before declaring cutover healthy"
     : "production is not connected yet; continue preview monitoring and keep DNS changes gated";
 
-  return {
+  const report = {
     checkedAt: new Date().toISOString(),
     productionUrl: args.productionUrl,
     previewUrl: args.previewUrl,
@@ -299,6 +376,8 @@ async function buildReport(args, deps = {}) {
     ready,
     decision,
   };
+  report.productionDiagnosis = diagnoseProductionIssue(report);
+  return report;
 }
 
 async function main() {
@@ -329,4 +408,5 @@ module.exports = {
   buildReport,
   renderReport,
   inspectProbe,
+  diagnoseProductionIssue,
 };

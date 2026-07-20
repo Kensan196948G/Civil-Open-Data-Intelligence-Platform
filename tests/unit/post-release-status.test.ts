@@ -41,12 +41,13 @@ const {
     ready: boolean;
     productionDns: { ok: boolean; error: string };
     productionProbes: { path: string; status: number; ok: boolean; state: string }[];
+    productionDiagnosis: string[][];
   }>;
   renderReport: (report: unknown) => string;
   fetchWithTimeout: (
     url: string,
     options: { fetcher: (url: string, init?: RequestInit) => Promise<Response>; timeoutMs: number },
-  ) => Promise<{ ok: boolean; status: number; state: string }>;
+  ) => Promise<{ ok: boolean; status: number; state: string; headers: Record<string, string> }>;
   inspectProbe: (
     pathname: string,
     result: { ok: boolean; status: number; state: string; responseTimeMs: number; bodyPreview: string },
@@ -133,7 +134,10 @@ describe("post-release-status", () => {
   it("probes and flags production endpoint failures even when local DNS resolution is inconclusive", async () => {
     const fetcher = vi.fn(async (url: string) => {
       if (url.includes("civilopendata.mirai-dx-platform.com")) {
-        return new Response("522: Connection timed out", { status: 522 });
+        return new Response("522: Connection timed out", {
+          status: 522,
+          headers: { server: "cloudflare", "cf-ray": "abc-NRT" },
+        });
       }
       return new Response("{}", { status: 200 });
     });
@@ -156,7 +160,12 @@ describe("post-release-status", () => {
     expect(report.productionConnected).toBe(false);
     expect(report.productionEndpointUnhealthy).toBe(true);
     expect(report.ready).toBe(false);
-    expect(renderReport(report)).toContain("investigate production route/origin health");
+    const text = renderReport(report);
+    expect(text).toContain("investigate production route/origin health");
+    expect(text).toContain("Production Route Diagnosis");
+    expect(text).toContain("Cloudflare edge reached");
+    expect(text).toContain("production Worker route is deployed");
+    expect(text).not.toContain("abc-NRT");
   });
 
   it("marks production connected only when DNS and read-only probes succeed", async () => {
@@ -185,6 +194,7 @@ describe("post-release-status", () => {
 
     expect(result.ok).toBe(false);
     expect(result.status).toBe(302);
+    expect(result.headers.location).toBeUndefined();
   });
 
   it("records /api/ready database health when the endpoint returns the standard payload", () => {

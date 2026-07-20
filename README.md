@@ -310,7 +310,7 @@ cmd /c "pushd \\192.168.0.185\kensan\Projects\Mirai-DX-Project\Civil-Open-Data-I
 | `npm run release:smoke -- --read-only --base-url https://...` | staging/production向けの非破壊HTTPスモーク |
 | `npm run release:smoke -- --base-url http://127.0.0.1:3102 --expect-standard-records` | PostGIS投入環境で `/api/v1` の `standard_records` modeを強制確認 |
 | `npm run release:smoke -- --base-url http://127.0.0.1:3102 --expect-standard-records --expect-seed-standard-record` | PostgreSQL seed入りCI/previewで検証用標準レコードとproperties sanitizationも確認 |
-| `npm run release:post-release-status -- --production-url https://civilopendata.mirai-dx-platform.com --max-response-ms 5000` | Cloudflare/Neonを変更せず、production DNS/health、応答時間、`/api/ready` DB状態、共有previewの読み取り専用状態をMarkdownで確認。DNS未接続は通常モードでは記録のみ |
+| `npm run release:post-release-status -- --production-url https://civilopendata.mirai-dx-platform.com --max-response-ms 5000` | Cloudflare/Neonを変更せず、production DNS/health、応答時間、`/api/ready` DB状態、共有preview、522時のWorker route診断をMarkdownで確認。DNS未接続は通常モードでは記録のみ |
 | `npm run db:migrate` | SQLite preview/localへ既存migrationを適用 |
 | `npm run db:migrate:dev` | schema作成者向け。新規migration生成時のみ使用 |
 | `npm run release:check-docker-contract` | Dockerfile、`.dockerignore`、image scan、SBOM/provenance契約 |
