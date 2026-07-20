@@ -27,11 +27,15 @@ import { POST as auditEventsPOST } from "@/app/api/admin/audit-events/route";
 import { invalidateOperationSettingsCache } from "@/lib/settings";
 import { resetRateLimitForTests } from "@/lib/rate-limit";
 
-function settingsRequest(method: string, body?: unknown) {
+function settingsRequest(method: string, body?: unknown, headers?: HeadersInit) {
   return new NextRequest("http://127.0.0.1:3100/api/admin/settings", {
     method,
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    headers: { "content-type": "application/json", origin: "http://127.0.0.1:3100" },
+    headers: {
+      "content-type": "application/json",
+      origin: "http://127.0.0.1:3100",
+      ...headers,
+    },
   });
 }
 
@@ -64,6 +68,35 @@ describe("admin settings / audit-events routes", () => {
     appSettingFindManyMock.mockResolvedValueOnce([{ key: "timeoutSec", value: "60" }]);
     const response = await settingsGET(settingsRequest("GET"));
     const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.settings.timeoutSec).toBe(60);
+  });
+
+  it("requires admin for reading operation settings", async () => {
+    vi.stubEnv("CODIP_ALLOW_INSECURE_ADMIN", "false");
+    vi.stubEnv("CODIP_ADMIN_TOKEN", "unit-test-admin-token-1234567890123456");
+
+    const response = await settingsGET(settingsRequest("GET"));
+
+    expect(response.status).toBe(401);
+    expect(appSettingFindManyMock).not.toHaveBeenCalled();
+  });
+
+  it("returns operation settings through trusted proxy admin identity", async () => {
+    vi.stubEnv("CODIP_ALLOW_INSECURE_ADMIN", "false");
+    vi.stubEnv("CODIP_TRUST_PROXY_AUTH", "true");
+    vi.stubEnv("CODIP_TRUST_PROXY_SECRET", "unit-test-proxy-secret-1234567890123");
+    vi.stubEnv("CODIP_ADMIN_EMAILS", "admin@example.com");
+    appSettingFindManyMock.mockResolvedValueOnce([{ key: "timeoutSec", value: "60" }]);
+
+    const response = await settingsGET(
+      settingsRequest("GET", undefined, {
+        "cf-access-authenticated-user-email": "admin@example.com",
+        "x-codip-proxy-secret": "unit-test-proxy-secret-1234567890123",
+      }),
+    );
+    const body = await response.json();
+
     expect(response.status).toBe(200);
     expect(body.settings.timeoutSec).toBe(60);
   });

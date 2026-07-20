@@ -12,6 +12,8 @@ import { GET as healthGET } from "@/app/api/health/route";
 import { GET as openApiGET } from "@/app/api/openapi/route";
 import { GET as readyGET } from "@/app/api/ready/route";
 
+const adminSecurity = [{ adminToken: [] }, { adminSession: [] }, { adminProxy: [] }];
+
 describe("operations API routes", () => {
   it("returns liveness without database access", async () => {
     const response = await healthGET();
@@ -67,8 +69,12 @@ describe("operations API routes", () => {
     expect(body.paths["/api/admin/session"].post.responses["403"].description).toContain("CSRF");
     expect(body.paths["/api/tags"].get.tags).toContain("catalog");
     expect(body.paths["/api/tags"].get.responses["429"].description).toContain("レート制限");
-    expect(body.paths["/api/tags"].post.security).toEqual([{ adminToken: [] }]);
-    expect(body.paths["/api/tags/{id}"].delete.security).toEqual([{ adminToken: [] }]);
+    expect(body.paths["/api/tags"].post.security).toEqual(adminSecurity);
+    expect(body.paths["/api/tags/{id}"].delete.security).toEqual(adminSecurity);
+    expect(body.paths["/api/admin/settings"].get.security).toEqual(adminSecurity);
+    expect(body.paths["/api/admin/settings"].get.responses["401"].description).toContain("管理認証");
+    expect(body.paths["/api/admin/settings"].get.responses["503"].description).toContain("管理ガード");
+    expect(body.paths["/api/admin/settings"].get.responses["403"]).toBeUndefined();
     expect(body.paths["/api/v1/records/search"].get.tags).toContain("downstream");
     expect(body.paths["/api/v1/records/point"].get.tags).toContain("downstream");
     expect(body.paths["/api/v1/sources/{id}/freshness"].get.tags).toContain("downstream");
@@ -91,10 +97,12 @@ describe("operations API routes", () => {
     expect(
       body.paths["/api/v1/layers/{id}/features"].get.responses["200"].content["application/json"].schema.$ref,
     ).toBe("#/components/schemas/V1FeatureCollectionResponse");
-    expect(body.paths["/api/fetch-logs"].get.security).toEqual([{ adminToken: [] }]);
+    expect(body.paths["/api/fetch-logs"].get.security).toEqual(adminSecurity);
     expect(body.paths["/api/fetch-logs"].get.responses["401"].description).toContain("管理認証");
     expect(body.paths["/api/fetch-logs"].get.responses["429"].description).toContain("レート制限");
     expect(body.paths["/api/fetch-logs"].get.responses["503"].description).toContain("管理ガード");
     expect(body.components.securitySchemes.adminToken.name).toBe("x-codip-admin-token");
+    expect(body.components.securitySchemes.adminSession.in).toBe("cookie");
+    expect(body.components.securitySchemes.adminProxy.name).toBe("x-codip-proxy-secret");
   });
 });

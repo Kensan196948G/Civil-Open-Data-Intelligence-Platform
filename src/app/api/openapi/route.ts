@@ -37,6 +37,8 @@ const v1Warnings = {
   items: { $ref: "#/components/schemas/V1Warning" },
 } as const;
 
+const adminSecurity = [{ adminToken: [] }, { adminSession: [] }, { adminProxy: [] }] as const;
+
 const openApiDocument = {
   openapi: "3.1.0",
   info: {
@@ -126,15 +128,18 @@ const openApiDocument = {
       get: {
         tags: ["admin"],
         summary: "接続確認の動作設定を取得",
+        security: adminSecurity,
         responses: {
           "200": { description: "タイムアウト・リダイレクト上限・プレビュー保存上限・要確認期間を返す" },
+          "401": { description: "管理認証エラー" },
           "429": { description: "レート制限超過" },
+          "503": { description: "管理ガード未設定" },
         },
       },
       put: {
         tags: ["admin"],
         summary: "接続確認の動作設定を変更",
-        security: [{ adminToken: [] }],
+        security: adminSecurity,
         responses: {
           "200": { description: "保存成功。変更は監査ログへ記録される" },
           "400": { description: "設定キーまたは値が選択肢外" },
@@ -149,7 +154,7 @@ const openApiDocument = {
       post: {
         tags: ["admin"],
         summary: "クライアント操作の監査イベントを記録",
-        security: [{ adminToken: [] }],
+        security: adminSecurity,
         responses: {
           "200": { description: "記録成功。内容はサーバー側のイベント種別写像で固定される" },
           "400": { description: "不明なイベント種別" },
@@ -172,7 +177,7 @@ const openApiDocument = {
       post: {
         tags: ["catalog"],
         summary: "タグを作成",
-        security: [{ adminToken: [] }],
+        security: adminSecurity,
         responses: {
           "201": { description: "作成成功" },
           "400": { description: "入力不正" },
@@ -187,7 +192,7 @@ const openApiDocument = {
       delete: {
         tags: ["catalog"],
         summary: "タグを削除",
-        security: [{ adminToken: [] }],
+        security: adminSecurity,
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         responses: {
           "200": { description: "削除成功" },
@@ -236,7 +241,7 @@ const openApiDocument = {
       post: {
         tags: ["catalog"],
         summary: "データソースを登録",
-        security: [{ adminToken: [] }],
+        security: adminSecurity,
         responses: {
           "201": { description: "登録成功" },
           "400": { description: "入力不正" },
@@ -259,7 +264,7 @@ const openApiDocument = {
       put: {
         tags: ["catalog"],
         summary: "データソースを更新",
-        security: [{ adminToken: [] }],
+        security: adminSecurity,
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         responses: {
           "200": { description: "更新成功" },
@@ -272,7 +277,7 @@ const openApiDocument = {
       delete: {
         tags: ["catalog"],
         summary: "データソースを削除",
-        security: [{ adminToken: [] }],
+        security: adminSecurity,
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         responses: {
           "200": { description: "削除成功" },
@@ -285,7 +290,7 @@ const openApiDocument = {
       get: {
         tags: ["catalog"],
         summary: "取得ログを取得",
-        security: [{ adminToken: [] }],
+        security: adminSecurity,
         responses: {
           "200": { description: "取得ログ一覧" },
           "401": { description: "管理認証エラー" },
@@ -449,7 +454,7 @@ const openApiDocument = {
       post: {
         tags: ["catalog"],
         summary: "データソースの接続確認",
-        security: [{ adminToken: [] }],
+        security: adminSecurity,
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         responses: {
           "200": { description: "接続確認結果" },
@@ -463,7 +468,7 @@ const openApiDocument = {
       post: {
         tags: ["catalog"],
         summary: "データソースのサンプル取得",
-        security: [{ adminToken: [] }],
+        security: adminSecurity,
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         responses: {
           "200": { description: "サンプル取得結果。APIキー必須データの本文は保存しない" },
@@ -477,7 +482,7 @@ const openApiDocument = {
       post: {
         tags: ["quality"],
         summary: "品質スコアを再計算",
-        security: [{ adminToken: [] }],
+        security: adminSecurity,
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         responses: {
           "200": { description: "再計算成功" },
@@ -642,6 +647,18 @@ const openApiDocument = {
         in: "header",
         name: "x-codip-admin-token",
         description: "APIクライアント用。CODIP_ADMIN_TOKEN と同じ値。Bearer認証も利用可能。ブラウザUIは署名済みHttpOnly Cookieを利用し、変更系操作では同一Origin確認を行う。",
+      },
+      adminSession: {
+        type: "apiKey",
+        in: "cookie",
+        name: "__Host-codip_admin_session",
+        description: "ブラウザUI用の署名済みHttpOnly管理セッションCookie。HTTPローカルでは codip_admin_session を利用する。",
+      },
+      adminProxy: {
+        type: "apiKey",
+        in: "header",
+        name: "x-codip-proxy-secret",
+        description: "Cloudflare Access identity header と組み合わせるプロキシ認証用共有secret。値はSecretsで管理する。",
       },
     },
   },

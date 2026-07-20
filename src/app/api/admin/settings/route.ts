@@ -11,6 +11,8 @@ import {
 
 /** 接続確認の動作設定 (デザイン正本 settings view の4項目) の取得 */
 export async function GET(request: NextRequest) {
+  const authError = requireAdminRequest(request);
+  if (authError) return authError;
   const rate = checkRateLimit("api:admin-settings", clientIdentifier(request), 60, 60_000);
   if (!rate.allowed) return rateLimitResponse(rate);
   return NextResponse.json({ settings: await getOperationSettings() });
