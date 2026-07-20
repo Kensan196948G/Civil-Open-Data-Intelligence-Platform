@@ -99,7 +99,7 @@ npm run release:post-release-status -- --strict-production --production-url http
 
 このコマンドはCloudflare API、Neon API、Secrets値を読み取らない。`/api/ready` が標準JSON (`status=ready`, `checks.database=ok`) を返す場合はDB接続確認として判定し、応答が `--max-response-ms` を超える場合はnot readyとして扱う。Access配下で `/api/health` / `/api/ready` が認証必須になる構成では、strict実行前に読み取り専用health endpointの公開範囲を運用設計で確定する。
 
-`522` が返る場合、レポートの `Production Route Diagnosis` を確認する。Cloudflare edge header (`server: cloudflare` または `cf-ray`) がある `522` は、DNSがCloudflareへ届いている一方で、Worker routeがリクエストを処理せずorigin接続タイムアウトになっている可能性が高い。承認済みCloudflare認証情報を持つ担当者は、DNSやSecretを変更する前に `wrangler deployments list --env production`、`wrangler tail codip --env production --status error`、Cloudflare Dashboard の zone route / DNS record / Workers Logs を読み取り確認する。
+`522` が返る場合、レポートの `Production Route Diagnosis` を確認する。Cloudflare edge header (`server: cloudflare` または `cf-ray`) がある `522` は、DNSがCloudflareへ届いている一方で、Worker routeがリクエストを処理せずorigin接続タイムアウトになっている可能性が高い。まず `npm run release:cloudflare-522-diagnostics` で Cloudflare へ接続しない証跡チェックリストを保存する。承認済みCloudflare認証情報を持つ担当者のみ `npm run release:cloudflare-522-diagnostics -- --execute-wrangler` を使い、DNSやSecretを変更する前に `deployments status/list`、`wrangler tail codip --env production --status error`、Cloudflare Dashboard の zone route / DNS record / Workers Logs を読み取り確認する。
 
 ## 3. 共有preview確認
 

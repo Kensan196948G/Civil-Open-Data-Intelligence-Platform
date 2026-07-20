@@ -224,7 +224,7 @@ flowchart TD
 | # | 作業 | 実行者 |
 | --- | --- | --- |
 | 1 | `release:post-release-status` の `Production Route Diagnosis` を保存 | CTO/運用 |
-| 2 | `wrangler deployments list --env production`、`wrangler tail codip --env production --status error`、Cloudflare Dashboardのroute/DNSを確認 | 承認済みCloudflare認証を持つ作業者 |
+| 2 | `npm run release:cloudflare-522-diagnostics` でroute/deployment/log evidenceチェックリストを作成し、承認済み認証がある場合のみ `-- --execute-wrangler` で `deployments status/list` をread-only実行。`wrangler tail codip --env production --status error` とDashboardのroute/DNSは証跡として確認 | 承認済みCloudflare認証を持つ作業者 |
 | 3 | Worker routeが未接続なら、承認済みCI/CDまたはRunbook経路でroute/deployを復旧。DNS/Secrets変更は証跡確認後に限定 | CTO判断 + 承認済み作業者 |
 | 4 | Cloudflare Access application/policy と `CODIP_TRUST_PROXY_SECRET` 登録状態を確認し、管理系fail-closedを維持 | 人間 (ユーザー) / 承認済み作業者 |
 
@@ -312,6 +312,7 @@ cmd /c "pushd \\192.168.0.185\kensan\Projects\Mirai-DX-Project\Civil-Open-Data-I
 | `npm run release:smoke -- --base-url http://127.0.0.1:3102 --expect-standard-records` | PostGIS投入環境で `/api/v1` の `standard_records` modeを強制確認 |
 | `npm run release:smoke -- --base-url http://127.0.0.1:3102 --expect-standard-records --expect-seed-standard-record` | PostgreSQL seed入りCI/previewで検証用標準レコードとproperties sanitizationも確認 |
 | `npm run release:post-release-status -- --production-url https://civilopendata.mirai-dx-platform.com --max-response-ms 5000` | Cloudflare/Neonを変更せず、production DNS/health、応答時間、`/api/ready` DB状態、共有preview、522時のWorker route診断をMarkdownで確認。DNS未接続は通常モードでは記録のみ |
+| `npm run release:cloudflare-522-diagnostics` | Cloudflareへ接続せず、production `wrangler.jsonc` route/Hyperdrive/observability契約と522時に採るべきread-only証跡をMarkdown化。承認済みCloudflare認証がある場合のみ `-- --execute-wrangler` で `deployments status/list` を実行 |
 | `npm run db:migrate` | SQLite preview/localへ既存migrationを適用 |
 | `npm run db:migrate:dev` | schema作成者向け。新規migration生成時のみ使用 |
 | `npm run release:check-docker-contract` | Dockerfile、`.dockerignore`、image scan、SBOM/provenance契約 |
