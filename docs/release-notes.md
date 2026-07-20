@@ -44,14 +44,14 @@
 | `/api/openapi` | 200 |
 | `/api/fetch-logs` | 401。未認証で保護 |
 | `/api/admin/audit-events` | 405。GET不可 |
-| `https://civilopendata.mirai-dx-platform.com` | `release:post-release-status` の対象。DNS record / Worker deploy / Secrets登録はマージ承認 (`Y`) 後に `scripts/deploy/deploy-production.mjs` が実行。Hyperdriveは作成済み。Cloudflare Accessのみユーザー手動 (未設定間は管理系fail-closed) |
+| `https://civilopendata.mirai-dx-platform.com` | `release:post-release-status` の対象。DNSはCloudflareへ解決済みだが、2026-07-20時点で `/api/health` / `/api/ready` は522。Worker route/deployment/logs、Secrets、Access、Hyperdrive実行時接続の証跡確認が完了するまで本番正常稼働とは判定しない |
 
 ### 残課題
 
 | 優先度 | 項目 | 方針 |
 | --- | --- | --- |
 | P1 | Issue #18 の残り: 実Hyperdrive/Neon証跡、外部URL取得の専用egress設計 | Prisma Hyperdrive driver adapter側は `@prisma/adapter-pg` で実装済み。Cloudflare Workersでは接続時DNSピン留め不可のため外部URL取得を安全停止 |
-| P1 | Cloudflare/Neon実リソース未確定 | 人間承認後に Worker、Hyperdrive、Access、Secrets、Neon branch を作成し証跡化 |
+| P1 | Cloudflare本番522継続 | Worker route/deployment/logs、DNS proxied `AAAA 100::`、Secrets、Access、Hyperdrive実行時接続を承認済みCloudflare認証で確認し、復旧またはrollback判断をIssue #18へ証跡化 |
 | P2 | Issue #46 監査記録の原子性 | 主要な台帳・タグ・接続確認・サンプル取得・品質再計算は同一transaction化済み。クライアント起点イベントは記録失敗を503化済み。残りは将来の長時間外部処理増加時にoutbox方式を採用するかの設計判断 |
 | P2 | 本番Evidence自動取得 | `production-evidence` はSecret非表示の入力状態と手動貼付欄まで。Cloudflare/Neon APIからの実ログ自動収集は認証・権限確認後に追加 |
 | P2 | Issue #63 Neon pg_dump定期ジョブ登録 | 鮮度ゲートは追加済み。実Secretを持つCI/CDまたは運用端末での `pg_dump` スケジュール、artifact保管先、restore drill自動証跡化は継続 |
