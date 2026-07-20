@@ -111,8 +111,19 @@ CODIP_ADMIN_TOKEN="$CODIP_ADMIN_TOKEN" npm run release:smoke -- --base-url http:
 本番NeonはPITRだけに依存しない。定期ジョブは `pg_dump` をSecret管理されたCI/CDまたは運用端末で実行し、接続文字列をログへ出さずに暗号化済みartifactへ保存する。リポジトリ側ではDBへ接続せず、ジョブが生成した非Secret証跡だけを検査する。
 
 ```bash
+npm run release:create-neon-backup-evidence -- \
+  --project-id falling-dawn-93620497 \
+  --branch production \
+  --history-window-hours 24 \
+  --pg-dump-file /secure/artifacts/codip.dump \
+  --restore-drill-at 2026-07-19T06:30:00Z \
+  --owner release-manager \
+  --pretty > evidence/neon-backup.json
+
 npm run release:check-neon-backup-evidence
 ```
+
+`release:create-neon-backup-evidence` はDBへ接続せず、dumpファイルの存在、サイズ、mtime、運用者が入力したPITR/restore drill情報から非Secret JSONを生成する。dump内容は読まない。Secret-bearingな `pg_dump` 実行、暗号化、artifact uploadは承認済みCI/CDまたは運用端末で行い、生成されたJSONだけを `CODIP_NEON_BACKUP_EVIDENCE_JSON` または `--evidence-file` へ渡す。
 
 最低限の証跡項目は `checkedAt`、`projectId`、`branch`、`historyWindowHours`、`lastPgDumpAt`、`lastPgDumpStatus`、`lastPgDumpArtifact`、`lastRestoreDrillAt`、`restoreDrillStatus`、`owner` とする。`lastPgDumpArtifact` はartifact名、保管先ID、または内部チケットIDに限定し、PostgreSQL URL、password、Neon API tokenを含めない。既定ゲートは `pg_dump` が24時間を超えて古い場合、PITR windowが24時間未満の場合、restore drillが30日を超えて古い場合に失敗する。
 

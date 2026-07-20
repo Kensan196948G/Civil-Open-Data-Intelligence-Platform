@@ -317,6 +317,7 @@ cmd /c "pushd \\192.168.0.185\kensan\Projects\Mirai-DX-Project\Civil-Open-Data-I
 | `npm run release:check-github-actions-contract` | actionlint、危険trigger、Action SHA固定契約 |
 | `npm run release:validate-env:production-target` | 実Cloudflare/Neon targetのSecrets/Variables検証。productionでは `https://civilopendata.mirai-dx-platform.com` 固定 |
 | `npm run release:production-evidence -- --strict` | 実Cloudflare/Neon target、Wrangler本番構成、監視・アラート、バックアップ・リストアの証跡MarkdownをSecret値なしで出力し、未充足Evidenceを検知 |
+| `npm run release:create-neon-backup-evidence` | `pg_dump` artifactのファイルmetadataまたはartifact IDから、Secretを含まないNeon backup証跡JSONを生成 |
 | `npm run release:check-neon-backup-evidence` | `CODIP_NEON_BACKUP_EVIDENCE_JSON` からPITR window、pg_dump 24h鮮度、restore drill 30日鮮度を非Secretで検査 |
 | `npm run release:post-release-status -- --strict-production --max-response-ms 5000` | 本番DNS/health/DB ready/応答時間が未達なら失敗させる本番化後の監視ゲート |
 | `npm run release:check-production-placeholders -- --env production` | 実デプロイ前にproduction Hyperdrive ID等の未解決placeholderを拒否 |
