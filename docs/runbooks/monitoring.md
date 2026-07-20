@@ -39,12 +39,35 @@
 | `CODIP_SMOKE_MONITORING_SCHEDULE` | read-only smokeの実行頻度、直近成功時刻、失敗時担当 |
 | `CODIP_ROLLBACK_OWNER` | rollback判断者または当番ロール |
 | `CODIP_BACKUP_RESTORE_EVIDENCE` | Neon PITR window、restore rehearsalまたはrollback drill結果、復旧確認担当 |
+| `CODIP_NEON_BACKUP_EVIDENCE_JSON` | `release:check-neon-backup-evidence` が読む非Secret JSON証跡。PITR window、pg_dump artifact名、restore drill日時を記録 |
 
 ```bash
 npm run release:production-evidence -- --strict
 ```
 
 `--strict` はAccess証跡、上記監視証跡、バックアップ・リストア証跡が未記録の場合も失敗する。Cloudflare Workers Observabilityは `wrangler.jsonc` の `observability.enabled=true` を維持し、Workers Logs / Traces / alert policy の実確認結果をEvidenceへ転記する。NeonはPITR履歴ウィンドウ、restore rehearsalまたはrollback drillの結果、復旧確認担当を `CODIP_BACKUP_RESTORE_EVIDENCE` として記録する。
+
+### 1.2 Neon backup鮮度ゲート
+
+`CODIP_BACKUP_RESTORE_EVIDENCE` は人間向けの証跡名だけを検査する。PITR window短縮や `pg_dump` 未実行を機械的に落とすため、production/stagingの定期バックアップジョブはSecretを含まないJSONを `CODIP_NEON_BACKUP_EVIDENCE_JSON` として渡し、次のゲートを実行する。
+
+```bash
+export CODIP_NEON_BACKUP_EVIDENCE_JSON='{
+  "checkedAt": "2026-07-20T07:00:00Z",
+  "projectId": "falling-dawn-93620497",
+  "branch": "production",
+  "historyWindowHours": 24,
+  "lastPgDumpAt": "2026-07-20T06:30:00Z",
+  "lastPgDumpStatus": "success",
+  "lastPgDumpArtifact": "secure-artifact://codip/neon/20260720T063000Z.dump",
+  "lastRestoreDrillAt": "2026-07-19T06:30:00Z",
+  "restoreDrillStatus": "success",
+  "owner": "release-manager"
+}'
+npm run release:check-neon-backup-evidence
+```
+
+既定では `historyWindowHours >= 24`、`lastPgDumpAt` が24時間以内、`lastRestoreDrillAt` が30日以内、各statusが `success` の場合だけ成功する。接続文字列、Neon API token、DB passwordはこのJSONへ入れない。誤って混入したSecret風文字列は出力時にredactされるが、証跡保存前に破棄して再発行する。
 
 ## 2. ポストリリース状態確認
 

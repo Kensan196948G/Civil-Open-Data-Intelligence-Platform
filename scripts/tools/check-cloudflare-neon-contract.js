@@ -36,6 +36,7 @@ requireText(".env.example", envExample, "CODIP_CLOUDFLARE_ACCESS_EVIDENCE");
 requireText(".env.example", envExample, "CODIP_CLOUDFLARE_ALERT_POLICY");
 requireText(".env.example", envExample, "CODIP_NEON_MONITORING_EVIDENCE");
 requireText(".env.example", envExample, "CODIP_BACKUP_RESTORE_EVIDENCE");
+requireText(".env.example", envExample, "CODIP_NEON_BACKUP_EVIDENCE_JSON");
 requireText("wrangler.jsonc", wrangler, "civilopendata.mirai-dx-platform.com");
 requireText("wrangler.jsonc", wrangler, "\"zone_name\": \"mirai-dx-platform.com\"");
 requireText("wrangler.jsonc", wrangler, "\"workers_dev\": false");
@@ -62,6 +63,8 @@ for (const token of [
   "CODIP_CLOUDFLARE_ALERT_POLICY",
   "CODIP_NEON_MONITORING_EVIDENCE",
   "CODIP_BACKUP_RESTORE_EVIDENCE",
+  "CODIP_NEON_BACKUP_EVIDENCE_JSON",
+  "release:check-neon-backup-evidence",
   "GHCR image digest",
   "rollback owner",
   "backup / restore",
@@ -111,6 +114,7 @@ requireText("docs/16", docs16, "image digest");
 requireText("docs/16", docs16, "Neon branch");
 requireText("package.json", packageJson, "release:validate-env:production-target");
 requireText("package.json", packageJson, "release:production-evidence");
+requireText("package.json", packageJson, "release:check-neon-backup-evidence");
 requireText("package.json", packageJson, "release:post-release-status");
 requireText("package.json", packageJson, "release:production-evidence -- --strict");
 requireText("package.json", packageJson, "release:check-production-placeholders");
@@ -120,6 +124,7 @@ requireText("package.json", packageJson, "--env production");
 requireText("package.json", packageJson, "@prisma/adapter-pg");
 requireText("package.json", packageJson, "@opennextjs/cloudflare");
 requireText("monitoring runbook", monitoringRunbook, "release:post-release-status");
+requireText("monitoring runbook", monitoringRunbook, "release:check-neon-backup-evidence");
 requireText("monitoring runbook", monitoringRunbook, "civilopendata.mirai-dx-platform.com");
 requireText("monitoring runbook", monitoringRunbook, "--strict-production");
 requireText("monitoring runbook", monitoringRunbook, "--max-response-ms");

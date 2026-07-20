@@ -116,6 +116,12 @@ Access証跡 (`CODIP_CLOUDFLARE_ACCESS_EVIDENCE`)、監視・アラート証跡 
 npm run release:production-evidence -- --strict
 ```
 
+NeonのPITR windowと `pg_dump` 鮮度は、Secretを含まない `CODIP_NEON_BACKUP_EVIDENCE_JSON` で別ゲート化する。
+
+```bash
+npm run release:check-neon-backup-evidence
+```
+
 `--strict` は実ターゲットに必要なEvidence入力、Wrangler production envのroute、Custom Domain、`workers_dev=false`、Observability、production Hyperdrive ID解決状態が欠けている場合に失敗する。失敗時はDNS/Secrets/Deployを進めず、不足項目を本runbook §6 Evidenceへ記録する。staging/preview側のplaceholderは、staging検証時に `release:check-production-placeholders -- --env staging` で別途確認する。
 
 ただし `release:production-evidence -- --strict` はCloudflare/Neon APIの実在照会ではなく、Evidence入力と `wrangler.jsonc` の静的構成を検査する。strict通過後も、Cloudflare Dashboard / Wrangler / Neon ConsoleでCustom Domain、Access、Hyperdrive、Neon branchの実リソース証跡を§6へ転記する。
