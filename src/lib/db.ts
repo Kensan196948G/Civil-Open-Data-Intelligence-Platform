@@ -61,7 +61,7 @@ function resolveConnection(): { provider: DatabaseProvider; connectionString: st
       return { provider: "postgresql", connectionString: hyperdrive };
     }
     throw new Error(
-      "[db] no PostgreSQL connection available: Hyperdrive binding is missing and DATABASE_URL is unset",
+      "[db] no PostgreSQL connection available: Hyperdrive binding is missing and DATABASE_URL is not a PostgreSQL URL",
     );
   }
 
