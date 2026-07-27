@@ -1,4 +1,4 @@
-import { Prisma as PostgreSQLPrisma } from "../../node_modules/.prisma/client-postgresql";
+import { Prisma as PostgreSQLPrisma } from ".prisma/client-postgresql";
 import { prisma } from "@/lib/db";
 import { isPostgreSqlDatabase } from "@/lib/database-url";
 import { sanitizeUrl } from "@/lib/url-safety";
