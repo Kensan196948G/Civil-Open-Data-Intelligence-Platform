@@ -110,6 +110,37 @@ describe("dependency audit allowlist gate", () => {
     expect(errors[0]).toContain("Issue #82");
   });
 
+  it("fails when a parseable audit execution error is reported", () => {
+    const { errors } = evaluateAudit(
+      { error: { code: "EAUDITNOLOCK", summary: "registry unavailable" } },
+      [],
+      "2026-07-27T00:00:00Z",
+    );
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("npm audit failed");
+    expect(errors[0]).toContain("registry unavailable");
+  });
+
+  it("fails on an expired allowlist entry even when no advisory is detected", () => {
+    const { errors } = evaluateAudit(
+      { vulnerabilities: {}, metadata: { vulnerabilities: {} } },
+      [
+        {
+          ghsa: ALLOWLISTED_GHSA,
+          severity: "high",
+          scope: "devDependencies",
+          reason: "test",
+          tracking: "Issue #82",
+          owner: "Kensan196948G",
+          expires: "2026-01-01T00:00:00Z",
+        },
+      ],
+      "2026-07-27T00:00:00Z",
+    );
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("expired");
+  });
+
   it("ignores low severity advisories without allowlist entries", () => {
     const { errors } = evaluateAudit(
       auditReport([

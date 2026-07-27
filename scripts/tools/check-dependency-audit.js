@@ -52,6 +52,30 @@ function evaluateAudit(report, allowlist, nowIso) {
   const now = Date.parse(nowIso);
   const errors = [];
   const allowed = [];
+
+  // A syntactically valid report can still carry a top-level execution error
+  // (e.g. registry unreachable). Never treat that as a clean audit.
+  if (report.error) {
+    const code = report.error.code ?? "unknown";
+    const summary = report.error.summary ?? "no summary";
+    errors.push(`npm audit failed: ${code} — ${summary}`);
+    return { errors, allowed };
+  }
+
+  // Stale-allowlist hygiene: expired entries fail even while their advisory is
+  // not currently detected, so acceptances cannot silently outlive their review.
+  for (const entry of allowlist) {
+    const expiresAt = Date.parse(entry.expires);
+    if (!Number.isFinite(expiresAt) || !(now < expiresAt)) {
+      errors.push(
+        `allowlist entry for ${entry.ghsa} expired at ${entry.expires} — re-evaluate via ${entry.tracking ?? "tracking issue"} (owner: ${entry.owner ?? "unassigned"})`,
+      );
+    }
+  }
+  if (errors.length > 0) {
+    return { errors, allowed };
+  }
+
   const advisories = collectAdvisories(report);
 
   if (advisories.size === 0) {
@@ -73,13 +97,7 @@ function evaluateAudit(report, allowlist, nowIso) {
       errors.push(`unallowlisted ${meta.severity} advisory ${ghsa} (${meta.pkg}: ${meta.title})`);
       continue;
     }
-    const expiresAt = Date.parse(entry.expires);
-    if (!Number.isFinite(expiresAt) || !(now < expiresAt)) {
-      errors.push(
-        `allowlist entry for ${ghsa} expired at ${entry.expires} — re-evaluate via ${entry.tracking} (owner: ${entry.owner})`,
-      );
-      continue;
-    }
+    // Expiry was validated for every entry above, so a match here is accepted.
     allowed.push(`${ghsa} (${meta.severity}, ${entry.scope}) until ${entry.expires} — ${entry.tracking}`);
   }
 
