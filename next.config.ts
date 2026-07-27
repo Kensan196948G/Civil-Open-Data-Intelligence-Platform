@@ -36,7 +36,23 @@ const nextConfig: NextConfig = {
   experimental: {
     cpus: 1,
   },
-  webpack(config) {
+  // Prisma clients must stay external to the webpack bundle: their package.json
+  // exports select a wasm query engine under the `workerd` condition, and that
+  // selection can only happen when wrangler (not webpack) resolves the import
+  // during the Workers deploy (see opennext.js.org/cloudflare/howtos/db).
+  serverExternalPackages: ["@prisma/client", ".prisma/client", ".prisma/client-postgresql"],
+  webpack(config, { isServer }) {
+    if (isServer) {
+      // serverExternalPackages does not reliably match the dot-leading pseudo
+      // package (`.prisma/...` parses as package ".prisma" + subpath), so the
+      // /wasm entry would get bundled and webpack would choke on the .wasm
+      // import. Externalize both entries explicitly; wrangler resolves them
+      // (including the wasm module) when it bundles the Worker at deploy.
+      config.externals.push({
+        ".prisma/client-postgresql": "commonjs .prisma/client-postgresql",
+        ".prisma/client-postgresql/wasm": "commonjs .prisma/client-postgresql/wasm",
+      });
+    }
     // The default webpack hash path can instantiate a Wasm xxhash module.
     // Some constrained Linux shells cap virtual memory in a way that makes that
     // fail before the app starts, so use Node's crypto-backed hash instead.
