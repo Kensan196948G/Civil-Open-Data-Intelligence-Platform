@@ -1,7 +1,8 @@
-// The wasm entry keeps the Workers bundle free of the Node/native-engine
-// entry; only engine-independent helpers (sql/join/empty) are used here.
-import { Prisma as PostgreSQLPrisma } from ".prisma/client-postgresql/wasm";
-import { prisma } from "@/lib/db";
+// Type-only import (erased at build time — adds nothing to the bundle). The
+// runtime Sql helpers must come from the same entry family as the active
+// client, so they are obtained per call via getPostgreSQLPrismaHelpers().
+import type { Prisma as PostgreSQLPrismaTypes } from ".prisma/client-postgresql";
+import { getPostgreSQLPrismaHelpers, prisma } from "@/lib/db";
 import { isPostgreSqlDatabase } from "@/lib/database-url";
 import { sanitizeUrl } from "@/lib/url-safety";
 import { toIso } from "@/lib/v1-response";
@@ -269,6 +270,7 @@ function standardLayerDto(row: RawLayer) {
 }
 
 function standardRecordSelectSql() {
+  const PostgreSQLPrisma = getPostgreSQLPrismaHelpers();
   return PostgreSQLPrisma.sql`
     sr.id AS "recordId",
     sr."dataSourceId" AS "sourceId",
@@ -308,7 +310,8 @@ export async function findStandardRecordsForSearch(input: {
 }): Promise<StandardRecordQueryResult | null> {
   if (!(await standardRecordsAvailable())) return null;
 
-  const where: PostgreSQLPrisma.Sql[] = [];
+  const PostgreSQLPrisma = getPostgreSQLPrismaHelpers();
+  const where: PostgreSQLPrismaTypes.Sql[] = [];
   if (input.q) {
     const q = `%${input.q}%`;
     where.push(
@@ -356,6 +359,7 @@ export async function findStandardRecordsForPoint(input: {
 }): Promise<StandardRecordQueryResult | null> {
   if (!(await standardRecordsAvailable())) return null;
 
+  const PostgreSQLPrisma = getPostgreSQLPrismaHelpers();
   const categorySql =
     input.categories.length > 0
       ? PostgreSQLPrisma.sql`AND sr.category IN (${PostgreSQLPrisma.join(input.categories)})`
@@ -396,7 +400,8 @@ export async function findStandardLayers(input: {
 }): Promise<StandardLayerQueryResult | null> {
   if (!(await standardRecordsAvailable())) return null;
 
-  const where: PostgreSQLPrisma.Sql[] = [];
+  const PostgreSQLPrisma = getPostgreSQLPrismaHelpers();
+  const where: PostgreSQLPrismaTypes.Sql[] = [];
   if (input.q) {
     const q = `%${input.q}%`;
     where.push(PostgreSQLPrisma.sql`(ds.name ILIKE ${q} OR ds."nameEn" ILIKE ${q} OR ds.description ILIKE ${q})`);
@@ -482,6 +487,7 @@ export async function findStandardFeaturesForLayer(input: {
   `;
   if (Number(sourceCount[0]?.count ?? 0) === 0) return null;
 
+  const PostgreSQLPrisma = getPostgreSQLPrismaHelpers();
   const bboxSql = input.bbox
     ? PostgreSQLPrisma.sql`AND sr.geometry && ST_MakeEnvelope(${input.bbox[0]}, ${input.bbox[1]}, ${input.bbox[2]}, ${input.bbox[3]}, 4326)
         AND ST_Intersects(sr.geometry, ST_MakeEnvelope(${input.bbox[0]}, ${input.bbox[1]}, ${input.bbox[2]}, ${input.bbox[3]}, 4326))`

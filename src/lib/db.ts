@@ -8,8 +8,14 @@ import { PrismaClient as SQLitePrismaClient } from "@prisma/client";
 // engine entries are imported statically and the right one is picked at
 // runtime. The wasm entry lazy-loads its engine, so merely importing it is
 // side-effect-free on Node.
-import { PrismaClient as PostgreSQLNodePrismaClient } from ".prisma/client-postgresql";
-import { PrismaClient as PostgreSQLWasmPrismaClient } from ".prisma/client-postgresql/wasm";
+import {
+  Prisma as PostgreSQLNodePrisma,
+  PrismaClient as PostgreSQLNodePrismaClient,
+} from ".prisma/client-postgresql";
+import {
+  Prisma as PostgreSQLWasmPrisma,
+  PrismaClient as PostgreSQLWasmPrismaClient,
+} from ".prisma/client-postgresql/wasm";
 import { databaseProviderFromUrl, type DatabaseProvider } from "@/lib/database-url";
 
 type AppPrismaClient = SQLitePrismaClient;
@@ -120,6 +126,18 @@ function getPrisma(): AppPrismaClient {
   globalForPrisma.prismaProvider = provider;
   globalForPrisma.prismaConnectionString = connectionString;
   return client;
+}
+
+// Sql helper objects (Prisma.sql / join / empty) fail `instanceof` checks when
+// they cross entry copies — a wasm-entry Sql handed to the node-entry client
+// (or vice versa) is silently treated as a plain parameter and the query
+// breaks. Raw-SQL call sites must therefore take the helper namespace from the
+// same entry family as the active client, via this selector.
+export function getPostgreSQLPrismaHelpers(): typeof PostgreSQLNodePrisma {
+  if (isCloudflareDeployTarget() && getCloudflareRequestContext() !== null) {
+    return PostgreSQLWasmPrisma as unknown as typeof PostgreSQLNodePrisma;
+  }
+  return PostgreSQLNodePrisma;
 }
 
 export const prisma: AppPrismaClient = new Proxy({} as AppPrismaClient, {
