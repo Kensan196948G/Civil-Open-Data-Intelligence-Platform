@@ -12,7 +12,7 @@ const PLACEHOLDER_PATTERNS = [
   /production-admin-token/i,
   /preview-admin-token/i,
 ];
-const PRODUCTION_BASE_HOSTNAME = "civilopendata.mirai-dx-platform.com";
+const PRODUCTION_BASE_HOSTNAME = "odip.mirai-dx-platform.com";
 
 function fail(errors, message) {
   errors.push(message);

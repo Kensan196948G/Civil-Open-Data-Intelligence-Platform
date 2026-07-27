@@ -218,7 +218,7 @@ describe("validate-env release contract", () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(
-      "Production CODIP_BASE_URL must be https://civilopendata.mirai-dx-platform.com",
+      "Production CODIP_BASE_URL must be https://odip.mirai-dx-platform.com",
     );
   });
 
@@ -228,7 +228,7 @@ describe("validate-env release contract", () => {
       DATABASE_URL: "postgresql://codip:secret@ep-codip-neon.aws.neon.tech/codip?schema=public&sslmode=require",
       CODIP_MIGRATION_DATABASE_URL:
         "postgresql://codip:secret@ep-codip-neon-direct.aws.neon.tech/codip?schema=public&sslmode=verify-full",
-      CODIP_BASE_URL: "https://civilopendata.mirai-dx-platform.com",
+      CODIP_BASE_URL: "https://odip.mirai-dx-platform.com",
       CODIP_HYPERDRIVE_BINDING: "CODIP_HYPERDRIVE",
       CODIP_NEON_BRANCH: "codip-production-20260719",
       CODIP_ADMIN_TOKEN: "realistic-random-target-token-123456",
@@ -248,7 +248,7 @@ describe("validate-env release contract", () => {
       DATABASE_URL: "postgresql://codip:secret@ep-codip-neon.aws.neon.tech/codip?schema=public&sslmode=require",
       CODIP_MIGRATION_DATABASE_URL:
         "postgresql://codip:secret@ep-codip-neon-direct.aws.neon.tech/codip?schema=public&sslmode=verify-full",
-      CODIP_BASE_URL: "https://civilopendata.mirai-dx-platform.com",
+      CODIP_BASE_URL: "https://odip.mirai-dx-platform.com",
       CODIP_HYPERDRIVE_BINDING: "CODIP_HYPERDRIVE",
       CODIP_NEON_BRANCH: "codip-production-20260719",
       CODIP_ADMIN_TOKEN: "realistic-random-target-token-123456",

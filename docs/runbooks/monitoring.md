@@ -90,13 +90,13 @@ npm run release:check-neon-backup-evidence
 Cloudflare / Neon の実リソースを変更せず、DNS、HTTP到達性、応答時間、`/api/ready` のDB状態を読み取り専用で確認する。production DNSが未解決の場合、通常モードでは「本番未接続」として記録し、共有previewの健全性を確認できればコマンドは成功する。
 
 ```powershell
-npm run release:post-release-status -- --preview-url http://192.168.0.185:3100 --production-url https://civilopendata.mirai-dx-platform.com --max-response-ms 5000
+npm run release:post-release-status -- --preview-url http://192.168.0.185:3100 --production-url https://odip.mirai-dx-platform.com --max-response-ms 5000
 ```
 
 本番Custom Domain、DNS、Access、Secrets、Hyperdrive、Neon branchの作成・承認後は、production未接続を失敗扱いにする。
 
 ```powershell
-npm run release:post-release-status -- --strict-production --production-url https://civilopendata.mirai-dx-platform.com --max-response-ms 5000
+npm run release:post-release-status -- --strict-production --production-url https://odip.mirai-dx-platform.com --max-response-ms 5000
 ```
 
 このコマンドはCloudflare API、Neon API、Secrets値を読み取らない。`/api/ready` が標準JSON (`status=ready`, `checks.database=ok`) を返す場合はDB接続確認として判定し、応答が `--max-response-ms` を超える場合はnot readyとして扱う。Access配下で `/api/health` / `/api/ready` が認証必須になる構成では、strict実行前に読み取り専用health endpointの公開範囲を運用設計で確定する。

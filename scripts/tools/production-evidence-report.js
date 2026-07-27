@@ -3,8 +3,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-const PRODUCTION_URL = "https://civilopendata.mirai-dx-platform.com";
-const PRODUCTION_HOSTNAME = "civilopendata.mirai-dx-platform.com";
+const PRODUCTION_URL = "https://odip.mirai-dx-platform.com";
+const PRODUCTION_HOSTNAME = "odip.mirai-dx-platform.com";
 
 const TARGETS = {
   production: {

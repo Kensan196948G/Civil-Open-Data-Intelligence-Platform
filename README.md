@@ -115,7 +115,7 @@ flowchart TD
 | DB | SQLite preview / PostgreSQL schema | Neon PostgreSQL + PostGIS |
 | 認証 | 管理トークン / HttpOnly Cookie | Cloudflare Access + proxy secret |
 | CI | GitHub Actions | SHA固定Actions、CodeQL、Trivy、SBOM/provenance |
-| 本番URL | 共有preview `http://192.168.0.185:3100/` | `https://civilopendata.mirai-dx-platform.com` |
+| 本番URL | 共有preview `http://192.168.0.185:3100/` | `https://odip.mirai-dx-platform.com` |
 
 ---
 
@@ -168,7 +168,7 @@ flowchart TD
 | API | `/api/health` 200、`/api/ready` 200、`/api/dashboard` 200、`/api/sources` 200、`/api/openapi` 200 |
 | 管理保護 | `/api/fetch-logs` は未認証401、`/api/admin/audit-events` のGETは405 |
 | DB | `/api/ready` 200でアプリからDB接続を確認。共有previewは正本Neonではなくローカル/preview DB |
-| Cloudflare/Neon | production targetは `civilopendata.mirai-dx-platform.com`。DNSはCloudflareへ解決済みだが、本番APIは522で未正常。Worker route/deployment/logs、Access、Secretsの実リソース証跡は承認済みCloudflare認証で確認する |
+| Cloudflare/Neon | production targetは `odip.mirai-dx-platform.com`。DNSはCloudflareへ解決済みだが、本番APIは522で未正常。Worker route/deployment/logs、Access、Secretsの実リソース証跡は承認済みCloudflare認証で確認する |
 
 ### 🔧 2026-07-19 安定化改善
 
@@ -208,7 +208,7 @@ flowchart TD
 
 ### 🏗️ 本番インフラの状態
 
-2026-07-20 更新: Cloudflare本番サブドメインは `civilopendata.mirai-dx-platform.com` で確定済みです。routingは zone route方式 (`routes[].pattern=<FQDN>/*` + `zone_name` + proxied AAAA `100::`) を採用し、決定記録は `docs/runbooks/cloudflare-production.md` §1.1 を正とします。
+2026-07-20 更新: Cloudflare本番サブドメインは `odip.mirai-dx-platform.com` で確定済みです。routingは zone route方式 (`routes[].pattern=<FQDN>/*` + `zone_name` + proxied AAAA `100::`) を採用し、決定記録は `docs/runbooks/cloudflare-production.md` §1.1 を正とします。
 
 | リソース | 状態 |
 | --- | --- |
@@ -232,7 +232,7 @@ flowchart TD
 
 - **Cloudflare Workers ランタイム互換**: [Issue #18](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/18)。SSRF事前DNS検証は `dns.promises.resolve4` / `resolve6` へ変更済み。接続時DNSピン留めはNode.js/Undiciで継続し、Cloudflare Workersでは同等保証ができないため外部URL取得を `unsupported_runtime` で安全停止する。PostgreSQL Prisma Clientは `@prisma/adapter-pg` によりHyperdrive `connectionString` を消費できる構成へ変更済み。残りは実Cloudflare/Neon証跡
 - **main branch protection**: 現在は有効。required checksは `verify` / `e2e` / `postgresql-compat` / `docker-preview` / `docker-image-security` / `analyze`、strict=true、admin enforcement=true。今後はrequired review数やCode Ownersの要否を運用成熟度に合わせて判断する
-- **Cloudflare本番522継続**: `civilopendata.mirai-dx-platform.com` はCloudflareへ解決済みだが、`/api/health` と `/api/ready` が522。Worker route/deployment/logs、Secrets、Access、Hyperdrive実行時接続の証跡を確認するまで本番正常稼働とは判定しない
+- **Cloudflare本番522継続**: `odip.mirai-dx-platform.com` はCloudflareへ解決済みだが、`/api/health` と `/api/ready` が522。Worker route/deployment/logs、Secrets、Access、Hyperdrive実行時接続の証跡を確認するまで本番正常稼働とは判定しない
 - **Neon pg_dump定期ジョブの本番証跡未完了**: [Issue #63](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/63)。`.github/workflows/neon-backup.yml` は追加済み。`CODIP_NEON_PGDUMP_DATABASE_URL` / `CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE` Secret、restore drill日時、初回成功artifactの証跡化は継続
 - **De-dockerization移行中**: [Issue #35](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/35)。Docker jobはbranch protection互換のため残し、先にDocker非依存の `node-preview` CIゲートを追加して差し替え先を育てる
 
@@ -311,14 +311,14 @@ cmd /c "pushd \\192.168.0.185\kensan\Projects\Mirai-DX-Project\Civil-Open-Data-I
 | `npm run release:smoke -- --read-only --base-url https://...` | staging/production向けの非破壊HTTPスモーク |
 | `npm run release:smoke -- --base-url http://127.0.0.1:3102 --expect-standard-records` | PostGIS投入環境で `/api/v1` の `standard_records` modeを強制確認 |
 | `npm run release:smoke -- --base-url http://127.0.0.1:3102 --expect-standard-records --expect-seed-standard-record` | PostgreSQL seed入りCI/previewで検証用標準レコードとproperties sanitizationも確認 |
-| `npm run release:post-release-status -- --production-url https://civilopendata.mirai-dx-platform.com --max-response-ms 5000` | Cloudflare/Neonを変更せず、production DNS/health、応答時間、`/api/ready` DB状態、共有preview、522時のWorker route診断をMarkdownで確認。DNS未接続は通常モードでは記録のみ |
+| `npm run release:post-release-status -- --production-url https://odip.mirai-dx-platform.com --max-response-ms 5000` | Cloudflare/Neonを変更せず、production DNS/health、応答時間、`/api/ready` DB状態、共有preview、522時のWorker route診断をMarkdownで確認。DNS未接続は通常モードでは記録のみ |
 | `npm run release:cloudflare-522-diagnostics` | Cloudflareへ接続せず、production `wrangler.jsonc` route/Hyperdrive/observability契約と522時に採るべきread-only証跡をMarkdown化。承認済みCloudflare認証がある場合のみ `-- --execute-wrangler` で `deployments status/list` を実行 |
 | `npm run db:migrate` | SQLite preview/localへ既存migrationを適用 |
 | `npm run db:migrate:dev` | schema作成者向け。新規migration生成時のみ使用 |
 | `npm run release:check-docker-contract` | Dockerfile、`.dockerignore`、image scan、SBOM/provenance契約 |
 | `npm run release:check-cloudflare-contract` | Cloudflare/Neon staging runbook契約 |
 | `npm run release:check-github-actions-contract` | actionlint、危険trigger、Action SHA固定契約 |
-| `npm run release:validate-env:production-target` | 実Cloudflare/Neon targetのSecrets/Variables検証。productionでは `https://civilopendata.mirai-dx-platform.com` 固定 |
+| `npm run release:validate-env:production-target` | 実Cloudflare/Neon targetのSecrets/Variables検証。productionでは `https://odip.mirai-dx-platform.com` 固定 |
 | `npm run release:production-evidence -- --strict` | 実Cloudflare/Neon target、Wrangler本番構成、監視・アラート、バックアップ・リストアの証跡MarkdownをSecret値なしで出力し、未充足Evidenceを検知 |
 | `npm run release:create-neon-backup-evidence` | `pg_dump` artifactのファイルmetadataまたはartifact IDから、Secretを含まないNeon backup証跡JSONを生成 |
 | `npm run release:check-neon-backup-evidence` | `CODIP_NEON_BACKUP_EVIDENCE_JSON` からPITR window、pg_dump 24h鮮度、restore drill 30日鮮度を非Secretで検査 |
@@ -385,7 +385,7 @@ production `runner` は `npm ci --omit=dev` を使い、起動時migrationを行
 | [docs/13-deployment-and-operations.md](docs/13-deployment-and-operations.md) | デプロイ・運用 |
 | [docs/16-release-readiness-checklist.md](docs/16-release-readiness-checklist.md) | リリース直前チェック |
 | [docs/release-notes.md](docs/release-notes.md) | リリース後確認・安定化履歴 |
-| [docs/runbooks/cloudflare-production.md](docs/runbooks/cloudflare-production.md) | `civilopendata.mirai-dx-platform.com` 本番化Runbook |
+| [docs/runbooks/cloudflare-production.md](docs/runbooks/cloudflare-production.md) | `odip.mirai-dx-platform.com` 本番化Runbook |
 | [docs/runbooks/cloudflare-neon-staging.md](docs/runbooks/cloudflare-neon-staging.md) | Cloudflare/Neon staging・rollback補助Runbook |
 | [docs/runbooks/monitoring.md](docs/runbooks/monitoring.md) | 監視・アラート・初動確認手順 |
 | [docs/runbooks/database-deployment.md](docs/runbooks/database-deployment.md) | DBデプロイ、バックアップ、SQLite復元、PostgreSQL/PostGIS移行前チェック |

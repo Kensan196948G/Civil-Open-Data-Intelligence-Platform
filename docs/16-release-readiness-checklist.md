@@ -21,7 +21,7 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | GitHub Actions契約確認 | `npm run release:check-github-actions-contract` | actionlint、危険なworkflow trigger、Trivy action固定、主要ActionsのSHA固定が妥当 |
 | env検証 | `npm run release:validate-env:preview` | 共有プレビュー必須設定が妥当 |
 | production env形状検証 | `npm run release:gate` 内の合成production env | PostgreSQL/PostGIS前提、外部DBのSSL指定、本番管理トークン強度、SQLite/未対応DB URL/起動時migration禁止の検査ロジックを確認 |
-| production実ターゲットenv検証 | 実デプロイ環境のSecrets/Variablesを読み込んで `CODIP_BASE_URL=https://civilopendata.mirai-dx-platform.com npm run release:validate-env:production-target` | `CODIP_DEPLOY_TARGET`、実HTTPS `CODIP_BASE_URL`、Cloudflare Hyperdrive、Neon branch、migration direct URL、外部PostgreSQL SSL、管理トークンまたはProxy認証設定、起動時migration禁止が実値で妥当 |
+| production実ターゲットenv検証 | 実デプロイ環境のSecrets/Variablesを読み込んで `CODIP_BASE_URL=https://odip.mirai-dx-platform.com npm run release:validate-env:production-target` | `CODIP_DEPLOY_TARGET`、実HTTPS `CODIP_BASE_URL`、Cloudflare Hyperdrive、Neon branch、migration direct URL、外部PostgreSQL SSL、管理トークンまたはProxy認証設定、起動時migration禁止が実値で妥当 |
 | production実ターゲット証跡 | 実デプロイ環境のSecrets/Variablesを読み込んで `npm run release:production-evidence -- --strict` | Secret値を出力せず、Cloudflare/Neon本番Evidence入力、Access、監視、バックアップ・リストア、wrangler本番route、Custom Domain、`workers_dev=false`、Observability、Hyperdrive ID解決状態、未充足項目をMarkdownで記録 |
 | Access証跡 | `release:production-evidence -- --strict` 内の `CODIP_CLOUDFLARE_ACCESS_EVIDENCE` | Cloudflare Access application domain、policy名、allowlist summary、proxy secret設定済み証跡が記録済み |
 | 監視・アラート証跡 | `release:production-evidence -- --strict` 内の Monitoring Evidence | 通知先、Cloudflare alert policy、Workers Logs / Traces、Neon monitoring、read-only smoke監視、rollback ownerが記録済み |
@@ -33,7 +33,7 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | 本番ビルド | `npm run build` | 成功 |
 | リリースゲート | `npm run release:gate` | fresh環境のSQLite migration preflightを含め、ブラウザ非依存ゲートが一括成功 |
 | 起動スモーク | `CODIP_ADMIN_TOKEN=... npm run release:smoke -- --base-url http://127.0.0.1:3100` | 主要画面、未認証管理UI非表示、CSP/HSTS、監視API、OpenAPI v1 schema、seed最小件数、公開DTO、後続API契約、v1 warning契約、地点照会の不正入力、管理APIガード、管理セッションCSRF、悪性URL複数種の登録拒否が成功 |
-| 実ターゲットread-onlyスモーク | `npm run release:smoke -- --read-only --base-url https://civilopendata.mirai-dx-platform.com` | staging/production DBへ書き込まず、主要画面、監視API、後続API、管理ガードを確認 |
+| 実ターゲットread-onlyスモーク | `npm run release:smoke -- --read-only --base-url https://odip.mirai-dx-platform.com` | staging/production DBへ書き込まず、主要画面、監視API、後続API、管理ガードを確認 |
 | Docker preview | GitHub Actions `docker-preview` job | production runner / preview runner build、production runner + PostgreSQL smoke、SQLite/PostgreSQL compose config、preview起動、ready、release smokeが成功 |
 | Docker image scan | GitHub Actions `docker-image-security` job | Trivyでproduction runner imageに固定可能なHigh/Critical CVEがない |
 | Docker supply chain | GitHub Actions `docker-supply-chain` job | GHCR image push、SBOM attestation、`mode=max` provenance、sha tag/digestが確認できる |
@@ -378,7 +378,7 @@ Codex 指摘修正 (`51bdda5`) は CodeRabbit 未レビューのコード変更�
 | --- | --- |
 | 確認日 |  |
 | 確認者 |  |
-| Production URL | `https://civilopendata.mirai-dx-platform.com` |
+| Production URL | `https://odip.mirai-dx-platform.com` |
 | commit SHA |  |
 | GHCR image tag |  |
 | image digest |  |

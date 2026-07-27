@@ -31,7 +31,7 @@ Civil Open Data Intelligence Platform（CODIP）は、土木建設関連の公�
 | ファイル | 用途 |
 | --- | --- |
 | [runbooks/database-deployment.md](runbooks/database-deployment.md) | SQLite preview運用、バックアップ、PostgreSQL/PostGIS移行前チェック |
-| [runbooks/cloudflare-production.md](runbooks/cloudflare-production.md) | `civilopendata.mirai-dx-platform.com` 本番化、DNS/Access/Secrets/Hyperdrive/証跡ゲート |
+| [runbooks/cloudflare-production.md](runbooks/cloudflare-production.md) | `odip.mirai-dx-platform.com` 本番化、DNS/Access/Secrets/Hyperdrive/証跡ゲート |
 | [runbooks/cloudflare-neon-staging.md](runbooks/cloudflare-neon-staging.md) | Cloudflare/Neon stagingのmigration、smoke、rollback、証跡 |
 | [runbooks/monitoring.md](runbooks/monitoring.md) | 監視・アラート・リリース後確認の初動手順 |
 | [runbooks/rollback.md](runbooks/rollback.md) | 障害時の切り戻し手順 (判断フロー、Workers、GHCR、Neon PITR、Prisma、SQLite、復旧後検証) |

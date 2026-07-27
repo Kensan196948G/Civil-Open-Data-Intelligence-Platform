@@ -42,7 +42,7 @@ const CF_API = "https://api.cloudflare.com/client/v4";
 
 // Stable, non-secret resource identifiers (docs/runbooks/cloudflare-production.md)
 const NEON_PROJECT_ID = process.env.CODIP_NEON_PROJECT_ID?.trim() || "falling-dawn-93620497";
-const PRODUCTION_HOST = "civilopendata.mirai-dx-platform.com";
+const PRODUCTION_HOST = "odip.mirai-dx-platform.com";
 const PRODUCTION_ZONE = "mirai-dx-platform.com";
 const BASE_URL = `https://${PRODUCTION_HOST}`;
 

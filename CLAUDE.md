@@ -1336,6 +1336,6 @@ launcher finalize（goal-rotation.js）がポインタ前進 → supervisor が�
 | 項目 | 値 | 状態（2026-07-19確認） |
 | --- | --- | --- |
 | zone | mirai-dx-platform.com | active |
-| サブドメイン | civilopendata.mirai-dx-platform.com | wrangler.jsoncにroute定義済み（custom_domain）、DNS未登録 |
+| サブドメイン | odip.mirai-dx-platform.com | wrangler.jsoncにroute定義済み（custom_domain）、DNS未登録 |
 | Worker | codip | wrangler.jsonc定義済み、未デプロイ |
 | Neonプロジェクト | 未確認 | 既存Neonプロジェクトに対応名なし |

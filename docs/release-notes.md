@@ -1,5 +1,14 @@
 # リリースノート
 
+## 2026-07-27 production subdomain change (civilopendata → odip)
+
+| 区分 | 内容 |
+| --- | --- |
+| Cloudflare | ユーザー指示により本番サブドメインを `civilopendata` から `odip` へ変更。FQDNは `odip.mirai-dx-platform.com`。zone route方式 (route pattern + proxied AAAA `100::`)、Worker名 `codip`、Hyperdrive、Neon構成は変更なし |
+| Cloudflare | `wrangler.jsonc` production routes、deploy pipeline、placeholder/evidence/契約チェック、runbook、README、テストのproduction FQDN参照を `odip.mirai-dx-platform.com` へ更新 |
+| Access boundary | アクセス制御 (Cloudflare Access application / policy) はユーザー側で設定する運用へ変更。設定完了までは管理系導線のfail-closed全拒否を維持 |
+| 残置 | 旧 `civilopendata` のproxied AAAAレコードは未使用のまま残置。削除は別途承認済みCloudflare操作で扱う |
+
 ## 2026-07-19 post-release preview hardening
 
 | 区分 | 内容 |
@@ -21,11 +30,11 @@
 | Docs | README、運用設計、監視runbook、Cloudflare/Neon runbook、リリースノートを更新 |
 | CI/契約 | Windows/UNCでOpenAPI route coverageが全APIをmissing扱いするパス正規化不具合を修正 |
 | CI/De-dockerization | GitHub Actionsに `node-preview` jobを追加。Dockerを使わずSQLite preview DBをmigrate/seedし、`next start` + `release:smoke` で直接起動経路を検証する。Docker job削除前のbranch protection差し替え候補 |
-| Cloudflare | production FQDNを `civilopendata.mirai-dx-platform.com` に固定し、Workers Custom Domain、Access Terraform例、Cloudflare/Neon Runbook、契約チェックへ反映 |
+| Cloudflare | production FQDNを `odip.mirai-dx-platform.com` に固定し、Workers Custom Domain、Access Terraform例、Cloudflare/Neon Runbook、契約チェックへ反映 |
 | Cloudflare | `docs/runbooks/cloudflare-production.md` を追加し、DNS/Access/Secrets/Hyperdrive/production evidenceの停止条件を本番専用Runbookとして分離 |
 | Cloudflare | 新規サブドメイン `civilopendata` の初回Custom Domain gateを追加。DNS未解決、hostname衝突、zone active、Access境界、証明書/validation証跡を確認するまでDNS変更・deployを停止する |
 | Cloudflare | `wrangler.jsonc` のproduction varsに `CODIP_DISABLE_TOKEN_AUTH=true` を固定し、Cloudflare Access/proxy auth配下で直接token経路を閉じる設定を契約チェック対象に追加 |
-| Cloudflare monitoring | `npm run release:post-release-status` を追加。`civilopendata.mirai-dx-platform.com` のDNS/health、応答時間、`/api/ready` DB状態、共有previewを読み取り専用で証跡化し、`--strict-production` では本番未接続やslow responseを失敗扱いにする |
+| Cloudflare monitoring | `npm run release:post-release-status` を追加。`odip.mirai-dx-platform.com` のDNS/health、応答時間、`/api/ready` DB状態、共有previewを読み取り専用で証跡化し、`--strict-production` では本番未接続やslow responseを失敗扱いにする |
 | Cloudflare 522 diagnosis | `release:post-release-status` に `Production Route Diagnosis` を追加。Cloudflare edge header付き522を、Worker route/deploy/logs確認へ誘導する |
 | Cloudflare 522 evidence | `release:cloudflare-522-diagnostics` を追加。既定はCloudflareへ接続せず、`wrangler.jsonc` のproduction route/Hyperdrive/observability契約と、承認済み認証で実行する `deployments status/list`・tail・Dashboard証跡をMarkdown化する |
 | Neon backup evidence | `npm run release:create-neon-backup-evidence` を追加。`pg_dump` artifact metadataまたはartifact IDから非Secret証跡JSONを生成し、既存の鮮度ゲートへ渡せるようにした |
@@ -48,7 +57,7 @@
 | `/api/openapi` | 200 |
 | `/api/fetch-logs` | 401。未認証で保護 |
 | `/api/admin/audit-events` | 405。GET不可 |
-| `https://civilopendata.mirai-dx-platform.com` | `release:post-release-status` の対象。DNSはCloudflareへ解決済みだが、2026-07-20時点で `/api/health` / `/api/ready` は522。Worker route/deployment/logs、Secrets、Access、Hyperdrive実行時接続の証跡確認が完了するまで本番正常稼働とは判定しない |
+| `https://odip.mirai-dx-platform.com` | `release:post-release-status` の対象。DNSはCloudflareへ解決済みだが、2026-07-20時点で `/api/health` / `/api/ready` は522。Worker route/deployment/logs、Secrets、Access、Hyperdrive実行時接続の証跡確認が完了するまで本番正常稼働とは判定しない |
 
 ### 残課題
 

@@ -79,7 +79,7 @@ describe("post-release-status", () => {
   it("defaults to the approved production subdomain and shared preview URL", () => {
     const args = parseArgs([]);
 
-    expect(args.productionUrl).toBe("https://civilopendata.mirai-dx-platform.com");
+    expect(args.productionUrl).toBe("https://odip.mirai-dx-platform.com");
     expect(args.previewUrl).toBe("http://192.168.0.185:3100");
     expect(args.strictProduction).toBe(false);
     expect(args.maxResponseMs).toBe(5000);
@@ -104,7 +104,7 @@ describe("post-release-status", () => {
     expect(report.ready).toBe(true);
 
     const text = renderReport(report);
-    expect(text).toContain("civilopendata.mirai-dx-platform.com");
+    expect(text).toContain("odip.mirai-dx-platform.com");
     expect(text).toContain("Max response time: 5000ms");
     expect(text).toContain("Production connected: no");
     expect(text).toContain("Preview healthy: yes");
@@ -133,7 +133,7 @@ describe("post-release-status", () => {
 
   it("probes and flags production endpoint failures even when local DNS resolution is inconclusive", async () => {
     const fetcher = vi.fn(async (url: string) => {
-      if (url.includes("civilopendata.mirai-dx-platform.com")) {
+      if (url.includes("odip.mirai-dx-platform.com")) {
         return new Response("522: Connection timed out", {
           status: 522,
           headers: { server: "cloudflare", "cf-ray": "abc-NRT" },
@@ -187,7 +187,7 @@ describe("post-release-status", () => {
   });
 
   it("does not treat Access or login redirects as a healthy API response", async () => {
-    const result = await fetchWithTimeout("https://civilopendata.mirai-dx-platform.com/api/health", {
+    const result = await fetchWithTimeout("https://odip.mirai-dx-platform.com/api/health", {
       fetcher: async () => new Response("", { status: 302, headers: { location: "https://example.com/login" } }),
       timeoutMs: 1000,
     });

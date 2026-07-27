@@ -9,7 +9,7 @@ const scriptPath = path.join(repoRoot, "scripts/tools/production-evidence-report
 
 const completeEvidenceEnv = {
   CODIP_DEPLOY_TARGET: "production",
-  CODIP_BASE_URL: "https://civilopendata.mirai-dx-platform.com",
+  CODIP_BASE_URL: "https://odip.mirai-dx-platform.com",
   CODIP_HYPERDRIVE_BINDING: "CODIP_HYPERDRIVE",
   CODIP_NEON_BRANCH: "codip-production-20260719",
   DATABASE_URL:
@@ -21,7 +21,7 @@ const completeEvidenceEnv = {
   CODIP_DISABLE_TOKEN_AUTH: "true",
   CODIP_TRUST_PROXY_AUTH: "true",
   CODIP_ADMIN_EMAIL_DOMAINS: "mirai-dx-platform.com",
-  CODIP_CLOUDFLARE_ACCESS_EVIDENCE: "Access app civilopendata policy allowlist recorded",
+  CODIP_CLOUDFLARE_ACCESS_EVIDENCE: "Access app odip policy allowlist recorded",
   CODIP_MONITORING_CONTACTS: "release-oncall",
   CODIP_CLOUDFLARE_ALERT_POLICY: "codip-production-p1",
   CODIP_CLOUDFLARE_LOGS_EVIDENCE: "workers logs query recorded",
@@ -48,7 +48,7 @@ function writeWrangler(root: string, hyperdriveId: string, previewHyperdriveId =
         "production": {
           "workers_dev": false,
           "routes": [
-            { "pattern": "civilopendata.mirai-dx-platform.com/*", "zone_name": "mirai-dx-platform.com" }
+            { "pattern": "odip.mirai-dx-platform.com/*", "zone_name": "mirai-dx-platform.com" }
           ],
           "hyperdrive": [
             { "binding": "HYPERDRIVE", "id": "${hyperdriveId}" }
@@ -84,7 +84,7 @@ describe("production-evidence-report", () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("Overall: ✅ evidence inputs look ready");
     expect(result.stdout).toContain("Deploy target: `production`");
-    expect(result.stdout).toContain("Target URL: `https://civilopendata.mirai-dx-platform.com`");
+    expect(result.stdout).toContain("Target URL: `https://odip.mirai-dx-platform.com`");
     expect(result.stdout).toContain("DATABASE_URL");
     expect(result.stdout).toContain("set (redacted");
     expect(result.stdout).toContain("Monitoring Evidence");
@@ -99,7 +99,7 @@ describe("production-evidence-report", () => {
     expect(result.stdout).not.toContain("real-admin-token-that-must-not-print");
     expect(result.stdout).not.toContain("real-proxy-secret-that-must-not-print");
     expect(result.stdout).not.toContain("workers logs query recorded");
-    expect(result.stdout).not.toContain("Access app civilopendata policy allowlist recorded");
+    expect(result.stdout).not.toContain("Access app odip policy allowlist recorded");
     expect(result.stdout).not.toContain("neon pitr restore rehearsal recorded");
   });
 
@@ -107,7 +107,7 @@ describe("production-evidence-report", () => {
     const result = runProductionEvidence(
       {
         CODIP_DEPLOY_TARGET: "production",
-        CODIP_BASE_URL: "https://civilopendata.mirai-dx-platform.com",
+        CODIP_BASE_URL: "https://odip.mirai-dx-platform.com",
       },
       ["--strict"],
     );
