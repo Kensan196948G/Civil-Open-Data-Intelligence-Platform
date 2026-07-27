@@ -1,4 +1,6 @@
-import { Prisma as PostgreSQLPrisma } from ".prisma/client-postgresql";
+// The wasm entry keeps the Workers bundle free of the Node/native-engine
+// entry; only engine-independent helpers (sql/join/empty) are used here.
+import { Prisma as PostgreSQLPrisma } from ".prisma/client-postgresql/wasm";
 import { prisma } from "@/lib/db";
 import { isPostgreSqlDatabase } from "@/lib/database-url";
 import { sanitizeUrl } from "@/lib/url-safety";

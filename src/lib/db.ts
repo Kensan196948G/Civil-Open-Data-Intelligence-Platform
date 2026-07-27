@@ -97,7 +97,14 @@ function getPrisma(): AppPrismaClient {
       return client;
     }
     // No request context (e.g. Node-side tooling running with the deploy-target
-    // env vars set): fall through to the Node resolution below.
+    // env vars set): fall through to the Node resolution below — but only when
+    // a real DATABASE_URL exists. Otherwise a missing context on Workers would
+    // silently degrade into an empty SQLite client.
+    if (!process.env.DATABASE_URL) {
+      throw new Error(
+        "[db] Cloudflare deploy target detected but no request context and no DATABASE_URL fallback available",
+      );
+    }
   }
 
   const { provider, connectionString } = resolveNodeConnection();
