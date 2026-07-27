@@ -1333,9 +1333,9 @@ launcher finalize（goal-rotation.js）がポインタ前進 → supervisor が�
 
 2026-07-19のユーザー指示により、Cloudflare zone と production subdomain を本プロジェクトへ記録する。ただし、本番影響を持つ Workers deploy、DNS/custom domain、Access、Secrets、Neon production branch、Hyperdrive config、課金プラン、認証方式の変更は、承認済みCI/CD経路または人間の明示操作でのみ実行する。Codex/ClaudeOS は設定・手順・証跡ゲートの整備と deploy ready 判定までを担当し、秘密情報を出力しない。
 
-| 項目 | 値 | 状態（2026-07-19確認） |
+| 項目 | 値 | 状態（2026-07-27更新。初回記録は2026-07-19） |
 | --- | --- | --- |
 | zone | mirai-dx-platform.com | active |
-| サブドメイン | odip.mirai-dx-platform.com | wrangler.jsoncにroute定義済み（custom_domain）、DNS未登録 |
+| サブドメイン | odip.mirai-dx-platform.com | wrangler.jsonc production routesにzone route方式（route pattern + proxied AAAA `100::`）で定義済み。2026-07-27に `civilopendata` から変更。DNSレコードはデプロイパイプラインが冪等作成（未登録） |
 | Worker | codip | wrangler.jsonc定義済み、未デプロイ |
-| Neonプロジェクト | 未確認 | 既存Neonプロジェクトに対応名なし |
+| Neonプロジェクト | falling-dawn-93620497 | 確認済み（PG17, aws-us-west-2。migration 2/2適用、data_sources 56件seed、PostGIS 3.5.0） |

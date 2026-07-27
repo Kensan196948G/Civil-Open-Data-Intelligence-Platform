@@ -53,15 +53,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Blocking gate: production dependency graph only. Dev-toolchain advisories
-      # with no semver-compatible fix are tracked as Issues (see release notes)
-      # and surfaced by the informational full audit below.
+      # Production dependency graph: zero tolerance, always blocking.
       - name: Dependency audit (production dependencies)
         run: npm audit --audit-level=moderate --omit=dev
 
-      - name: Dependency audit (all dependencies, informational)
-        run: npm audit --audit-level=moderate
-        continue-on-error: true
+      # Full graph (dev included): blocking allowlist gate. Every moderate+
+      # advisory must be covered by an unexpired allowlist entry (reason,
+      # tracking issue, owner, expiry) in check-dependency-audit.js; unknown
+      # advisories, expired entries, and audit execution errors fail CI.
+      - name: Dependency audit (all dependencies, allowlist gate)
+        run: node scripts/tools/check-dependency-audit.js
 
       - name: Validate local env contract
         run: npm run release:validate-env:local
