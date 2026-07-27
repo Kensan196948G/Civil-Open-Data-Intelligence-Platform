@@ -8,6 +8,8 @@
 | Cloudflare | `wrangler.jsonc` production routes、deploy pipeline、placeholder/evidence/契約チェック、runbook、README、テストのproduction FQDN参照を `odip.mirai-dx-platform.com` へ更新 |
 | Access boundary | アクセス制御 (Cloudflare Access application / policy) はユーザー側で設定する運用へ変更。設定完了までは管理系導線のfail-closed全拒否を維持 |
 | 残置 | 旧 `civilopendata` のproxied AAAAレコードは未使用のまま残置。削除は別途承認済みCloudflare操作で扱う |
+| Security deps | 2026-07-21/22公開のadvisory群に対応: `next` 15.5.22 (GHSA-q8wf-6r8g-63ch / GHSA-955p-x3mx-jcvp は15.5.21修正済み)、`sharp` 0.35.3 (`overrides` でnextネスト依存も強制、libvips CVE-2026-33327/33328/35590/35591)、`@opennextjs/cloudflare` 1.20.2、`wrangler` 4.114.0 / `miniflare` 4.20260722.0。本番依存 (`npm audit --omit=dev`) は0件 |
+| CI audit gate | `Dependency audit` を「本番依存 (--omit=dev) ブロッキング + 全依存は情報表示 (continue-on-error)」へ分離。eslint系devツールチェーンのhigh advisory (brace-expansion OOM-DoS波及) はsemver-major (eslint 10) でしか解消できないためIssueで追跡 |
 
 ## 2026-07-19 post-release preview hardening
 
