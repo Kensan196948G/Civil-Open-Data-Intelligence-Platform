@@ -118,6 +118,7 @@ describe("dependency audit allowlist gate", () => {
     );
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain("npm audit failed");
+    expect(errors[0]).toContain("EAUDITNOLOCK");
     expect(errors[0]).toContain("registry unavailable");
   });
 
