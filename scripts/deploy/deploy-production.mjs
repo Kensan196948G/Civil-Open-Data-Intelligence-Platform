@@ -42,7 +42,7 @@ const CF_API = "https://api.cloudflare.com/client/v4";
 
 // Stable, non-secret resource identifiers (docs/runbooks/cloudflare-production.md)
 const NEON_PROJECT_ID = process.env.CODIP_NEON_PROJECT_ID?.trim() || "falling-dawn-93620497";
-const PRODUCTION_HOST = "civilopendata.mirai-dx-platform.com";
+const PRODUCTION_HOST = "odip.mirai-dx-platform.com";
 const PRODUCTION_ZONE = "mirai-dx-platform.com";
 const BASE_URL = `https://${PRODUCTION_HOST}`;
 
@@ -251,7 +251,14 @@ async function main() {
     run("npm", ["run", "release:check-production-placeholders", "--", "--env", "production"], deployEnv);
     run("npm", ["run", "cf:build"], deployEnv);
     run("npm", ["run", "release:check-cloudflare-build-artifact"], deployEnv);
-    run("npx", ["wrangler", "deploy", "--env", "production"], deployEnv);
+    // OPEN_NEXT_DEPLOY=true is the OpenNext wrapper's own re-entry flag: it stops
+    // `wrangler deploy` from delegating back to `opennextjs-cloudflare deploy`
+    // (which boots miniflare/workerd and cannot start under this host's hard
+    // `ulimit -v`). The pre-built .open-next/worker.js is deployed as-is.
+    run("npx", ["wrangler", "deploy", "--env", "production"], {
+      ...deployEnv,
+      OPEN_NEXT_DEPLOY: "true",
+    });
   } else {
     run("npm", ["run", "cf:deploy:production"], deployEnv);
   }

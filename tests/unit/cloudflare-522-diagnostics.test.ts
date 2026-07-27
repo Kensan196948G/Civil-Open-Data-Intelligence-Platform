@@ -48,7 +48,7 @@ const wranglerConfig = {
   env: {
     production: {
       workers_dev: false,
-      routes: [{ pattern: "civilopendata.mirai-dx-platform.com/*", zone_name: "mirai-dx-platform.com" }],
+      routes: [{ pattern: "odip.mirai-dx-platform.com/*", zone_name: "mirai-dx-platform.com" }],
       observability: { enabled: true },
       hyperdrive: [{ binding: "HYPERDRIVE", id: "1da7b81807374ec190addf146717d275" }],
     },
@@ -88,7 +88,7 @@ describe("cloudflare-522-diagnostics", () => {
         env: {
           production: {
             workers_dev: false,
-            routes: [{ pattern: "civilopendata.mirai-dx-platform.com/*", zone_name: "mirai-dx-platform.com" }],
+            routes: [{ pattern: "odip.mirai-dx-platform.com/*", zone_name: "mirai-dx-platform.com" }],
             observability: { enabled: true },
             hyperdrive: [{ binding: "HYPERDRIVE", id: "REPLACE_WITH_PRODUCTION_HYPERDRIVE_ID" }],
           },

@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
-const DEFAULT_PRODUCTION_URL = "https://civilopendata.mirai-dx-platform.com";
+const DEFAULT_PRODUCTION_URL = "https://odip.mirai-dx-platform.com";
 const DEFAULT_WORKER_NAME = "codip";
 const DEFAULT_ENV = "production";
 const DEFAULT_ZONE = "mirai-dx-platform.com";
@@ -44,7 +44,7 @@ function usage() {
     "Usage: node scripts/tools/cloudflare-522-diagnostics.js [options]",
     "",
     "Options:",
-    "  --production-url <url>   Production URL. Defaults to civilopendata.mirai-dx-platform.com.",
+    "  --production-url <url>   Production URL. Defaults to odip.mirai-dx-platform.com.",
     "  --worker-name <name>     Worker name. Default: codip.",
     "  --env <name>             Wrangler environment. Default: production.",
     "  --execute-wrangler       Run read-only Wrangler deployments status/list checks.",
@@ -294,8 +294,8 @@ function renderReport(report) {
     "| Evidence | Expected |",
     "| --- | --- |",
     "| Workers & Pages > codip > Deployments | latest production deployment is active and matches the intended release commit |",
-    "| Workers & Pages > codip > Settings > Domains & Routes | `civilopendata.mirai-dx-platform.com/*` is attached to the production Worker route |",
-    "| DNS record | `civilopendata` is proxied and intentionally configured as the Worker route placeholder, not an unintended origin |",
+    "| Workers & Pages > codip > Settings > Domains & Routes | `odip.mirai-dx-platform.com/*` is attached to the production Worker route |",
+    "| DNS record | `odip` is proxied and intentionally configured as the Worker route placeholder, not an unintended origin |",
     "| Workers Logs / Traces | a request to `/api/health` reaches Worker `codip`; if no invocation appears, traffic is not routed to the Worker |",
     "| Hyperdrive binding | production binding `HYPERDRIVE` points to the approved Neon target |",
   ];

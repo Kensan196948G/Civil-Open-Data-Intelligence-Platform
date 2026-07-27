@@ -31,23 +31,23 @@ requireText(".env.example", envExample, "CODIP_DEPLOY_TARGET");
 requireText(".env.example", envExample, "CODIP_HYPERDRIVE_BINDING");
 requireText(".env.example", envExample, "CODIP_NEON_BRANCH");
 requireText(".env.example", envExample, "CODIP_MIGRATION_DATABASE_URL");
-requireText(".env.example", envExample, "civilopendata.mirai-dx-platform.com");
+requireText(".env.example", envExample, "odip.mirai-dx-platform.com");
 requireText(".env.example", envExample, "CODIP_CLOUDFLARE_ACCESS_EVIDENCE");
 requireText(".env.example", envExample, "CODIP_CLOUDFLARE_ALERT_POLICY");
 requireText(".env.example", envExample, "CODIP_NEON_MONITORING_EVIDENCE");
 requireText(".env.example", envExample, "CODIP_BACKUP_RESTORE_EVIDENCE");
 requireText(".env.example", envExample, "CODIP_NEON_BACKUP_EVIDENCE_JSON");
-requireText("wrangler.jsonc", wrangler, "civilopendata.mirai-dx-platform.com");
+requireText("wrangler.jsonc", wrangler, "odip.mirai-dx-platform.com");
 requireText("wrangler.jsonc", wrangler, "\"zone_name\": \"mirai-dx-platform.com\"");
 requireText("wrangler.jsonc", wrangler, "\"workers_dev\": false");
 requireText("wrangler.jsonc", wrangler, "\"observability\"");
 requireText("wrangler.jsonc", wrangler, "\"enabled\": true");
 requireText("wrangler.jsonc", wrangler, "\"CODIP_DISABLE_TOKEN_AUTH\": \"true\"");
-requireText("infra/cloudflare terraform vars", accessVars, "application_domain     = \"civilopendata.mirai-dx-platform.com\"");
+requireText("infra/cloudflare terraform vars", accessVars, "application_domain     = \"odip.mirai-dx-platform.com\"");
 requireText("infra/cloudflare README", accessReadme, "Terraform >= 1.9");
 
 for (const token of [
-  "civilopendata.mirai-dx-platform.com",
+  "odip.mirai-dx-platform.com",
   "Cloudflare Hyperdrive",
   "CODIP_HYPERDRIVE_BINDING",
   "CODIP_MIGRATION_DATABASE_URL",
@@ -75,7 +75,7 @@ for (const token of [
 }
 
 for (const token of [
-  "civilopendata.mirai-dx-platform.com",
+  "odip.mirai-dx-platform.com",
   "DNS、Custom Domain、Access、Secrets、Hyperdrive、Neon本番接続を無断で変更しない",
   "scripts/deploy/create-hyperdrive.mjs",
   "release:validate-env:production-target",
@@ -127,7 +127,7 @@ requireText("package.json", packageJson, "@opennextjs/cloudflare");
 requireText("monitoring runbook", monitoringRunbook, "release:post-release-status");
 requireText("monitoring runbook", monitoringRunbook, "release:cloudflare-522-diagnostics");
 requireText("monitoring runbook", monitoringRunbook, "release:check-neon-backup-evidence");
-requireText("monitoring runbook", monitoringRunbook, "civilopendata.mirai-dx-platform.com");
+requireText("monitoring runbook", monitoringRunbook, "odip.mirai-dx-platform.com");
 requireText("monitoring runbook", monitoringRunbook, "--strict-production");
 requireText("monitoring runbook", monitoringRunbook, "--max-response-ms");
 requireText("monitoring runbook", monitoringRunbook, "checks.database=ok");

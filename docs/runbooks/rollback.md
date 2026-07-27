@@ -265,7 +265,7 @@ npm run release:smoke -- --read-only --base-url "https://<対象URL>"
 | 文書 | 役割 |
 | --- | --- |
 | `docs/13-deployment-and-operations.md` | デプロイ方針・障害対応の初動 |
-| `docs/runbooks/cloudflare-production.md` | `civilopendata.mirai-dx-platform.com` 本番化と本番smoke/rollback証跡 |
+| `docs/runbooks/cloudflare-production.md` | `odip.mirai-dx-platform.com` 本番化と本番smoke/rollback証跡 |
 | `docs/runbooks/cloudflare-neon-staging.md` | staging デプロイ手順と rollback 方針 |
 | `docs/runbooks/database-deployment.md` | DB デプロイ手順と rollback 方針 |
 | `docs/16-release-readiness-checklist.md` | リリース直前チェックリスト |

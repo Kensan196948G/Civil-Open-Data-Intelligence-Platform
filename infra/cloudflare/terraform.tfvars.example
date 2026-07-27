@@ -4,7 +4,7 @@
 
 cloudflare_account_id = "REPLACE_WITH_ACCOUNT_ID"
 environment            = "production"
-application_domain     = "civilopendata.mirai-dx-platform.com"
+application_domain     = "odip.mirai-dx-platform.com"
 session_duration        = "24h"
 allowed_emails          = []
 allowed_email_domains   = ["REPLACE_WITH_ALLOWED_EMAIL_DOMAIN"]

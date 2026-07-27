@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   // CODIP: Cloudflare Workers 実行構成 (Next.js on Workers via @opennextjs/cloudflare)
   // 実デプロイの前提: docs/13-deployment-and-operations.md §2, docs/runbooks/cloudflare-production.md を参照。
-  // Production hostname: civilopendata.mirai-dx-platform.com (zone route + proxied DNS record方式)
+  // Production hostname: odip.mirai-dx-platform.com (zone route + proxied DNS record方式)
   // 決定記録 (2026-07-20): 現行APIトークンはaccount-level Workers Custom Domains APIのスコープが
   // 付与されておらず (error 10000)、付与済みのZone Workers Routes + Zone DNSスコープで完結する
   // zone route方式を採用した。Custom Domain方式への移行はスコープ付与後にIssueで扱う。
@@ -54,14 +54,14 @@
       "workers_dev": false,
       "routes": [
         {
-          "pattern": "civilopendata.mirai-dx-platform.com/*",
+          "pattern": "odip.mirai-dx-platform.com/*",
           "zone_name": "mirai-dx-platform.com"
         }
       ],
       "vars": {
         "CODIP_ENV_MODE": "production",
         "CODIP_DEPLOY_TARGET": "production",
-        "CODIP_BASE_URL": "https://civilopendata.mirai-dx-platform.com",
+        "CODIP_BASE_URL": "https://odip.mirai-dx-platform.com",
         "CODIP_TRUST_PROXY_AUTH": "true",
         "CODIP_TRUST_PROXY_HEADERS": "true",
         "CODIP_DISABLE_TOKEN_AUTH": "true"

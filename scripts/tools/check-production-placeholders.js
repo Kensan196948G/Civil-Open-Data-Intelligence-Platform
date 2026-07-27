@@ -9,7 +9,7 @@ const TARGETS = new Map([
     "production",
     {
       wranglerEnv: "production",
-      host: "civilopendata.mirai-dx-platform.com",
+      host: "odip.mirai-dx-platform.com",
       zone: "mirai-dx-platform.com",
     },
   ],

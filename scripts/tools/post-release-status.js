@@ -2,7 +2,7 @@
 
 const dns = require("node:dns/promises");
 
-const DEFAULT_PRODUCTION_URL = "https://civilopendata.mirai-dx-platform.com";
+const DEFAULT_PRODUCTION_URL = "https://odip.mirai-dx-platform.com";
 const DEFAULT_PREVIEW_URL = "http://192.168.0.185:3100";
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_RESPONSE_MS = 5_000;
@@ -49,7 +49,7 @@ function usage() {
     "Usage: node scripts/tools/post-release-status.js [options]",
     "",
     "Options:",
-    "  --production-url <url>    Production URL to check. Defaults to civilopendata.mirai-dx-platform.com.",
+    "  --production-url <url>    Production URL to check. Defaults to odip.mirai-dx-platform.com.",
     "  --preview-url <url>       Shared preview URL to check. Defaults to http://192.168.0.185:3100.",
     "  --strict-production       Fail when production DNS or read-only health probes are not ready.",
     "  --allow-preview-down      Do not fail the command when the shared preview is unavailable.",
@@ -220,7 +220,7 @@ function diagnoseProductionIssue(report) {
       [
         "Likely next check",
         "ATTENTION",
-        "Verify the production Worker route is deployed and attached to civilopendata.mirai-dx-platform.com/* before the proxied 100:: placeholder is treated as an origin.",
+        "Verify the production Worker route is deployed and attached to odip.mirai-dx-platform.com/* before the proxied 100:: placeholder is treated as an origin.",
       ],
       [
         "Safe commands",
