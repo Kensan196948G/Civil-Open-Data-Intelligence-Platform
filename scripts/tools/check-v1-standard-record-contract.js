@@ -52,7 +52,7 @@ const spatialRoutes =
 const layersRoute = fs.readFileSync(path.join(root, "src/app/api/v1/layers/route.ts"), "utf8");
 
 for (const token of [
-  "isPostgreSqlDatabase",
+  "isPostgreSqlRuntime",
   "$queryRaw<",
   "ST_DWithin",
   "geometry::geography",
