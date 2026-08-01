@@ -36,7 +36,7 @@
 
 **決定記録 (2026-07-20)**: 当初計画はWorkers Custom Domain (`custom_domain=true`) だったが、現行APIトークンにはaccount-levelのWorkers Custom Domains APIスコープがなく (`/accounts/{id}/workers/domains` がerror 10000)、付与済みのZone Workers Routes + Zone DNSスコープで完結する **zone route方式** (route pattern + proxied AAAA `100::` レコード) へ変更した。TLSはUniversal SSLが第1階層サブドメインをカバーする。Custom Domain方式への移行はトークンへのスコープ付与後にIssueで扱う。この変更は `~/.claude/CLAUDE.md` §27.1の特則 (ユーザー指定サブドメインの追加DNSレコード作成 + Worker紐付け) の範囲内である。
 
-**決定記録 (2026-07-27)**: ユーザー指示により本番サブドメインを `civilopendata` から `odip` へ変更した。routing方式 (zone route + proxied AAAA `100::`)、Worker名 `codip`、Hyperdrive、Neon構成は変更しない。アクセス制御 (Cloudflare Access application / policy) はユーザー側で設定するため、本Runbookのデプロイ作業には含めない。旧 `civilopendata` のDNSレコードは未使用のまま残置しており、削除は別途承認済みCloudflare操作で扱う。
+**決定記録 (2026-07-27)**: ユーザー指示により本番サブドメインを `civilopendata` から `odip` へ変更した。routing方式 (zone route + proxied AAAA `100::`)、Worker名 `codip`、Hyperdrive、Neon構成は変更しない。アクセス制御 (Cloudflare Access application / policy) はユーザー側で設定するため、本Runbookのデプロイ作業には含めない。旧 `civilopendata` のDNSレコード (proxied AAAA `100::`) は **2026-08-01にユーザー操作で削除済み** (`dig` でNXDOMAINを確認、`odip` 側のレコードは残置)。
 
 | Check | 合格条件 |
 | --- | --- |
