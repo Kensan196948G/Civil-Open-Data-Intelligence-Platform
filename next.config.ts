@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+const isCloudflareBuild = process.env.CODIP_CLOUDFLARE_BUILD === "true";
+
 const scriptSrc =
   process.env.NODE_ENV === "production"
     ? "script-src 'self' 'unsafe-inline'"
@@ -48,7 +50,14 @@ const nextConfig: NextConfig = {
       // /wasm entry would get bundled and webpack would choke on the .wasm
       // import. Externalize both entries explicitly; wrangler resolves them
       // (including the wasm module) when it bundles the Worker at deploy.
-      config.externals.push({
+      // OpenNext invokes `npm run build` before Wrangler bundles the Worker.
+      // At that earlier stage, replace the local SQLite client with the same
+      // PostgreSQL wasm entry used at runtime; otherwise both generated wasm
+      // engines are traced and uploaded. Normal Node builds keep SQLite.
+      config.externals.unshift({
+        ...(isCloudflareBuild
+          ? { "@prisma/client": "commonjs .prisma/client-postgresql/wasm" }
+          : {}),
         ".prisma/client-postgresql": "commonjs .prisma/client-postgresql",
         ".prisma/client-postgresql/wasm": "commonjs .prisma/client-postgresql/wasm",
       });

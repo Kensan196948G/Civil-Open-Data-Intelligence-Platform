@@ -65,6 +65,21 @@ npm run release:check-cloudflare-build-artifact
 
 `release:production-evidence -- --strict` は、Secrets値を出さずにEvidence入力の有無と `wrangler.jsonc` のproduction静的構成を検査するゲートである。Cloudflare API / Neon APIへ接続してCustom Domain、Access application、Hyperdrive config、Neon projectの実在を自動確認するものではない。strictが通っても、§1.1 と §5 のCloudflare Dashboard / Wrangler / Neon Consoleでの実リソース証跡を別途記録する。
 
+### 2.1 Worker bundle size gate
+
+2026-08-01の再デプロイ試行では、OpenNext成果物にPostgreSQL用 (`2297601 bytes`) と未使用のSQLite用 (`2171299 bytes`) のPrisma WASM engineが同時混入し、`wrangler deploy --dry-run --env production` がgzip `3235.38 KiB`となった。これはWorkers Freeの圧縮後3 MB上限を超えるため、production deployを停止した。
+
+Cloudflare build時だけ`@prisma/client`をPostgreSQL WASMへ解決し、通常のNode/SQLite buildを変えない修正後は、PostgreSQL WASM 1個のみとなり、同じdry-runでgzip `2350.09 KiB`を確認した。`npm run release:check-cloudflare-build-artifact` はPostgreSQL WASMの存在を必須とし、SQLite WASMが再混入した場合は失敗する。
+
+再デプロイは、次を同一immutable commit SHAで満たした場合のみ承認済みCI/CD経路から実行する。
+
+1. 通常CIとCodeQLが成功する。
+2. `npm run cf:build`と`npm run release:check-cloudflare-build-artifact`が成功する。
+3. `npx wrangler deploy --dry-run --env production`のgzipが3 MB未満である。
+4. §1のtarget env、Evidence、migration、rollback等の既存停止条件をすべて満たす。
+
+サイズ超過やSQLite WASM再混入を検知した場合はdeployせず、依存解決とOpenNext成果物を再調査する。上限回避を目的とした課金プラン変更は本手順に含めない。Cloudflareの現行上限とdry-run確認方法は[Workers limits](https://developers.cloudflare.com/workers/platform/limits/#worker-size)を参照する。
+
 WindowsのUNC共有から実行する場合は、npmのカレントディレクトリ問題を避けるため次の形を使う。
 
 ```powershell

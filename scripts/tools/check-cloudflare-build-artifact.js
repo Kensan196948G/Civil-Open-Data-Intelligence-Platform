@@ -28,6 +28,8 @@ function directoryExists(root, relativePath) {
 function validateBuildArtifact(root) {
   const wrangler = readWrangler(root);
   const errors = [];
+  const postgresqlPrismaWasm = ".open-next/server-functions/default/node_modules/.prisma/client-postgresql/query_engine_bg.wasm";
+  const sqlitePrismaWasm = ".open-next/server-functions/default/node_modules/.prisma/client/query_engine_bg.wasm";
 
   if (!wrangler.main) {
     errors.push("wrangler.jsonc main is missing");
@@ -40,6 +42,13 @@ function validateBuildArtifact(root) {
     errors.push("wrangler.jsonc assets.directory is missing");
   } else if (!directoryExists(root, assetsDirectory)) {
     errors.push(`Cloudflare static assets directory is missing: ${assetsDirectory}`);
+  }
+
+  if (!fileExists(root, postgresqlPrismaWasm)) {
+    errors.push(`Cloudflare PostgreSQL Prisma wasm is missing: ${postgresqlPrismaWasm}`);
+  }
+  if (fileExists(root, sqlitePrismaWasm)) {
+    errors.push(`Cloudflare bundle contains the unused SQLite Prisma wasm: ${sqlitePrismaWasm}`);
   }
 
   return errors;

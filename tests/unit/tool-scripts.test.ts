@@ -114,7 +114,15 @@ describe("tool scripts", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "codip-cloudflare-artifact-present-"));
     fs.copyFileSync(path.join(process.cwd(), "wrangler.jsonc"), path.join(tmp, "wrangler.jsonc"));
     fs.mkdirSync(path.join(tmp, ".open-next/assets"), { recursive: true });
+    fs.mkdirSync(
+      path.join(tmp, ".open-next/server-functions/default/node_modules/.prisma/client-postgresql"),
+      { recursive: true },
+    );
     fs.writeFileSync(path.join(tmp, ".open-next/worker.js"), "export default {};\n");
+    fs.writeFileSync(
+      path.join(tmp, ".open-next/server-functions/default/node_modules/.prisma/client-postgresql/query_engine_bg.wasm"),
+      "postgresql-wasm",
+    );
 
     const result = spawnSync(process.execPath, [buildArtifactScript], {
       cwd: tmp,
@@ -124,6 +132,38 @@ describe("tool scripts", () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("[cloudflare-build-artifact] OK");
+  });
+
+  it("rejects a Cloudflare build that also contains the unused SQLite Prisma wasm", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "codip-cloudflare-artifact-sqlite-"));
+    fs.copyFileSync(path.join(process.cwd(), "wrangler.jsonc"), path.join(tmp, "wrangler.jsonc"));
+    fs.mkdirSync(path.join(tmp, ".open-next/assets"), { recursive: true });
+    fs.mkdirSync(
+      path.join(tmp, ".open-next/server-functions/default/node_modules/.prisma/client-postgresql"),
+      { recursive: true },
+    );
+    fs.mkdirSync(
+      path.join(tmp, ".open-next/server-functions/default/node_modules/.prisma/client"),
+      { recursive: true },
+    );
+    fs.writeFileSync(path.join(tmp, ".open-next/worker.js"), "export default {};\n");
+    fs.writeFileSync(
+      path.join(tmp, ".open-next/server-functions/default/node_modules/.prisma/client-postgresql/query_engine_bg.wasm"),
+      "postgresql-wasm",
+    );
+    fs.writeFileSync(
+      path.join(tmp, ".open-next/server-functions/default/node_modules/.prisma/client/query_engine_bg.wasm"),
+      "sqlite-wasm",
+    );
+
+    const result = spawnSync(process.execPath, [buildArtifactScript], {
+      cwd: tmp,
+      env: { PATH: process.env.PATH ?? "", NODE_ENV: "test" },
+      encoding: "utf8",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("unused SQLite Prisma wasm");
   });
 
   it("gates production Cloudflare deploy behind real target evidence and artifact checks", () => {
