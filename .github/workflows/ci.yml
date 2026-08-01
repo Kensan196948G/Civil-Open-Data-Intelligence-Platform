@@ -106,12 +106,6 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Build Cloudflare Worker artifact
-        run: npm run cf:build
-
-      - name: Verify Cloudflare Worker artifact
-        run: npm run release:check-cloudflare-build-artifact
-
       - name: Validate preview env contract
         run: npm run release:validate-env:preview
 
@@ -140,6 +134,12 @@ jobs:
           done
           cat /tmp/codip-ready.json
           npm run release:smoke -- --base-url http://127.0.0.1:3100
+
+      - name: Build Cloudflare Worker artifact
+        run: npm run cf:build
+
+      - name: Verify Cloudflare Worker artifact
+        run: npm run release:check-cloudflare-build-artifact
 
       - name: Secret scan (gitleaks)
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7
