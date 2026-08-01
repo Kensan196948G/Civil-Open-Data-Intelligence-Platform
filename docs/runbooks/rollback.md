@@ -10,7 +10,7 @@
 
 | 区分 | 内容 |
 | --- | --- |
-| 対象 | 共有プレビュー / 将来 staging / 将来 production |
+| 対象 | 共有プレビュー / staging / production |
 | 実行者 | **人間**。ロールバックは本番状態を変更するため、AI エージェントは判断材料の提示までとし実行しない |
 | 事前確認 | 本書の各手順は「影響」「不可逆性」を明記している。実行前に必ず読むこと |
 | 記録 | 実行後は §7 の記録欄と該当 Issue に、実行者・時刻・対象・結果を残す |
@@ -47,7 +47,7 @@ flowchart TD
 
 ## ☁️ 2. Cloudflare Workers のロールバック
 
-> 適用: Workers へデプロイ済みの場合のみ。**2026-07-18 時点で CODIP の Worker は未作成のため本手順は未使用。**
+> 適用: Workers へデプロイ済みの場合。2026-08-01時点で `codip-production` は稼働中だがDB経路が503で、最新mainのWorkers wasm修正が未デプロイ。既知の正常な旧Worker versionは確認できないため、無根拠なrollbackより承認済みCI/CDからの最新main再デプロイを優先する。
 
 ### 2.1 現在の状態を確認する
 
@@ -128,33 +128,44 @@ CODIP_IMAGE="$REPO@sha256:<戻す先のdigest>" \
 
 ## 🐘 4. Neon PostgreSQL のロールバック (Instant restore / PITR)
 
-> 適用: 破壊的 migration やデータ破損からの復旧。**2026-07-18 時点で CODIP の Neon project は未作成のため本手順は未使用。**
+> 適用: 破壊的migration、旧コードと非互換なschema変更、またはデータ破損からの復旧。2026-08-01時点でNeon mainはread-only整合性確認済みであり、現行障害にDB rollbackは不要。PITR/restoreはこれらの証拠がある場合だけ人間承認下で実施する。
 
 ### 4.1 復旧ポイントを確定する (先に必ず実施)
 
 Neon の **Time Travel Assist** で、復旧したい時刻の状態に read-only 接続して内容を確認する。
 確認せずに restore すると、誤った時点へ全体を上書きする。
 
+2026-08-01時点の本番正本branchは `main`。実行直前にread-only一覧でdefault/primary/protected状態を再確認し、対象を環境変数へ明示する。文書の固定値だけでrestoreしてはならない。
+
+```bash
+NEON_PROJECT_ID="falling-dawn-93620497"
+NEON_PRODUCTION_BRANCH="main"
+neon branches list --project-id "$NEON_PROJECT_ID"
+```
+
 ### 4.2 復旧を実行する
 
 ```bash
-# 自分自身の履歴へ戻す (^self)。--preserve-under-name は self 復元時は必須
-neon branches restore production '^self@2026-07-18T12:00:00Z' \
-  --preserve-under-name production_before_restore
+# INCIDENT_IDとRESTORE_POINTは承認済みincident記録から設定する。
+# RESTORE_POINTは実行直前に確認したPITR履歴ウィンドウ内のISO 8601時刻。
+INCIDENT_ID="<incident-id>"
+RESTORE_POINT="<verified-iso-8601-restore-point>"
+neon branches restore "$NEON_PRODUCTION_BRANCH" "^self@$RESTORE_POINT" \
+  --project-id "$NEON_PROJECT_ID" \
+  --preserve-under-name "main_before_restore_$INCIDENT_ID"
 ```
 
 API を使う場合:
 
 ```bash
+TARGET_BRANCH_ID="<verified-main-branch-id>"
+RESTORE_POINT="<verified-iso-8601-restore-point>"
+PRESERVED_BRANCH="main_before_restore_<incident-id>"
 curl --request POST \
-  --url "https://console.neon.tech/api/v2/projects/<PROJECT_ID>/branches/<BRANCH_ID>/restore" \
+  --url "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$TARGET_BRANCH_ID/restore" \
   --header "Authorization: Bearer $NEON_API_KEY" \
   --header 'Content-Type: application/json' \
-  --data '{
-    "source_branch_id": "<BRANCH_ID>",
-    "source_timestamp": "2026-07-18T12:00:00Z",
-    "preserve_under_name": "production_before_restore"
-  }'
+  --data "{\"source_branch_id\":\"$TARGET_BRANCH_ID\",\"source_timestamp\":\"$RESTORE_POINT\",\"preserve_under_name\":\"$PRESERVED_BRANCH\"}"
 ```
 
 ### 4.3 制約 (Neon 公式仕様)
@@ -176,7 +187,10 @@ curl --request POST \
 
 ```bash
 # 自動作成されたバックアップブランチを source にして再度 restore する
-neon branches restore production production_before_restore
+INCIDENT_ID="<incident-id>"
+PRESERVED_BRANCH="main_before_restore_$INCIDENT_ID"
+neon branches restore "$NEON_PRODUCTION_BRANCH" "$PRESERVED_BRANCH" \
+  --project-id "$NEON_PROJECT_ID"
 ```
 
 ---

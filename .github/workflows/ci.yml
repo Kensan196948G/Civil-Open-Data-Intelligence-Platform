@@ -106,6 +106,12 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Build Cloudflare Worker artifact
+        run: npm run cf:build
+
+      - name: Verify Cloudflare Worker artifact
+        run: npm run release:check-cloudflare-build-artifact
+
       - name: Validate preview env contract
         run: npm run release:validate-env:preview
 

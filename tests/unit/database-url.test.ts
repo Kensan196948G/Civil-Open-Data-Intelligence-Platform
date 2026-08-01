@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { databaseProviderFromUrl, isPostgreSqlDatabase } from "@/lib/database-url";
+import {
+  databaseProviderFromUrl,
+  isPostgreSqlDatabase,
+  isPostgreSqlRuntime,
+} from "@/lib/database-url";
 
 describe("databaseProviderFromUrl", () => {
   it("detects PostgreSQL URLs", () => {
@@ -13,5 +17,13 @@ describe("databaseProviderFromUrl", () => {
     expect(databaseProviderFromUrl("file:./dev.db")).toBe("sqlite");
     expect(databaseProviderFromUrl("")).toBe("sqlite");
     expect(isPostgreSqlDatabase("file:./dev.db")).toBe(false);
+  });
+
+  it("treats Cloudflare staging and production deploy targets as PostgreSQL runtimes", () => {
+    expect(isPostgreSqlRuntime({ databaseUrl: "", deployTarget: "production" })).toBe(true);
+    expect(isPostgreSqlRuntime({ databaseUrl: "", deployTarget: "staging" })).toBe(true);
+    expect(isPostgreSqlRuntime({ databaseUrl: "", deployTarget: "" })).toBe(false);
+    expect(isPostgreSqlRuntime({ databaseUrl: "file:./dev.db", deployTarget: "preview" })).toBe(false);
+    expect(isPostgreSqlRuntime({ databaseUrl: "file:./dev.db", deployTarget: "production" })).toBe(false);
   });
 });

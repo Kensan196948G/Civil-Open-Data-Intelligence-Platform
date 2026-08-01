@@ -27,6 +27,7 @@ function parseArgs(argv) {
 
     if (arg === "--project-id") options.projectId = next();
     else if (arg === "--branch") options.branch = next();
+    else if (arg === "--endpoint-host") options.endpointHost = next();
     else if (arg === "--history-window-hours") options.historyWindowHours = parsePositiveNumber(next(), arg);
     else if (arg === "--pg-dump-file") options.pgDumpFile = next();
     else if (arg === "--pg-dump-artifact") options.pgDumpArtifact = next();
@@ -100,6 +101,7 @@ function artifactFromFile(filePath) {
 function buildEvidence(options) {
   const projectId = requireText(options, "projectId");
   const branch = requireText(options, "branch");
+  const endpointHost = requireText(options, "endpointHost");
   const owner = requireText(options, "owner");
   const historyWindowHours = Number(options.historyWindowHours);
   if (!Number.isFinite(historyWindowHours) || historyWindowHours <= 0) {
@@ -129,6 +131,7 @@ function buildEvidence(options) {
     checkedAt: iso(options.checkedAt),
     projectId,
     branch,
+    endpointHost,
     historyWindowHours,
     lastPgDumpAt: iso(lastPgDumpAt),
     lastPgDumpStatus: requireText(options, "pgDumpStatus"),
@@ -145,8 +148,8 @@ function buildEvidence(options) {
 function usage() {
   return [
     "Usage:",
-    "  node scripts/tools/create-neon-backup-evidence.js --project-id <id> --branch <branch> --history-window-hours <hours> --pg-dump-file <dump> --restore-drill-at <iso> --owner <role>",
-    "  node scripts/tools/create-neon-backup-evidence.js --project-id <id> --branch <branch> --history-window-hours <hours> --pg-dump-artifact <artifact-id> --pg-dump-at <iso> --restore-drill-at <iso> --owner <role>",
+    "  node scripts/tools/create-neon-backup-evidence.js --project-id <id> --branch <branch> --endpoint-host <host> --history-window-hours <hours> --pg-dump-file <dump> --restore-drill-at <iso> --owner <role>",
+    "  node scripts/tools/create-neon-backup-evidence.js --project-id <id> --branch <branch> --endpoint-host <host> --history-window-hours <hours> --pg-dump-artifact <artifact-id> --pg-dump-at <iso> --restore-drill-at <iso> --owner <role>",
     "",
     "Notes:",
     "  This tool never connects to Neon and never reads dump contents. It emits non-secret JSON for release:check-neon-backup-evidence.",

@@ -1,0 +1,57 @@
+name: Production Smoke
+
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+
+      - name: Probe production health and database readiness
+        id: production-status
+        continue-on-error: true
+        shell: bash
+        run: >-
+          node scripts/tools/post-release-status.js
+          --production-url https://odip.mirai-dx-platform.com
+          --preview-url http://192.168.0.185:3100
+          --strict-production
+          --allow-preview-down
+          --max-response-ms 5000
+          > production-status.md 2>&1
+
+      - name: Publish run summary
+        if: always()
+        shell: bash
+        run: cat production-status.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload redacted monitoring evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: production-status-${{ github.run_id }}
+          path: production-status.md
+          retention-days: 14
+
+      - name: Enforce production readiness
+        if: steps.production-status.outcome == 'failure'
+        shell: bash
+        run: exit 1

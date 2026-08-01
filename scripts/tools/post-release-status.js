@@ -283,6 +283,13 @@ function renderResponseTime(value) {
   return typeof value === "number" ? `${value}ms` : "n/a";
 }
 
+function escapeMarkdownTable(value) {
+  return String(value ?? "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\|/g, "\\|")
+    .replace(/[\r\n]+/g, " ");
+}
+
 function renderReport(report) {
   const lines = [
     "# Post-release Runtime Status",
@@ -305,19 +312,19 @@ function renderReport(report) {
     "",
     "| Path | Response | State |",
     "| --- | ---: | --- |",
-    ...report.productionProbes.map((probe) => `| \`${probe.path || probe.url}\` | ${renderResponseTime(probe.responseTimeMs)} | ${status(probe.ok, "not ready")} (${probe.state}) |`),
+    ...report.productionProbes.map((probe) => `| \`${escapeMarkdownTable(probe.path || probe.url)}\` | ${renderResponseTime(probe.responseTimeMs)} | ${status(probe.ok, "not ready")} (${escapeMarkdownTable(probe.state)}) |`),
     "",
     "## Production Route Diagnosis",
     "",
     "| Check | State | Detail |",
     "| --- | --- | --- |",
-    ...report.productionDiagnosis.map(([check, state, detail]) => `| ${check} | ${state} | ${detail} |`),
+    ...report.productionDiagnosis.map(([check, state, detail]) => `| ${escapeMarkdownTable(check)} | ${escapeMarkdownTable(state)} | ${escapeMarkdownTable(detail)} |`),
     "",
     "## Shared Preview Probes",
     "",
     "| Path | Response | State |",
     "| --- | ---: | --- |",
-    ...report.previewProbes.map((probe) => `| \`${probe.path || probe.url}\` | ${renderResponseTime(probe.responseTimeMs)} | ${status(probe.ok, "not ready")} (${probe.state}) |`),
+    ...report.previewProbes.map((probe) => `| \`${escapeMarkdownTable(probe.path || probe.url)}\` | ${renderResponseTime(probe.responseTimeMs)} | ${status(probe.ok, "not ready")} (${escapeMarkdownTable(probe.state)}) |`),
     "",
     "## CTO Decision",
     "",
@@ -409,4 +416,5 @@ module.exports = {
   renderReport,
   inspectProbe,
   diagnoseProductionIssue,
+  escapeMarkdownTable,
 };

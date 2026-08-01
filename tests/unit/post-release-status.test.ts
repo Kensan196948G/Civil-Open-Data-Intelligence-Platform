@@ -10,6 +10,7 @@ const {
   renderReport,
   fetchWithTimeout,
   inspectProbe,
+  escapeMarkdownTable,
 } = require("../../scripts/tools/post-release-status.js") as {
   DEFAULT_PREVIEW_URL: string;
   DEFAULT_PRODUCTION_URL: string;
@@ -60,6 +61,7 @@ const {
     databaseState?: string;
     readyState?: string;
   };
+  escapeMarkdownTable: (value: unknown) => string;
 };
 
 const baseArgs = {
@@ -250,5 +252,11 @@ describe("post-release-status", () => {
     expect(probe.ok).toBe(false);
     expect(probe.responseTimeOk).toBe(false);
     expect(probe.state).toContain("slow>5000ms");
+  });
+
+  it("escapes endpoint-controlled values before rendering Markdown tables", () => {
+    expect(escapeMarkdownTable("ready|spoofed\n| injected | row")).toBe(
+      "ready\\|spoofed \\| injected \\| row",
+    );
   });
 });

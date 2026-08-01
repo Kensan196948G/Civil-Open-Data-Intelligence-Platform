@@ -11,6 +11,7 @@ function readNormalized(relativePath) {
 const ci = readNormalized(".github/workflows/ci.yml");
 const codeql = readNormalized(".github/workflows/codeql.yml");
 const neonBackup = readNormalized(".github/workflows/neon-backup.yml");
+const productionSmoke = readNormalized(".github/workflows/production-smoke.yml");
 const packageJson = readNormalized("package.json");
 
 const errors = [];
@@ -82,6 +83,30 @@ requireText("Neon backup workflow", neonBackup, "retention-days: 14");
 if (neonBackup.includes("pull_request:")) {
   errors.push("Neon backup workflow must not run on pull_request");
 }
+requireText("Production smoke workflow", productionSmoke, "name: Production Smoke");
+requireText("Production smoke workflow", productionSmoke, "schedule:");
+requireText("Production smoke workflow", productionSmoke, "workflow_dispatch:");
+requireText("Production smoke workflow", productionSmoke, "permissions:\n  contents: read");
+requireText("Production smoke workflow", productionSmoke, "--strict-production");
+requireText("Production smoke workflow", productionSmoke, "--allow-preview-down");
+requireText("Production smoke workflow", productionSmoke, "https://odip.mirai-dx-platform.com");
+requireText("Production smoke workflow", productionSmoke, "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0");
+requireText("Production smoke workflow", productionSmoke, "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020");
+requireText("Production smoke workflow", productionSmoke, "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
+requireText("Production smoke workflow", productionSmoke, "retention-days: 14");
+requireText("Production smoke workflow", productionSmoke, "timeout-minutes: 5");
+requireText("Production smoke workflow", productionSmoke, "persist-credentials: false");
+requireText("Production smoke workflow", productionSmoke, 'cron: "7,22,37,52 * * * *"');
+requireText("Production smoke workflow", productionSmoke, "cancel-in-progress: false");
+requireText("Production smoke workflow", productionSmoke, "continue-on-error: true");
+requireText("Production smoke workflow", productionSmoke, "if: always()");
+requireText("Production smoke workflow", productionSmoke, "if: steps.production-status.outcome == 'failure'");
+requireText("Neon backup workflow", neonBackup, "CODIP_NEON_BRANCH: main");
+requireText("Neon backup workflow", neonBackup, "vars.CODIP_NEON_PGDUMP_HOST");
+requireText("Neon backup workflow", neonBackup, "--endpoint-host");
+if (productionSmoke.includes("pull_request:")) {
+  errors.push("Production smoke workflow must not run on pull_request");
+}
 requireText("node-preview job", nodePreviewJob, "persist-credentials: false");
 requireText("node-preview job", nodePreviewJob, "Prepare SQLite preview database");
 requireText("node-preview job", nodePreviewJob, "npm run db:generate");
@@ -108,13 +133,20 @@ const forbiddenPatterns = [
 ];
 
 for (const pattern of forbiddenPatterns) {
-  if (ci.includes(pattern) || codeql.includes(pattern) || neonBackup.includes(pattern)) {
+  if (
+    ci.includes(pattern) ||
+    codeql.includes(pattern) ||
+    neonBackup.includes(pattern) ||
+    productionSmoke.includes(pattern)
+  ) {
     errors.push(`GitHub workflows must not contain ${pattern}`);
   }
 }
 
 const unpinnedActions = [
-  ...`${ci}\n${codeql}\n${neonBackup}`.matchAll(/uses:\s+[^@\s]+\/[^@\s]+@([^\s#]+)/g),
+  ...`${ci}\n${codeql}\n${neonBackup}\n${productionSmoke}`.matchAll(
+    /uses:\s+[^@\s]+\/[^@\s]+@([^\s#]+)/g,
+  ),
 ]
   .map((match) => match[1])
   .filter((ref) => !/^[0-9a-f]{40}$/i.test(ref));

@@ -9,6 +9,7 @@ const DEFAULT_MAX_RESTORE_DRILL_AGE_DAYS = 30;
 const REQUIRED_STRING_FIELDS = [
   "projectId",
   "branch",
+  "endpointHost",
   "lastPgDumpStatus",
   "lastPgDumpArtifact",
   "restoreDrillStatus",
