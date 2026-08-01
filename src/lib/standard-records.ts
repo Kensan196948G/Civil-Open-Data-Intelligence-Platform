@@ -3,7 +3,7 @@
 // client, so they are obtained per call via getPostgreSQLPrismaHelpers().
 import type { Prisma as PostgreSQLPrismaTypes } from ".prisma/client-postgresql";
 import { getPostgreSQLPrismaHelpers, prisma } from "@/lib/db";
-import { isPostgreSqlDatabase } from "@/lib/database-url";
+import { isPostgreSqlRuntime } from "@/lib/database-url";
 import { sanitizeUrl } from "@/lib/url-safety";
 import { toIso } from "@/lib/v1-response";
 
@@ -171,7 +171,10 @@ export function resetStandardRecordsAvailabilityForTests() {
 }
 
 export async function standardRecordsAvailable() {
-  if (!isPostgreSqlDatabase()) return false;
+  // Cloudflare Workers intentionally receive PostgreSQL through Hyperdrive
+  // without a DATABASE_URL. Treat the deploy target as PostgreSQL so the
+  // request-scoped client can resolve the binding (and fail closed if absent).
+  if (!isPostgreSqlRuntime()) return false;
   // true は短い TTL でキャッシュする。運用ロールバックで空化した場合も TTL 後に検知する。
   // false は従来どおり毎回再評価し、取り込み後の有効化を妨げない。
   if (Date.now() < standardRecordsAvailableUntil) return true;

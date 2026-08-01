@@ -8,7 +8,8 @@ const scriptPath = path.join(repoRoot, "scripts/tools/check-neon-backup-evidence
 const freshEvidence = {
   checkedAt: "2026-07-20T07:00:00Z",
   projectId: "falling-dawn-93620497",
-  branch: "production",
+  branch: "main",
+  endpointHost: "ep-main.example.neon.tech",
   historyWindowHours: 24,
   lastPgDumpAt: "2026-07-20T06:30:00Z",
   lastPgDumpStatus: "success",

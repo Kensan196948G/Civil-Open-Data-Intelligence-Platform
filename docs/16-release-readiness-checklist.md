@@ -2,6 +2,21 @@
 
 CODIPを共有プレビューまたは本番相当環境へ出す前に、次の項目を必ず確認する。
 
+## 0. 2026-08-01 再判定
+
+| Gate | 状態 | 根拠 / 次の操作 |
+| --- | --- | --- |
+| Production URL | ✅ | `https://odip.mirai-dx-platform.com`、DNS/TLS/route到達 |
+| Application health | ⚠️ | `/api/health` 200 |
+| DB readiness / 主要業務 | ❌ P1 | `/api/ready` 503、主要DB画面/API 500 |
+| Root cause | 確定 | 稼働deploymentはWorkers wasm修正 `83b1b91` より古く、native Prisma engine初期化で失敗 |
+| Neon integrity | ✅ read-only | migration 2/2、重複official URL・外部キー孤児・不正geometry 0。DB rollback不要 |
+| Backup | ❌ | scheduled 12/12失敗、artifact 0。Issue #63 |
+| Monitoring | ⚠️ | scheduled production smokeを本変更で追加。通知先・受信テストは人間設定待ち |
+| Current decision | **Needs Human Decision** | 最新mainの承認済み再デプロイ、backup Secret/restore drill、通知設定が必要 |
+
+再デプロイ後は `/api/ready=200`、主要画面/API、管理negative、`release:smoke --read-only`、Workers Logs、Neon接続を再測定する。既知の正常な旧Worker versionは確認できないため、無根拠なrollbackは行わない。
+
 ## 1. ビルド・テスト
 
 | 区分 | コマンド | 合格条件 |
@@ -9,7 +24,7 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | 静的解析 | `npm run lint` | エラー0件 |
 | 型検査 | `npm run typecheck` | Prisma Client生成を含めてエラー0件 |
 | 単体テスト | `npm run test` | 全テスト成功 |
-| 依存監査 | `npm audit --audit-level=moderate` | moderate以上0件 |
+| 依存監査 | `node scripts/tools/check-dependency-audit.js` と `npm audit --omit=dev --audit-level=moderate` | 本番依存0件。dev-only例外はIssue、期限、到達可能性付きallowlistに一致 |
 | DB事前確認 | `DATABASE_URL=file:./dev.db npm run db:check-duplicates` | 公式URL重複0件 |
 | 標準レコード方針 | `npm run db:check-standard-record-policy` | SQLite fallbackとPostgreSQL/PostGIS `standard_records` 読取MVPの契約がDB状態と一致 |
 | PostgreSQL schema確認 | `npm run db:compare-schemas && npm run db:pg:validate && npm run db:pg:generate` | 中核モデルとPostgreSQL schemaが妥当 |

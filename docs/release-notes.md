@@ -1,5 +1,19 @@
 # リリースノート
 
+## 2026-08-01 post-release stabilization (未デプロイ)
+
+| 区分 | 内容 |
+| --- | --- |
+| Production incident | `https://odip.mirai-dx-platform.com/api/health` は200だが `/api/ready` は503、主要DB画面/APIは500。稼働Workerがnative Prisma engineを探索して初期化失敗 |
+| Root cause | 稼働deploymentは2026-07-27 10:51 UTC。Workers wasm修正 `83b1b91` は同日12:23 UTCで、現行deploymentに未反映 |
+| Application fix | Hyperdrive-only WorkersをPostgreSQL runtimeとして扱い、`standard_records` 経路がcatalog fallbackへ誤縮退する回帰を修正。明示DB URLがあるNode実行ではURL側providerを優先。回帰テスト追加 |
+| CI / monitoring | 通常PR verifyでCloudflare artifactをbuild/検査。15分間隔のstrict read-only production smoke workflowを追加 |
+| Cloudflare bundle blocker | OpenNext成果物へPostgreSQL用とSQLite用のPrisma WASM engineが同時混入し、Wrangler dry-runのgzipが `3235.38 KiB` となってWorkers Freeの3 MB上限を超過。再デプロイを停止 |
+| Bundle fix / regression guard | Cloudflare build時だけ`@prisma/client`をPostgreSQL WASMへ解決し、通常Node/SQLite buildは維持。修正後dry-runはgzip `2350.09 KiB`。artifact checkerはPostgreSQL WASMを必須とし、未使用のSQLite WASM再混入を拒否 |
+| Neon | mainへread-only接続成功。migration 2/2、重複official URL・外部キー孤児・不正geometryはいずれも0。DB rollback不要 |
+| Backup blocker | scheduled backup 12/12失敗、artifact 0。証跡branchを`main`へ固定し、Secret URLのhostnameと`CODIP_NEON_PGDUMP_HOST`をdump前に照合するfail-closed gateを追加。Secret/Variable登録とrestore drillは人間承認境界 (Issue #63) |
+| Deploy status | 本変更はローカルbranchのみ。通常CI、CodeQL、Cloudflare build/artifact検査、3 MB未満のWrangler dry-runを同一immutable SHAで確認後、承認済みCI/CD経路からのみ再デプロイする。DNS、Secrets、Access、DB変更は未実施 |
+
 ## 2026-07-27 production subdomain change (civilopendata → odip)
 
 | 区分 | 内容 |

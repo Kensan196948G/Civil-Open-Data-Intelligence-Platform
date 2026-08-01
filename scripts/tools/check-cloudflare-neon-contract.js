@@ -14,6 +14,7 @@ const docs13 = fs.readFileSync(path.join(root, "docs/13-deployment-and-operation
 const docs16 = fs.readFileSync(path.join(root, "docs/16-release-readiness-checklist.md"), "utf8");
 const rollbackRunbook = fs.readFileSync(path.join(root, "docs/runbooks/rollback.md"), "utf8");
 const packageJson = fs.readFileSync(path.join(root, "package.json"), "utf8");
+const packageConfig = JSON.parse(packageJson);
 const wrangler = fs.readFileSync(path.join(root, "wrangler.jsonc"), "utf8");
 const accessVars = fs.readFileSync(path.join(root, "infra/cloudflare/terraform.tfvars.example"), "utf8");
 const accessReadme = fs.readFileSync(path.join(root, "infra/cloudflare/README.md"), "utf8");
@@ -45,6 +46,10 @@ requireText("wrangler.jsonc", wrangler, "\"enabled\": true");
 requireText("wrangler.jsonc", wrangler, "\"CODIP_DISABLE_TOKEN_AUTH\": \"true\"");
 requireText("infra/cloudflare terraform vars", accessVars, "application_domain     = \"odip.mirai-dx-platform.com\"");
 requireText("infra/cloudflare README", accessReadme, "Terraform >= 1.9");
+const cloudflareBuildCommand = packageConfig.scripts?.["cf:build"] ?? "";
+if (!cloudflareBuildCommand.includes("CODIP_CLOUDFLARE_BUILD=true")) {
+  errors.push("package.json scripts.cf:build must enable CODIP_CLOUDFLARE_BUILD=true");
+}
 
 for (const token of [
   "odip.mirai-dx-platform.com",

@@ -7,11 +7,6 @@ on:
     - cron: "17 18 * * *"
   workflow_dispatch:
     inputs:
-      branch:
-        description: "Non-secret branch label for backup evidence"
-        required: false
-        type: string
-        default: "production"
       history_window_hours:
         description: "Observed Neon PITR history window in hours"
         required: false
@@ -43,7 +38,8 @@ jobs:
       NEON_DATABASE_URL: ${{ secrets.CODIP_NEON_PGDUMP_DATABASE_URL }}
       CODIP_BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE }}
       CODIP_NEON_PROJECT_ID: ${{ vars.CODIP_NEON_PROJECT_ID }}
-      CODIP_NEON_BRANCH: ${{ github.event.inputs.branch || vars.CODIP_NEON_BRANCH }}
+      CODIP_NEON_BRANCH: main
+      CODIP_NEON_PGDUMP_HOST: ${{ vars.CODIP_NEON_PGDUMP_HOST }}
       CODIP_NEON_HISTORY_WINDOW_HOURS: ${{ github.event.inputs.history_window_hours || vars.CODIP_NEON_HISTORY_WINDOW_HOURS }}
       CODIP_LAST_RESTORE_DRILL_AT: ${{ github.event.inputs.restore_drill_at || vars.CODIP_LAST_RESTORE_DRILL_AT }}
       CODIP_BACKUP_OWNER: ${{ github.event.inputs.owner || vars.CODIP_BACKUP_OWNER }}
@@ -74,9 +70,22 @@ jobs:
           missing=()
           [ -n "${NEON_DATABASE_URL:-}" ] || missing+=("secrets.CODIP_NEON_PGDUMP_DATABASE_URL")
           [ -n "${CODIP_BACKUP_ENCRYPTION_PASSPHRASE:-}" ] || missing+=("secrets.CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE")
+          [ -n "${CODIP_NEON_PGDUMP_HOST:-}" ] || missing+=("vars.CODIP_NEON_PGDUMP_HOST")
           [ -n "${CODIP_LAST_RESTORE_DRILL_AT:-}" ] || missing+=("inputs.restore_drill_at or vars.CODIP_LAST_RESTORE_DRILL_AT")
           if [ "${#missing[@]}" -gt 0 ]; then
             printf '::error::Missing required Neon backup configuration: %s\n' "${missing[*]}"
+            exit 1
+          fi
+          actual_host="$(node -e '
+            const url = new URL(process.env.NEON_DATABASE_URL);
+            if (url.protocol !== "postgresql:" && url.protocol !== "postgres:") process.exit(2);
+            process.stdout.write(url.hostname);
+          ')" || {
+            echo "::error::CODIP_NEON_PGDUMP_DATABASE_URL is not a valid PostgreSQL URL"
+            exit 1
+          }
+          if [ "$actual_host" != "$CODIP_NEON_PGDUMP_HOST" ]; then
+            echo "::error::Neon pg_dump endpoint does not match vars.CODIP_NEON_PGDUMP_HOST"
             exit 1
           fi
 
@@ -114,13 +123,14 @@ jobs:
         run: |
           set -euo pipefail
           project_id="${CODIP_NEON_PROJECT_ID:-falling-dawn-93620497}"
-          branch="${CODIP_NEON_BRANCH:-production}"
+          branch="$CODIP_NEON_BRANCH"
           history_window_hours="${CODIP_NEON_HISTORY_WINDOW_HOURS:-24}"
           owner="${CODIP_BACKUP_OWNER:-release-manager}"
           evidence_path="$RUNNER_TEMP/neon-backup-evidence.json"
           npm run release:create-neon-backup-evidence -- \
             --project-id "$project_id" \
             --branch "$branch" \
+            --endpoint-host "$CODIP_NEON_PGDUMP_HOST" \
             --history-window-hours "$history_window_hours" \
             --pg-dump-file "${{ steps.dump.outputs.artifact_path }}" \
             --pg-dump-artifact "github-actions-artifact://${{ steps.dump.outputs.artifact_name }}" \

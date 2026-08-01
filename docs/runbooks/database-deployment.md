@@ -117,7 +117,7 @@ CODIP_ADMIN_TOKEN="$CODIP_ADMIN_TOKEN" npm run release:smoke -- --base-url http:
 | 項目 | 内容 |
 | --- | --- |
 | Secret | `CODIP_NEON_PGDUMP_DATABASE_URL` と `CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE`。専用dumpロールまたは最小権限URLを登録し、どちらもログではmaskする |
-| Variables/Input | `CODIP_NEON_PROJECT_ID`、`CODIP_NEON_BRANCH`、`CODIP_NEON_HISTORY_WINDOW_HOURS`、`CODIP_LAST_RESTORE_DRILL_AT`、`CODIP_BACKUP_OWNER` |
+| Variables/Input | `CODIP_NEON_PROJECT_ID`、`CODIP_NEON_PGDUMP_HOST`（main branchの期待endpoint hostname）、`CODIP_NEON_HISTORY_WINDOW_HOURS`、`CODIP_LAST_RESTORE_DRILL_AT`、`CODIP_BACKUP_OWNER`。証跡branchはworkflowで`main`に固定し、Secret URLのhostnameが期待値と不一致ならdump前にfail-closed |
 | Artifact | custom format dumpをGPG AES256で暗号化した `codip-neon-pgdump-<UTC>.dump.gpg` を14日保持。復号Secretを持つ本番運用者に限定する |
 | Evidence | `neon-backup-evidence` artifactを30日保持。Secretを含めず、PITR window、dump鮮度、restore drill鮮度を検査する |
 | Fail closed | dump URL Secret未設定、暗号化Secret未設定、restore drill日時未記録、dump/暗号化失敗、証跡鮮度NGではworkflowを失敗させる |
@@ -127,7 +127,8 @@ CODIP_ADMIN_TOKEN="$CODIP_ADMIN_TOKEN" npm run release:smoke -- --base-url http:
 ```bash
 npm run release:create-neon-backup-evidence -- \
   --project-id falling-dawn-93620497 \
-  --branch production \
+  --branch main \
+  --endpoint-host '<main-endpoint>.neon.tech' \
   --history-window-hours 24 \
   --pg-dump-file /secure/artifacts/codip.dump \
   --restore-drill-at 2026-07-19T06:30:00Z \

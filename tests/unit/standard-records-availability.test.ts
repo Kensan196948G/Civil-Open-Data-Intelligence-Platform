@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const queryRawMock = vi.hoisted(() => vi.fn());
-const isPostgreSqlDatabaseMock = vi.hoisted(() => vi.fn());
+const isPostgreSqlRuntimeMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/db", () => ({
   prisma: {
@@ -10,13 +10,13 @@ vi.mock("@/lib/db", () => ({
 }));
 
 vi.mock("@/lib/database-url", () => ({
-  isPostgreSqlDatabase: isPostgreSqlDatabaseMock,
+  isPostgreSqlRuntime: isPostgreSqlRuntimeMock,
 }));
 
 import { resetStandardRecordsAvailabilityForTests, standardRecordsAvailable } from "@/lib/standard-records";
 
 beforeEach(() => {
-  isPostgreSqlDatabaseMock.mockReturnValue(true);
+  isPostgreSqlRuntimeMock.mockReturnValue(true);
   resetStandardRecordsAvailabilityForTests();
 });
 
@@ -26,10 +26,18 @@ afterEach(() => {
 
 describe("standardRecordsAvailable", () => {
   it("PostgreSQLでなければクエリせずfalseを返す", async () => {
-    isPostgreSqlDatabaseMock.mockReturnValue(false);
+    isPostgreSqlRuntimeMock.mockReturnValue(false);
 
     await expect(standardRecordsAvailable()).resolves.toBe(false);
     expect(queryRawMock).not.toHaveBeenCalled();
+  });
+
+  it("Workers/Hyperdrive runtimeではDATABASE_URLなしでも標準レコードを確認する", async () => {
+    isPostgreSqlRuntimeMock.mockReturnValue(true);
+    queryRawMock.mockResolvedValueOnce([{ count: 1 }]);
+
+    await expect(standardRecordsAvailable()).resolves.toBe(true);
+    expect(queryRawMock).toHaveBeenCalledTimes(1);
   });
 
   it("空結果(false)はキャッシュせず、再呼び出しのたびに再評価する", async () => {

@@ -52,7 +52,7 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "cf:typegen": "node node_modules/wrangler/bin/wrangler.js types",
-    "cf:build": "node node_modules/@opennextjs/cloudflare/dist/cli/index.js build",
+    "cf:build": "node scripts/tools/with-env.js CODIP_CLOUDFLARE_BUILD=true -- node node_modules/@opennextjs/cloudflare/dist/cli/index.js build",
     "cf:preview": "node node_modules/@opennextjs/cloudflare/dist/cli/index.js preview",
     "cf:deploy": "node node_modules/@opennextjs/cloudflare/dist/cli/index.js deploy",
     "cf:deploy:production": "npm run release:validate-env:production-target && npm run release:production-evidence -- --strict && npm run release:check-production-placeholders -- --env production && npm run cf:build && npm run release:check-cloudflare-build-artifact && node node_modules/@opennextjs/cloudflare/dist/cli/index.js deploy --env production"

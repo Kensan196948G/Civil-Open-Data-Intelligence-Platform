@@ -6,8 +6,8 @@
 | --- | --- | --- |
 | Local | 開発 | Next.js, SQLite |
 | 現行共有Preview | 関係者検証 | Node.jsコンテナ、SQLiteまたはPostgreSQL/PostGIS compose、Cloudflare Access相当の前段保護 |
-| 将来Staging | Cloudflare/Neon検証 | Cloudflare Workers (`@opennextjs/cloudflare`)、Access、Neon PostgreSQL/PostGIS staging branch |
-| Production目標 | 本番 | Cloudflare Workers (`@opennextjs/cloudflare`)、Access、Neon PostgreSQL/PostGIS、Cloudflare Cron Triggers、`https://odip.mirai-dx-platform.com` |
+| Staging | Cloudflare/Neon検証 | Cloudflare Workers (`@opennextjs/cloudflare`)、Access、Neon PostgreSQL/PostGIS staging branch (実環境証跡は未完) |
+| Production | 本番 | Cloudflare Workers、Hyperdrive、Neon PostgreSQL/PostGIS、`https://odip.mirai-dx-platform.com`。2026-08-01時点DB readiness障害中 |
 
 ## 2. デプロイ方針
 
@@ -16,7 +16,7 @@ MVPではローカル、CI、Docker previewで品質を確認する。2026-07-19
 ただし以下は未解決のアプリケーションコード/実リソース側の制約であり、Workers本番切替前に解消または証跡化が必須:
 
 - `src/lib/url-guard.ts` の事前DNS検証は `resolve4` / `resolve6` へ変更済み。接続時ピン留めはNode.js/Undici Agentで実施する。Cloudflare Workersでは公式仕様上 `dns.lookup` が未実装で、同等の接続時ピン留めを保証できないため、`src/lib/http-client.ts` はWorkers runtimeを検知した場合に外部URL取得を `unsupported_runtime` として明示的に停止する
-- `wrangler.jsonc` の production route は `odip.mirai-dx-platform.com/*` に固定済み。production `workers_dev=false` により本番の `*.workers.dev` 直公開経路は使わない。2026-07-20時点で本番hostnameはCloudflareへ解決するが、`/api/health` / `/api/ready` は522であり、Worker route/deployment/logs、Secrets、Access、Hyperdrive実行時接続の証跡確認が完了するまで本番正常稼働とは判定しない。本番化・復旧手順は `docs/runbooks/cloudflare-production.md` を入口とする (Neon project `falling-dawn-93620497` は既存。2026-07-20 に Neon MCP で実地確認済み、詳細は `docs/16-release-readiness-checklist.md` §5.1)
+- `wrangler.jsonc` の production route は `odip.mirai-dx-platform.com/*` に固定済み。production `workers_dev=false` により本番の `*.workers.dev` 直公開経路は使わない。2026-08-01時点でDNS、route、Worker、Hyperdriveは実在し `/api/health` は200だが、`/api/ready` は503 (`database=error`)。Workers Logsで、稼働deploymentがnative Prisma engineを探索して初期化失敗することを確認した。修正commit `83b1b91` は稼働deploymentより新しく未反映のため、承認済みCI/CDから最新mainを再デプロイしread-only smokeを再実行する。本番化・復旧手順は `docs/runbooks/cloudflare-production.md` を入口とする。Neon mainはread-only整合性確認済みでDB rollbackは不要
 
 Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、Cloudflareが現在推奨するNext.jsデプロイ経路が `@opennextjs/cloudflare` アダプタ経由のWorkersであり、レガシーの `@cloudflare/next-on-pages` ではないため。取得処理は将来Cloudflare Cron TriggersとWorkersへ分離する。
 

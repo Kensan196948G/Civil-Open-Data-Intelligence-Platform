@@ -10,7 +10,7 @@
 
 **CODIP** は、国土交通省、国土地理院、気象庁、自治体、道路、河川、防災、都市計画、インフラ、環境などに分散している公開データを、土木建設業務で再利用しやすい形に整理するための共通データ基盤です。
 
-現行MVPは **データソース台帳、取得確認、取得ログ、地図プレビュー、品質状態、後続API、PostgreSQL/PostGIS標準レコード読取経路** を中心に実装しています。2026-07-19 時点で共有preview `http://192.168.0.185:3100/` は稼働確認済みです。ローカルSQLiteは台帳中心の軽量preview、CI/PostGIS previewは検証用 `standard_records` を投入した後続API smoke、本番Cloudflare/Neonと実データ原本保存は次フェーズで段階投入します。
+現行MVPは **データソース台帳、取得確認、取得ログ、地図プレビュー、品質状態、後続API、PostgreSQL/PostGIS標準レコード読取経路** を中心に実装しています。共有preview `http://192.168.0.185:3100/` は稼働中です。本番Cloudflare Workers + Hyperdrive + Neonも配備済みですが、2026-08-01時点は稼働Workerが最新のPrisma wasm修正を含まず、DB readiness障害中です。復旧完了までは本番を業務利用可能と判定しません。
 
 > 公開データを探すだけのサイトではなく、土木建設システムが公開データを安全に再利用するための共通データハブです。
 
@@ -119,6 +119,35 @@ flowchart TD
 
 ---
 
+## 🚨 本番稼働状況 (2026-08-01)
+
+```mermaid
+flowchart LR
+    U["利用者"] --> CF["Cloudflare route / codip-production"]
+    CF --> H["/api/health 200"]
+    CF --> A["Next.js API / UI"]
+    A --> P["Prisma engine初期化"]
+    P -. "稼働版はnative engineを探索" .-> X["500 / ready 503"]
+    M["origin/main 83b1b91<br/>Workers wasm修正"] -. "未デプロイ" .-> CF
+    N["Neon PostgreSQL / PostGIS<br/>read-only整合性OK"] --> HD["Hyperdrive"]
+    HD --> A
+```
+
+| 確認項目 | 実測 | 判定 |
+| --- | --- | --- |
+| 正式URL | `https://odip.mirai-dx-platform.com` | ✅ DNS/TLS/route到達 |
+| Health | `/api/health` 200 | ✅ Worker生存 |
+| Readiness | `/api/ready` 503 (`database=error`) | ❌ P1 |
+| 主要機能 | `/`、dashboard、sourcesが500 | ❌ 業務利用不可 |
+| Root cause | 稼働deploymentは2026-07-27 10:51 UTC、wasm修正 `83b1b91` は同日12:23 UTC | ❌ 修正未反映 |
+| Neon | PostgreSQL 17.10 / PostGIS 3.5、migration 2/2、整合性異常0 | ✅ DB rollback不要 |
+| Backup | scheduled 12/12失敗、暗号化artifact 0 | ❌ Issue #63 |
+| 復旧策 | 承認済みCI/CDから最新mainを再デプロイ後、read-only smoke | 🔐 人間実行 |
+
+定期検知は `.github/workflows/production-smoke.yml` が15分ごとにstrict read-only probeを実行し、Summaryと14日保持artifactを残します。通知先設定と初回通知テストは人間の運用設定が必要です。
+
+---
+
 ## ✅ 実装済みの主な機能
 
 | 区分 | 内容 |
@@ -134,9 +163,9 @@ flowchart TD
 
 ---
 
-## 🚦 記録済みリリースゲート証跡
+## 🚦 過去のリリースゲート証跡
 
-2026-07-19T15:41Z (2026-07-20 JST) に確認したmain最新証跡です。実Cloudflare/Neon targetの検証はまだ未実行のため、production target envだけは `workflow_dispatch` で承認済みSecrets/Variablesを読み込んで別途記録します。
+以下は2026-07-19T15:41Z (2026-07-20 JST) 時点の履歴です。現在状態は上記「本番稼働状況」とGitHub `main@83b1b91` のCI証跡を正とします。
 
 | 区分 | 状態 | 証跡 |
 | --- | --- | --- |
@@ -168,7 +197,7 @@ flowchart TD
 | API | `/api/health` 200、`/api/ready` 200、`/api/dashboard` 200、`/api/sources` 200、`/api/openapi` 200 |
 | 管理保護 | `/api/fetch-logs` は未認証401、`/api/admin/audit-events` のGETは405 |
 | DB | `/api/ready` 200でアプリからDB接続を確認。共有previewは正本Neonではなくローカル/preview DB |
-| Cloudflare/Neon | production targetは `odip.mirai-dx-platform.com`。DNSはCloudflareへ解決済みだが、本番APIは522で未正常。Worker route/deployment/logs、Access、Secretsの実リソース証跡は承認済みCloudflare認証で確認する |
+| Cloudflare/Neon | production targetは `odip.mirai-dx-platform.com`。2026-08-01再確認ではhealth 200、ready 503。Neon自体は正常で、稼働Workerがwasm修正前であることをログとdeployment時刻から確定 |
 
 ### 🔧 2026-07-19 安定化改善
 
@@ -214,29 +243,29 @@ flowchart TD
 | --- | --- |
 | Cloudflare Hyperdrive | 🟢 作成済み `codip-production` (caching disabled、`scripts/deploy/create-hyperdrive.mjs` で払い出し、`wrangler.jsonc` に実ID反映済み) |
 | Neon production | 🟢 既存 project `falling-dawn-93620497` の default branch を本番として使用 (PostGIS、migration適用済み、pre-release backup branch取得済み) |
-| Worker `codip` | ⚠️ 要確認。本番URLはCloudflare edgeへ到達するが `/api/health` / `/api/ready` は522。承認済み認証で `wrangler deployments list --env production` と Workers Logs / route を確認する |
+| Worker `codip` | 🔴 稼働中だが古いdeployment。`/api/health` 200、`/api/ready` 503。native Prisma engine初期化失敗をWorkers Logsで確認し、最新main再デプロイ待ち |
 | DNS record | 🟡 Cloudflare A/AAAAへ解決済み。zone route方式の proxied `AAAA 100::` が意図通りかはCloudflare Dashboard / Wranglerで証跡化する |
 | Worker Secrets | ⚠️ 要確認。値は出力せず、Secrets登録有無だけを承認済みCloudflare認証で確認する |
 | Cloudflare Access | ⚠️ 要確認。未設定またはproxy secret未整備の場合、管理系はfail-closed全拒否として扱う |
 
-現時点の最優先ステップは本番522の復旧判断である。DNSやSecretsを変更する前に、Cloudflare route/deployment/logsを読み取り確認し、証跡をIssue #18へ記録する。
+現時点の最優先ステップは、`83b1b91` と本安定化修正を含むimmutable SHAを通常CIで検証し、承認済みCI/CD経路から再デプロイすることである。DNS、Secrets、DBは変更せず、デプロイ後にstrict read-only smokeを実行して `/api/ready=200` と主要DB経路の復旧を確認する。
 
 | # | 作業 | 実行者 |
 | --- | --- | --- |
-| 1 | `release:post-release-status` の `Production Route Diagnosis` を保存 | CTO/運用 |
-| 2 | `npm run release:cloudflare-522-diagnostics` でroute/deployment/log evidenceチェックリストを作成し、承認済み認証がある場合のみ `-- --execute-wrangler` で `deployments status/list` をread-only実行。`wrangler tail codip --env production --status error` とDashboardのroute/DNSは証跡として確認 | 承認済みCloudflare認証を持つ作業者 |
-| 3 | Worker routeが未接続なら、承認済みCI/CDまたはRunbook経路でroute/deployを復旧。DNS/Secrets変更は証跡確認後に限定 | CTO判断 + 承認済み作業者 |
+| 1 | PRの通常CI、CodeQL、Cloudflare bundle artifact検査を成功させ、復旧候補SHAを固定 | CTO/運用 |
+| 2 | 固定SHAを承認済みCI/CD経路から再デプロイし、Worker deployment IDと時刻を保存 | 人間承認 + ReleaseManager |
+| 3 | `/api/ready`、主要画面/API、`release:smoke --read-only`、Workers error logを再確認。失敗時のみ既知正常版へのWorker rollbackを検討 | CTO/運用 |
 | 4 | Cloudflare Access application/policy と `CODIP_TRUST_PROXY_SECRET` 登録状態を確認し、管理系fail-closedを維持 | 人間 (ユーザー) / 承認済み作業者 |
 
 ### ⚠️ 残課題
 
 - **Cloudflare Workers ランタイム互換**: [Issue #18](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/18)。SSRF事前DNS検証は `dns.promises.resolve4` / `resolve6` へ変更済み。接続時DNSピン留めはNode.js/Undiciで継続し、Cloudflare Workersでは同等保証ができないため外部URL取得を `unsupported_runtime` で安全停止する。PostgreSQL Prisma Clientは `@prisma/adapter-pg` によりHyperdrive `connectionString` を消費できる構成へ変更済み。残りは実Cloudflare/Neon証跡
 - **main branch protection**: 現在は有効。required checksは `verify` / `e2e` / `postgresql-compat` / `docker-preview` / `docker-image-security` / `analyze`、strict=true、admin enforcement=true。今後はrequired review数やCode Ownersの要否を運用成熟度に合わせて判断する
-- **Cloudflare本番522継続**: `odip.mirai-dx-platform.com` はCloudflareへ解決済みだが、`/api/health` と `/api/ready` が522。Worker route/deployment/logs、Secrets、Access、Hyperdrive実行時接続の証跡を確認するまで本番正常稼働とは判定しない
-- **Neon pg_dump定期ジョブの本番証跡未完了**: [Issue #63](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/63)。`.github/workflows/neon-backup.yml` は追加済み。`CODIP_NEON_PGDUMP_DATABASE_URL` / `CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE` Secret、restore drill日時、初回成功artifactの証跡化は継続
+- **Cloudflare本番DB障害**: `odip.mirai-dx-platform.com` はCloudflareへ到達しhealth 200だが、ready 503・主要DB画面/API 500。稼働deploymentが最新mainのWorkers wasm修正前であるため、承認済みCI/CDから再デプロイして回帰smokeが通るまで本番正常稼働とは判定しない
+- **Neon pg_dump定期ジョブの本番証跡未完了**: [Issue #63](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/63)。`.github/workflows/neon-backup.yml` は追加済み。`CODIP_NEON_PGDUMP_DATABASE_URL` / `CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE` Secret、main endpointを照合する`CODIP_NEON_PGDUMP_HOST` Variable、restore drill日時、初回成功artifactの証跡化は継続
 - **De-dockerization移行中**: [Issue #35](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/35)。Docker jobはbranch protection互換のため残し、先にDocker非依存の `node-preview` CIゲートを追加して差し替え先を育てる
 
-🔒 **本番URLはCloudflareへ到達済みだが、522のため本番正常稼働は未達**。復旧判断は [`docs/runbooks/cloudflare-production.md`](docs/runbooks/cloudflare-production.md) の522手順と [`docs/runbooks/rollback.md`](docs/runbooks/rollback.md) に従います。
+🔒 **本番URLはCloudflareへ到達済みですが、DB readiness障害のため本番正常稼働は未達**。復旧判断は [`docs/runbooks/cloudflare-production.md`](docs/runbooks/cloudflare-production.md) と [`docs/runbooks/rollback.md`](docs/runbooks/rollback.md) に従います。
 
 ---
 

@@ -1,5 +1,18 @@
 # 監視・アラート runbook
 
+## 0. 現在のインシデント状態 (2026-08-01)
+
+| 項目 | 実測 | 判定 |
+| --- | --- | --- |
+| Production URL | `https://odip.mirai-dx-platform.com` | 正式ターゲット |
+| Cloudflare route / Worker | route・deploymentとも実在、`/api/health` 200 | edge到達は正常 |
+| DB readiness | `/api/ready` 503 (`database=error`) | **P1 / Production Readyではない** |
+| 根因 | 稼働deploymentは2026-07-27 10:51 UTC。Workers wasm修正 `83b1b91` は同日12:23 UTCで未反映 | `83b1b91` と本安定化修正を含む承認済みimmutable SHAをCI/CDから再デプロイし、health/ready/Production Smoke成功を確認 |
+| Neon | mainへread-only直結成功、migration 2/2、孤児・重複・不正geometry 0 | DB rollback不要 |
+| Backup | scheduled run 12/12失敗、暗号化artifact 0 | Issue #63、人間によるSecret/restore drill設定が必要 |
+
+旧 `civilopendata.mirai-dx-platform.com` は現行ターゲットではない。DNS、Secrets、Access、DBを変更する前に、まず稼働deploymentとGit SHAを突き合わせる。
+
 ## 1. 監視対象
 
 | 対象 | 確認方法 | 異常判定 |
@@ -25,7 +38,18 @@
 | Cloudflare Workers Logs / Traces | 手動確認予定 | error rate、例外sample、対象deploy idをEvidenceへ記録 |
 | Cloudflare alert / Web Analytics | 未設定 | 通知先、閾値、通知テスト結果を記録 |
 | Neon monitoring | 未設定 | branch、容量、接続数、slow query、PITR windowを記録 |
-| GitHub Actions | 設定済み | CI失敗時の担当・Issue化ルールをProjectへ反映 |
+| GitHub Actions | workflow追加済み・通知受信未確認 | CI/production smoke失敗時の通知先・担当・Issue化ルールをProjectへ反映し、受信テストを記録 |
+
+### 1.1.1 定期production smoke
+
+`.github/workflows/production-smoke.yml` は毎時7/22/37/52分（15分間隔）、および手動dispatchで次を実行する。定時集中を避け、実行中の手動確認をscheduled runでキャンセルしない。
+
+- `odip.mirai-dx-platform.com` のDNS、`/api/health`、`/api/ready` をstrict read-only判定
+- 共有preview停止は本番判定へ混ぜない (`--allow-preview-down`)
+- 結果をGitHub Actions Summaryと14日保持artifactへ保存
+- readiness失敗時はworkflowを失敗させ、GitHub Actions通知対象にする
+
+このworkflowは公開health endpointだけを読み、Cloudflare/Neon API tokenやDB接続文字列を使用しない。実通知を成立させるには、リポジトリのActions失敗通知先と当番を人間が設定し、テスト通知の受信時刻を `CODIP_SMOKE_MONITORING_SCHEDULE` / `CODIP_MONITORING_CONTACTS` の証跡へ記録する。
 
 実ターゲットの監視証跡は、Secrets値や個人情報を出さずに次の環境変数で `production-evidence` へ渡す。値はレポートに表示されず、`set (recorded)` のみ出力される。
 
@@ -51,12 +75,13 @@ npm run release:production-evidence -- --strict
 
 `CODIP_BACKUP_RESTORE_EVIDENCE` は人間向けの証跡名だけを検査する。PITR window短縮や `pg_dump` 未実行を機械的に落とすため、production/stagingの定期バックアップジョブはSecretを含まないJSONを `CODIP_NEON_BACKUP_EVIDENCE_JSON` として渡し、次のゲートを実行する。
 
-本番向けの定期ジョブは `.github/workflows/neon-backup.yml` で管理する。`CODIP_NEON_PGDUMP_DATABASE_URL` / `CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE` Secretと `CODIP_LAST_RESTORE_DRILL_AT` Variableまたはdispatch入力が未設定の場合、workflowはfail-closedで失敗し、バックアップ運用のドリフトをGitHub Actions上で可視化する。
+本番向けの定期ジョブは `.github/workflows/neon-backup.yml` で管理する。`CODIP_NEON_PGDUMP_DATABASE_URL` / `CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE` Secret、main endpoint hostnameを保持する `CODIP_NEON_PGDUMP_HOST` Variable、`CODIP_LAST_RESTORE_DRILL_AT` Variableまたはdispatch入力が未設定の場合、workflowはfail-closedで失敗する。証跡branchは`main`に固定し、Secret URLから抽出したhostnameが期待値と一致した場合だけdumpを開始する。
 
 ```bash
 npm run release:create-neon-backup-evidence -- \
   --project-id falling-dawn-93620497 \
-  --branch production \
+  --branch main \
+  --endpoint-host '<main-endpoint>.neon.tech' \
   --history-window-hours 24 \
   --pg-dump-artifact secure-artifact://codip/neon/20260720T063000Z.dump \
   --pg-dump-at 2026-07-20T06:30:00Z \
@@ -71,7 +96,7 @@ npm run release:create-neon-backup-evidence -- \
 export CODIP_NEON_BACKUP_EVIDENCE_JSON='{
   "checkedAt": "2026-07-20T07:00:00Z",
   "projectId": "falling-dawn-93620497",
-  "branch": "production",
+  "branch": "main",
   "historyWindowHours": 24,
   "lastPgDumpAt": "2026-07-20T06:30:00Z",
   "lastPgDumpStatus": "success",
