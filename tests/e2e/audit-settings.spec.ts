@@ -12,9 +12,10 @@ test.describe("監査ログと設定 (デザイン正本整合)", () => {
     page,
   }) => {
     await page.goto("/settings");
-    // 未認証時はセレクトが無効で、管理セッション開始の案内を表示する
-    await expect(page.getByText(/変更には管理セッションが必要です/)).toBeVisible();
-    await expect(page.getByLabel(/タイムアウト/)).toBeDisabled();
+    // 未認証時は管理用設定・APIキーUIを表示せず、管理セッション開始の案内のみを表示する
+    await expect(page.getByText(/設定の表示・変更には管理セッションが必要です/)).toBeVisible();
+    await expect(page.getByText(/接続確認の動作設定/)).toHaveCount(0);
+    await expect(page.getByLabel(/管理操作トークン/)).toBeVisible();
 
     await startAdminSession(page);
     await page.goto("/settings");
