@@ -1,5 +1,16 @@
 # リリースノート
 
+## 2026-08-04 production readiness（Access対応・依存更新）
+
+| 区分 | 内容 |
+| --- | --- |
+| 本番状態 | `codip-production` はmain `5f76656` 相当で稼働中。Cloudflare Access app `odip` が未認証アクセスを302でloginへ誘導 |
+| Monitoring | `release:post-release-status` にAccess service token対応を追加。`production-smoke.yml` は `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` をprobeへ付与可能に。未設定時は302を「Cloudflare Access boundary」診断として報告し、アプリ障害と誤判定しない |
+| Security | `/settings` は未認証時に管理用設定・APIキーUIを描画せず、管理セッション開始の案内のみ表示（認証後のみDB読取） |
+| Dependencies | `undici` 8.10.0 / `postcss` 8.5.25 / `wrangler` 4.118.0、`brace-expansion` 1.1.18 / 2.1.4 / 5.0.9 override。`npm audit` 全グラフ0件・本番依存0件 |
+| Docs | README、docs/13、docs/16、monitoring / production runbookを実状態（Access・稼働deployment・監視方式）へ更新 |
+| 残課題 | Access service token作成とGitHub Actions Secret登録、通知テスト (Issue #90)、Neon backup Secrets/restore drill (Issue #63) は人間承認・設定待ち |
+
 ## 2026-08-01 post-release stabilization (未デプロイ)
 
 | 区分 | 内容 |
@@ -21,7 +32,7 @@
 | Cloudflare | ユーザー指示により本番サブドメインを `civilopendata` から `odip` へ変更。FQDNは `odip.mirai-dx-platform.com`。zone route方式 (route pattern + proxied AAAA `100::`)、Worker名 `codip`、Hyperdrive、Neon構成は変更なし |
 | Cloudflare | `wrangler.jsonc` production routes、deploy pipeline、placeholder/evidence/契約チェック、runbook、README、テストのproduction FQDN参照を `odip.mirai-dx-platform.com` へ更新 |
 | Access boundary | アクセス制御 (Cloudflare Access application / policy) はユーザー側で設定する運用へ変更。設定完了までは管理系導線のfail-closed全拒否を維持 |
-| 残置 | 旧 `civilopendata` のproxied AAAAレコードは未使用のまま残置。削除は別途承認済みCloudflare操作で扱う |
+| DNS削除 | 旧 `civilopendata` のproxied AAAAレコード (`100::`) は2026-08-01にユーザー操作で削除済み (`dig` NXDOMAIN確認)。`odip` 側レコードは残置 |
 | Security deps | 2026-07-21/22公開のadvisory群に対応: `next` 15.5.22 (GHSA-q8wf-6r8g-63ch / GHSA-955p-x3mx-jcvp は15.5.21修正済み)、`sharp` 0.35.3 (`overrides` でnextネスト依存も強制、libvips CVE-2026-33327/33328/35590/35591)、`@opennextjs/cloudflare` 1.20.2、`wrangler` 4.114.0 / `miniflare` 4.20260722.0。本番依存 (`npm audit --omit=dev`) は0件 |
 | CI audit gate | `Dependency audit` を「本番依存 (--omit=dev) ゼロ許容ブロッキング + 全依存はallowlistゲート (`scripts/tools/check-dependency-audit.js`)」へ再構成。allowlistは理由・追跡Issue・担当・期限つきで、allowlist外の新規moderate+検出、期限切れエントリ、監査実行エラーはすべてCI失敗。現在の許容は `GHSA-mh99-v99m-4gvg` (brace-expansion OOM-DoS、devチェーンのみ、期限2026-09-30、Issue #82) の1件 |
 

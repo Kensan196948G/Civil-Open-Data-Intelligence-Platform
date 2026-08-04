@@ -119,32 +119,29 @@ flowchart TD
 
 ---
 
-## 🚨 本番稼働状況 (2026-08-01)
+## 🚨 本番稼働状況 (2026-08-04)
 
 ```mermaid
 flowchart LR
-    U["利用者"] --> CF["Cloudflare route / codip-production"]
-    CF --> H["/api/health 200"]
+    U["利用者"] --> A1["Cloudflare Access (odip)"]
+    A1 --> CF["Cloudflare route / codip-production"]
     CF --> A["Next.js API / UI"]
-    A --> P["Prisma engine初期化"]
-    P -. "稼働版はnative engineを探索" .-> X["500 / ready 503"]
-    M["origin/main 83b1b91<br/>Workers wasm修正"] -. "未デプロイ" .-> CF
-    N["Neon PostgreSQL / PostGIS<br/>read-only整合性OK"] --> HD["Hyperdrive"]
-    HD --> A
+    A --> P["Prisma WASM (PostgreSQL)"]
+    P --> HD["Hyperdrive"]
+    HD --> N["Neon PostgreSQL / PostGIS"]
 ```
 
 | 確認項目 | 実測 | 判定 |
 | --- | --- | --- |
 | 正式URL | `https://odip.mirai-dx-platform.com` | ✅ DNS/TLS/route到達 |
-| Health | `/api/health` 200 | ✅ Worker生存 |
-| Readiness | `/api/ready` 503 (`database=error`) | ❌ P1 |
-| 主要機能 | `/`、dashboard、sourcesが500 | ❌ 業務利用不可 |
-| Root cause | 稼働deploymentは2026-07-27 10:51 UTC、wasm修正 `83b1b91` は同日12:23 UTC | ❌ 修正未反映 |
+| Access | Cloudflare Access app `odip`（mirai-const.co.jp + kensan1969@gmail.com） | ✅ 未認証は302→login |
+| Health / Ready | 未認証は302。Access認証済みブラウザで正常閲覧を確認 (2026-08-02) | ✅ Worker/DB稼働 |
+| 稼働deployment | `codip-production` 2026-08-01T15:33Z（main `5f76656` 相当） | ✅ Workers wasm修正反映済 |
 | Neon | PostgreSQL 17.10 / PostGIS 3.5、migration 2/2、整合性異常0 | ✅ DB rollback不要 |
 | Backup | scheduled 12/12失敗、暗号化artifact 0 | ❌ Issue #63 |
-| 復旧策 | 承認済みCI/CDから最新mainを再デプロイ後、read-only smoke | 🔐 人間実行 |
+| 定期smoke | scheduled production smokeは未認証302のため失敗継続。Access service token設定が必要 | ⚠️ Issue #90 |
 
-定期検知は `.github/workflows/production-smoke.yml` が15分ごとにstrict read-only probeを実行し、Summaryと14日保持artifactを残します。通知先設定と初回通知テストは人間の運用設定が必要です。
+定期検知は `.github/workflows/production-smoke.yml` が15分ごとにstrict read-only probeを実行します。odipはCloudflare Access配下のため、監視にはAccess service token（`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`）をGitHub Actions Secretへ設定する必要があります。通知先設定と初回通知テストは人間の運用設定が必要です。
 
 ---
 
@@ -261,11 +258,11 @@ flowchart LR
 
 - **Cloudflare Workers ランタイム互換**: [Issue #18](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/18)。SSRF事前DNS検証は `dns.promises.resolve4` / `resolve6` へ変更済み。接続時DNSピン留めはNode.js/Undiciで継続し、Cloudflare Workersでは同等保証ができないため外部URL取得を `unsupported_runtime` で安全停止する。PostgreSQL Prisma Clientは `@prisma/adapter-pg` によりHyperdrive `connectionString` を消費できる構成へ変更済み。残りは実Cloudflare/Neon証跡
 - **main branch protection**: 現在は有効。required checksは `verify` / `e2e` / `postgresql-compat` / `docker-preview` / `docker-image-security` / `analyze`、strict=true、admin enforcement=true。今後はrequired review数やCode Ownersの要否を運用成熟度に合わせて判断する
-- **Cloudflare本番DB障害**: `odip.mirai-dx-platform.com` はCloudflareへ到達しhealth 200だが、ready 503・主要DB画面/API 500。稼働deploymentが最新mainのWorkers wasm修正前であるため、承認済みCI/CDから再デプロイして回帰smokeが通るまで本番正常稼働とは判定しない
+- **本番監視のAccess対応**: `odip` はCloudflare Access配下のため、未認証のscheduled smokeは302を受け失敗します。監視用service tokenの作成と `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` のGitHub Actions Secret登録、通知テストが未完了 (Issue #90)。Access変更は人間承認境界
 - **Neon pg_dump定期ジョブの本番証跡未完了**: [Issue #63](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/63)。`.github/workflows/neon-backup.yml` は追加済み。`CODIP_NEON_PGDUMP_DATABASE_URL` / `CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE` Secret、main endpointを照合する`CODIP_NEON_PGDUMP_HOST` Variable、restore drill日時、初回成功artifactの証跡化は継続
 - **De-dockerization移行中**: [Issue #35](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/35)。Docker jobはbranch protection互換のため残し、先にDocker非依存の `node-preview` CIゲートを追加して差し替え先を育てる
 
-🔒 **本番URLはCloudflareへ到達済みですが、DB readiness障害のため本番正常稼働は未達**。復旧判断は [`docs/runbooks/cloudflare-production.md`](docs/runbooks/cloudflare-production.md) と [`docs/runbooks/rollback.md`](docs/runbooks/rollback.md) に従います。
+🔒 **本番アプリはCloudflare Access配下で稼働中**。残る本番ブロッカーは監視用Access service token（Issue #90）とNeon pg_dump Secrets設定（Issue #63）です。手順は [`docs/runbooks/cloudflare-production.md`](docs/runbooks/cloudflare-production.md) と [`docs/runbooks/monitoring.md`](docs/runbooks/monitoring.md) を参照してください。
 
 ---
 

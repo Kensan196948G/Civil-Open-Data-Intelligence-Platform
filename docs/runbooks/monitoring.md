@@ -1,13 +1,14 @@
 # 監視・アラート runbook
 
-## 0. 現在のインシデント状態 (2026-08-01)
+## 0. 現在のインシデント状態 (2026-08-04)
 
 | 項目 | 実測 | 判定 |
 | --- | --- | --- |
 | Production URL | `https://odip.mirai-dx-platform.com` | 正式ターゲット |
-| Cloudflare route / Worker | route・deploymentとも実在、`/api/health` 200 | edge到達は正常 |
-| DB readiness | `/api/ready` 503 (`database=error`) | **P1 / Production Readyではない** |
-| 根因 | 稼働deploymentは2026-07-27 10:51 UTC。Workers wasm修正 `83b1b91` は同日12:23 UTCで未反映 | `83b1b91` と本安定化修正を含む承認済みimmutable SHAをCI/CDから再デプロイし、health/ready/Production Smoke成功を確認 |
+| Cloudflare route / Worker | route・deploymentとも実在、`codip-production` は2026-08-01T15:33Zにmain `5f76656` 相当へ更新済み | 稼働 |
+| Access boundary | Cloudflare Access app `odip` が未認証アクセスを302でloginへ誘導 | 期待動作 |
+| DB readiness | Access認証済みで `/api/ready=ready`、manual production smoke 75/75成功 (2026-08-02) | 稼働 |
+| 定期smoke | scheduled production smokeは未認証302のため失敗継続 | Access service token設定が必要 (Issue #90) |
 | Neon | mainへread-only直結成功、migration 2/2、孤児・重複・不正geometry 0 | DB rollback不要 |
 | Backup | scheduled run 12/12失敗、暗号化artifact 0 | Issue #63、人間によるSecret/restore drill設定が必要 |
 
@@ -49,7 +50,9 @@
 - 結果をGitHub Actions Summaryと14日保持artifactへ保存
 - readiness失敗時はworkflowを失敗させ、GitHub Actions通知対象にする
 
-このworkflowは公開health endpointだけを読み、Cloudflare/Neon API tokenやDB接続文字列を使用しない。実通知を成立させるには、リポジトリのActions失敗通知先と当番を人間が設定し、テスト通知の受信時刻を `CODIP_SMOKE_MONITORING_SCHEDULE` / `CODIP_MONITORING_CONTACTS` の証跡へ記録する。
+odipはCloudflare Access配下のため、workflowはGitHub Actions Secret `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`（Access service token）をprobeへ付与する。token未設定時は302を検知し「Cloudflare Access boundary」の診断と設定手順を出力して失敗する。実通知を成立させるには、リポジトリのActions失敗通知先と当番を人間が設定し、テスト通知の受信時刻を `CODIP_SMOKE_MONITORING_SCHEDULE` / `CODIP_MONITORING_CONTACTS` の証跡へ記録する。Cloudflare/Neon API tokenやDB接続文字列は使用しない。
+
+Access service tokenの作成とGitHub Actions Secret登録は、Cloudflare Accessの変更を伴うため人間承認後に実施する。作成後、`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` をリポジトリSecretsへ登録し、workflow_dispatchで初回成功を確認する。
 
 実ターゲットの監視証跡は、Secrets値や個人情報を出さずに次の環境変数で `production-evidence` へ渡す。値はレポートに表示されず、`set (recorded)` のみ出力される。
 

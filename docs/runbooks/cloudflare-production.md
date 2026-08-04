@@ -15,6 +15,8 @@
 | Routing | Zone route (`routes[].pattern=odip.mirai-dx-platform.com/*` + `zone_name`) + proxied AAAA `100::` DNSレコード、production `workers_dev=false` |
 | DB | Neon PostgreSQL/PostGIS via Cloudflare Hyperdrive (`codip-production`, ID `1da7b81807374ec190addf146717d275`, caching disabled) |
 | Neon | project `falling-dawn-93620497` (Civil-Open-Data-Intelligence-Platform, PG17, aws-us-west-2) default branch |
+| Access | Cloudflare Access app `odip`（policy: mirai-const.co.jp + kensan1969@gmail.com）。未認証は302→login |
+| Deployed | `codip-production` 2026-08-01T15:33:31Z（main `5f76656` 相当、Workers wasm修正反映済） |
 | Secrets | Cloudflare/GitHub Secrets only. Do not commit secret values |
 
 ## 1. Stop conditions
@@ -30,13 +32,17 @@
 | Smoke | `release:smoke --read-only` が本番URLに対して成功 |
 | Rollback | 直前Worker version、Neon復旧手段、担当者、判断時刻を記録済み |
 
+### 1.0.1 Access service token（監視用）
+
+本番URLはCloudflare Access配下のため、未認証の `/api/health` / `/api/ready` は302を返す。scheduled production smokeを成立させるにはAccess service tokenを作成し、Cloudflare Accessのodip policyへservice authを追加したうえで、GitHub Actions Secret `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` へ登録する。Access変更は人間承認後のみ実施する。未設定時のsmokeは302を検知して「Cloudflare Access boundary」診断を出力し、アプリ障害と誤判定しない。
+
 ## 1.1 New subdomain / routing gate
 
 `odip` は `mirai-dx-platform.com` 配下の新規サブドメインとして扱う。
 
 **決定記録 (2026-07-20)**: 当初計画はWorkers Custom Domain (`custom_domain=true`) だったが、現行APIトークンにはaccount-levelのWorkers Custom Domains APIスコープがなく (`/accounts/{id}/workers/domains` がerror 10000)、付与済みのZone Workers Routes + Zone DNSスコープで完結する **zone route方式** (route pattern + proxied AAAA `100::` レコード) へ変更した。TLSはUniversal SSLが第1階層サブドメインをカバーする。Custom Domain方式への移行はトークンへのスコープ付与後にIssueで扱う。この変更は `~/.claude/CLAUDE.md` §27.1の特則 (ユーザー指定サブドメインの追加DNSレコード作成 + Worker紐付け) の範囲内である。
 
-**決定記録 (2026-07-27)**: ユーザー指示により本番サブドメインを `civilopendata` から `odip` へ変更した。routing方式 (zone route + proxied AAAA `100::`)、Worker名 `codip`、Hyperdrive、Neon構成は変更しない。アクセス制御 (Cloudflare Access application / policy) はユーザー側で設定するため、本Runbookのデプロイ作業には含めない。旧 `civilopendata` のDNSレコードは未使用のまま残置しており、削除は別途承認済みCloudflare操作で扱う。
+**決定記録 (2026-07-27)**: ユーザー指示により本番サブドメインを `civilopendata` から `odip` へ変更した。routing方式 (zone route + proxied AAAA `100::`)、Worker名 `codip`、Hyperdrive、Neon構成は変更しない。アクセス制御 (Cloudflare Access application / policy) はユーザー側で設定するため、本Runbookのデプロイ作業には含めない。旧 `civilopendata` のDNSレコード (proxied AAAA `100::`) は **2026-08-01にユーザー操作で削除済み** (`dig` でNXDOMAINを確認、`odip` 側のレコードは残置)。
 
 | Check | 合格条件 |
 | --- | --- |

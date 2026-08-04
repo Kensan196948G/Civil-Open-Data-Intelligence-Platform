@@ -2,20 +2,20 @@
 
 CODIPを共有プレビューまたは本番相当環境へ出す前に、次の項目を必ず確認する。
 
-## 0. 2026-08-01 再判定
+## 0. 2026-08-04 再判定
 
 | Gate | 状態 | 根拠 / 次の操作 |
 | --- | --- | --- |
 | Production URL | ✅ | `https://odip.mirai-dx-platform.com`、DNS/TLS/route到達 |
-| Application health | ⚠️ | `/api/health` 200 |
-| DB readiness / 主要業務 | ❌ P1 | `/api/ready` 503、主要DB画面/API 500 |
-| Root cause | 確定 | 稼働deploymentはWorkers wasm修正 `83b1b91` より古く、native Prisma engine初期化で失敗 |
+| Application health | ✅ | Cloudflare Access配下。未認証は302、認証済みブラウザで正常閲覧確認 (2026-08-02) |
+| DB readiness / 主要業務 | ✅ | Access認証済みで `/api/ready=ready`、主要画面/API正常。2026-08-02のmanual production smoke 75/75成功 |
+| Root cause | 解消 | main `5f76656` 相当を `codip-production` へ再デプロイし、Workers wasm修正 (`83b1b91`) を反映 |
 | Neon integrity | ✅ read-only | migration 2/2、重複official URL・外部キー孤児・不正geometry 0。DB rollback不要 |
 | Backup | ❌ | scheduled 12/12失敗、artifact 0。Issue #63 |
-| Monitoring | ⚠️ | scheduled production smokeを本変更で追加。通知先・受信テストは人間設定待ち |
-| Current decision | **Needs Human Decision** | 最新mainの承認済み再デプロイ、backup Secret/restore drill、通知設定が必要 |
+| Monitoring | ⚠️ | scheduled production smokeは未認証302のため失敗継続。Access service token + 通知先の設定が必要 (Issue #90) |
+| Current decision | **CONDITIONAL GO** | アプリは稼働。監視service token (Issue #90) とbackup Secret/restore drill (Issue #63) の人間設定で完了条件を満たす |
 
-再デプロイ後は `/api/ready=200`、主要画面/API、管理negative、`release:smoke --read-only`、Workers Logs、Neon接続を再測定する。既知の正常な旧Worker versionは確認できないため、無根拠なrollbackは行わない。
+再デプロイ後は `/api/ready=200`、主要画面/API、管理negative、`release:smoke --read-only`、Workers Logs、Neon接続を再測定する。既知の正常な旧Worker versionは確認できないため、無根拠なrollbackは行わない。本番probeはAccess service token付きで実行し、302を障害と誤判定しない。
 
 ## 1. ビルド・テスト
 
