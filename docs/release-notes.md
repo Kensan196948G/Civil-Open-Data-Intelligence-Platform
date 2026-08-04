@@ -8,8 +8,9 @@
 | Monitoring | `release:post-release-status` にAccess service token対応を追加。`production-smoke.yml` は `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` をprobeへ付与可能に。未設定時は302を「Cloudflare Access boundary」診断として報告し、アプリ障害と誤判定しない |
 | Security | `/settings` は未認証時に管理用設定・APIキーUIを描画せず、管理セッション開始の案内のみ表示（認証後のみDB読取） |
 | Dependencies | `undici` 8.10.0 / `postcss` 8.5.25 / `wrangler` 4.118.0、`brace-expansion` 1.1.18 / 2.1.4 / 5.0.9 override。`npm audit` 全グラフ0件・本番依存0件 |
+| Neon backup | `neon-backup.yml` がPGDGの `postgresql-client-17` を導入し、Neon PostgreSQL 17 とのpg_dumpバージョン不一致を解消。GitHub Actions Secrets/Variablesを設定し、restore drill `restore-drill-20260804` を実施 |
 | Docs | README、docs/13、docs/16、monitoring / production runbookを実状態（Access・稼働deployment・監視方式）へ更新 |
-| 残課題 | Access service token作成とGitHub Actions Secret登録、通知テスト (Issue #90)、Neon backup Secrets/restore drill (Issue #63) は人間承認・設定待ち |
+| 残課題 | Access service token作成とGitHub Actions Secret登録、通知テスト (Issue #90) は人間承認・設定待ち。Neon backupはSecrets/restore drill設定済みで、main merge後のscheduled初回成功を確認予定 (Issue #63) |
 
 ## 2026-08-01 post-release stabilization (未デプロイ)
 
