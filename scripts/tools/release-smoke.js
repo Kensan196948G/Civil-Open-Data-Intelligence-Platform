@@ -135,6 +135,18 @@ async function main() {
     logsHtml.slice(0, 200),
   );
 
+  const settingsPage = await fetchWithTimeout(`${baseUrl}/settings`);
+  const settingsHtml = await settingsPage.text();
+  requireStatus(checks, "page:/settings", settingsPage.status, 200);
+  requireCondition(
+    checks,
+    "public ui:settings management metadata hidden",
+    settingsHtml.includes("設定の表示・変更には管理セッションが必要です") &&
+      !settingsHtml.includes("🔧 接続確認の動作設定") &&
+      !settingsHtml.includes("🔑 APIキーの設定"),
+    settingsHtml.slice(0, 200),
+  );
+
   const rootHead = await fetchWithTimeout(`${baseUrl}/`, { method: "HEAD" });
   requireStatus(checks, "page:/ HEAD", rootHead.status, 200);
   for (const header of [

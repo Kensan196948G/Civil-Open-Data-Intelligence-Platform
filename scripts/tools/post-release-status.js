@@ -10,6 +10,9 @@ const DEFAULT_MAX_RESPONSE_MS = 5_000;
 const PREVIEW_PATHS = ["/", "/api/health", "/api/ready", "/api/openapi"];
 const PRODUCTION_PATHS = ["/api/health", "/api/ready"];
 
+const ACCESS_CLIENT_ID_HEADER = "cf-access-client-id";
+const ACCESS_CLIENT_SECRET_HEADER = "cf-access-client-secret";
+
 function parseArgs(argv) {
   const args = {
     productionUrl: process.env.CODIP_PRODUCTION_URL || DEFAULT_PRODUCTION_URL,
@@ -18,6 +21,8 @@ function parseArgs(argv) {
     allowPreviewDown: false,
     timeoutMs: DEFAULT_TIMEOUT_MS,
     maxResponseMs: Number.parseInt(process.env.CODIP_MAX_RESPONSE_MS || "", 10) || DEFAULT_MAX_RESPONSE_MS,
+    accessClientId: (process.env.CF_ACCESS_CLIENT_ID || "").trim(),
+    accessClientSecret: (process.env.CF_ACCESS_CLIENT_SECRET || "").trim(),
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -36,6 +41,10 @@ function parseArgs(argv) {
     } else if (arg === "--max-response-ms") {
       const value = Number.parseInt(argv[++index] ?? "", 10);
       if (Number.isFinite(value) && value > 0) args.maxResponseMs = value;
+    } else if (arg === "--access-client-id") {
+      args.accessClientId = (argv[++index] ?? "").trim();
+    } else if (arg === "--access-client-secret") {
+      args.accessClientSecret = (argv[++index] ?? "").trim();
     } else if (arg === "--help" || arg === "-h") {
       args.help = true;
     }
@@ -55,6 +64,8 @@ function usage() {
     "  --allow-preview-down      Do not fail the command when the shared preview is unavailable.",
     "  --timeout-ms <ms>         Per-request timeout. Default: 10000.",
     "  --max-response-ms <ms>    Mark probes slower than this as not ready. Default: 5000.",
+    "  --access-client-id <id>   Cloudflare Access service token client ID (also CF_ACCESS_CLIENT_ID).",
+    "  --access-client-secret    Cloudflare Access service token secret (also CF_ACCESS_CLIENT_SECRET).",
   ].join("\n");
 }
 
@@ -111,7 +122,10 @@ async function resolveHost(hostname, resolver = dns) {
   return result;
 }
 
-async function fetchWithTimeout(url, { fetcher = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+async function fetchWithTimeout(
+  url,
+  { fetcher = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS, headers: extraHeaders = {} } = {},
+) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const startedAt = Date.now();
@@ -120,7 +134,7 @@ async function fetchWithTimeout(url, { fetcher = globalThis.fetch, timeoutMs = D
       method: "GET",
       redirect: "manual",
       signal: controller.signal,
-      headers: { accept: "application/json,text/html;q=0.8,*/*;q=0.5" },
+      headers: { accept: "application/json,text/html;q=0.8,*/*;q=0.5", ...extraHeaders },
     });
     const responseTimeMs = Date.now() - startedAt;
     const body = await response.text().catch(() => "");
@@ -210,6 +224,21 @@ function diagnoseProductionIssue(report) {
   const has522 = probes.some((probe) => probe.status === 522);
   const edgeResponses = probes.filter(isCloudflareEdgeResponse);
 
+  if (statuses.includes(302) && edgeResponses.length > 0) {
+    return [
+      [
+        "Cloudflare Access boundary",
+        "ATTENTION",
+        "Production is protected by Cloudflare Access and returned 302 for unauthenticated probes. This is expected when Access is enabled; it is not an application outage.",
+      ],
+      [
+        "Likely next check",
+        "ACTION",
+        "Configure CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET (Access service token) as secrets in the production-smoke workflow, or define a monitoring-only public endpoint with human approval.",
+      ],
+    ];
+  }
+
   if (has522 && edgeResponses.length > 0) {
     return [
       [
@@ -265,10 +294,17 @@ async function probeUrl(baseUrl, paths, options) {
     return [{ url: baseUrl, path: "", ok: false, state: "invalid url" }];
   }
 
+  const accessHeaders =
+    options.accessClientId && options.accessClientSecret
+      ? {
+          [ACCESS_CLIENT_ID_HEADER]: options.accessClientId,
+          [ACCESS_CLIENT_SECRET_HEADER]: options.accessClientSecret,
+        }
+      : {};
   const rows = [];
   for (const pathname of paths) {
     const url = buildUrl(baseUrl, pathname);
-    const result = await fetchWithTimeout(url, options);
+    const result = await fetchWithTimeout(url, { ...options, headers: accessHeaders });
     rows.push({ path: pathname, ...inspectProbe(pathname, result, options.maxResponseMs) });
   }
   return rows;
@@ -299,6 +335,7 @@ function renderReport(report) {
     `- Preview URL: \`${report.previewUrl}\``,
     `- Max response time: ${report.maxResponseMs}ms`,
     `- Overall: ${report.ready ? "OK" : "ATTENTION"}`,
+    `- Access service token: ${report.accessTokenConfigured ? "configured" : "not configured"}`,
     "",
     "## Production DNS",
     "",
@@ -341,17 +378,22 @@ function renderReport(report) {
 async function buildReport(args, deps = {}) {
   const productionHost = hostForDisplay(args.productionUrl);
   const productionDns = await resolveHost(productionHost, deps.resolver);
+  const accessTokenConfigured = Boolean(args.accessClientId && args.accessClientSecret);
   const productionProbes = productionHost
     ? await probeUrl(args.productionUrl, PRODUCTION_PATHS, {
         fetcher: deps.fetcher,
         timeoutMs: args.timeoutMs,
         maxResponseMs: args.maxResponseMs,
+        accessClientId: args.accessClientId,
+        accessClientSecret: args.accessClientSecret,
       })
     : [{ path: "(skipped)", ok: false, responseTimeMs: null, status: 0, state: "missing production hostname" }];
   const previewProbes = await probeUrl(args.previewUrl, PREVIEW_PATHS, {
     fetcher: deps.fetcher,
     timeoutMs: args.timeoutMs,
     maxResponseMs: args.maxResponseMs,
+    accessClientId: args.accessClientId,
+    accessClientSecret: args.accessClientSecret,
   });
 
   const productionProbesHealthy = productionProbes.every((probe) => probe.ok);
@@ -374,6 +416,7 @@ async function buildReport(args, deps = {}) {
     previewUrl: args.previewUrl,
     maxResponseMs: args.maxResponseMs,
     strictProduction: args.strictProduction,
+    accessTokenConfigured,
     productionDns,
     productionProbes,
     previewProbes,

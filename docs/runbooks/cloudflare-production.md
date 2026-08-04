@@ -15,6 +15,8 @@
 | Routing | Zone route (`routes[].pattern=odip.mirai-dx-platform.com/*` + `zone_name`) + proxied AAAA `100::` DNSレコード、production `workers_dev=false` |
 | DB | Neon PostgreSQL/PostGIS via Cloudflare Hyperdrive (`codip-production`, ID `1da7b81807374ec190addf146717d275`, caching disabled) |
 | Neon | project `falling-dawn-93620497` (Civil-Open-Data-Intelligence-Platform, PG17, aws-us-west-2) default branch |
+| Access | Cloudflare Access app `odip`（policy: mirai-const.co.jp + kensan1969@gmail.com）。未認証は302→login |
+| Deployed | `codip-production` 2026-08-01T15:33:31Z（main `5f76656` 相当、Workers wasm修正反映済） |
 | Secrets | Cloudflare/GitHub Secrets only. Do not commit secret values |
 
 ## 1. Stop conditions
@@ -30,13 +32,17 @@
 | Smoke | `release:smoke --read-only` が本番URLに対して成功 |
 | Rollback | 直前Worker version、Neon復旧手段、担当者、判断時刻を記録済み |
 
+### 1.0.1 Access service token（監視用）
+
+本番URLはCloudflare Access配下のため、未認証の `/api/health` / `/api/ready` は302を返す。scheduled production smokeを成立させるにはAccess service tokenを作成し、Cloudflare Accessのodip policyへservice authを追加したうえで、GitHub Actions Secret `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` へ登録する。Access変更は人間承認後のみ実施する。未設定時のsmokeは302を検知して「Cloudflare Access boundary」診断を出力し、アプリ障害と誤判定しない。
+
 ## 1.1 New subdomain / routing gate
 
 `odip` は `mirai-dx-platform.com` 配下の新規サブドメインとして扱う。
 
 **決定記録 (2026-07-20)**: 当初計画はWorkers Custom Domain (`custom_domain=true`) だったが、現行APIトークンにはaccount-levelのWorkers Custom Domains APIスコープがなく (`/accounts/{id}/workers/domains` がerror 10000)、付与済みのZone Workers Routes + Zone DNSスコープで完結する **zone route方式** (route pattern + proxied AAAA `100::` レコード) へ変更した。TLSはUniversal SSLが第1階層サブドメインをカバーする。Custom Domain方式への移行はトークンへのスコープ付与後にIssueで扱う。この変更は `~/.claude/CLAUDE.md` §27.1の特則 (ユーザー指定サブドメインの追加DNSレコード作成 + Worker紐付け) の範囲内である。
 
-**決定記録 (2026-07-27)**: ユーザー指示により本番サブドメインを `civilopendata` から `odip` へ変更した。routing方式 (zone route + proxied AAAA `100::`)、Worker名 `codip`、Hyperdrive、Neon構成は変更しない。アクセス制御 (Cloudflare Access application / policy) はユーザー側で設定するため、本Runbookのデプロイ作業には含めない。旧 `civilopendata` のDNSレコードは未使用のまま残置しており、削除は別途承認済みCloudflare操作で扱う。
+**決定記録 (2026-07-27)**: ユーザー指示により本番サブドメインを `civilopendata` から `odip` へ変更した。routing方式 (zone route + proxied AAAA `100::`)、Worker名 `codip`、Hyperdrive、Neon構成は変更しない。アクセス制御 (Cloudflare Access application / policy) はユーザー側で設定するため、本Runbookのデプロイ作業には含めない。旧 `civilopendata` のDNSレコード (proxied AAAA `100::`) は **2026-08-01にユーザー操作で削除済み** (`dig` でNXDOMAINを確認、`odip` 側のレコードは残置)。
 
 | Check | 合格条件 |
 | --- | --- |
@@ -123,23 +129,23 @@ npm run release:smoke -- --read-only --base-url "https://odip.mirai-dx-platform.
 
 | 項目 | 記録 |
 | --- | --- |
-| Approval / change ticket |  |
-| commit SHA |  |
-| Cloudflare Worker version |  |
-| Custom Domain status |  |
-| DNS status |  |
-| Hostname conflict check |  |
-| Cloudflare zone status |  |
-| Access application / policy evidence |  |
-| Hyperdrive binding name / ID evidence |  |
-| Neon project / branch evidence |  |
-| Migration result |  |
-| `release:validate-env:production-target` result |  |
-| `release:production-evidence -- --strict` result |  |
-| `release:check-production-placeholders -- --env production` result |  |
-| Cloudflare logs / alert policy evidence |  |
-| Neon monitoring evidence |  |
-| Backup / restore evidence |  |
-| Smoke monitoring schedule |  |
-| `release:smoke --read-only` result |  |
-| Rollback owner / rollback target |  |
+| Approval / change ticket | PR #93 (2026-08-04)、本番デプロイ承認済みパイプライン |
+| commit SHA | `6dce57c`（本番反映）、PR head `fe71477` |
+| Cloudflare Worker version | `codip-production` Version ID `50ed1ab5-d601-4763-b76b-2142f8d99631` (2026-08-04T14:37:44Z) |
+| Custom Domain status | 非使用（zone route方式） |
+| DNS status | `odip.mirai-dx-platform.com` proxied AAAA `100::`、A 104.21.57.65 / 172.67.189.96、NXDOMAIN→旧 civilopendata 削除済 |
+| Hostname conflict check | 2026-07-20 に既存CNAME/Pages/Access衝突なしを確認 |
+| Cloudflare zone status | `mirai-dx-platform.com` active |
+| Access application / policy evidence | app `odip` (9af09a69-6338-4e9b-ad31-8434aa0a3f1e)、policy allow mirai-const.co.jp + kensan1969@gmail.com、未認証302 |
+| Hyperdrive binding name / ID evidence | `codip-production` / `1da7b81807374ec190addf146717d275` (caching disabled) |
+| Neon project / branch evidence | project `falling-dawn-93620497`、branch `main`、PG17.10 / PostGIS 3.5、staging-20260804・restore-drill-20260804 作成済 |
+| Migration result | 2/2適用済み、driftなし（2026-08-01/04確認） |
+| `release:validate-env:production-target` result | PASS（実ターゲット値） |
+| `release:production-evidence -- --strict` result | PASS（2026-08-04） |
+| `release:check-production-placeholders -- --env production` result | PASS |
+| Cloudflare logs / alert policy evidence | Observability enabled、専用alert policyはIssue #90追跡 |
+| Neon monitoring evidence | PITR window 24h、restore drill 2026-08-04 実施 |
+| Backup / restore evidence | Secrets/Variables設定済み、`restore-drill-20260804` (br-wild-shape-aff21r0u) |
+| Smoke monitoring schedule | 15分間隔 production-smoke。Access service token未設定のため302診断継続中 (Issue #90) |
+| `release:smoke --read-only` result | 未認証302のため要service token。ローカルpreview 85 checks OK、PR CI green |
+| Rollback owner / rollback target | human kensan / `wrangler rollback --env production` で直前version (2026-08-01T15:33:31Z) |

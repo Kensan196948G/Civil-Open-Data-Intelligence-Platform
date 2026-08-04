@@ -21,6 +21,8 @@ const {
     allowPreviewDown: boolean;
     timeoutMs: number;
     maxResponseMs: number;
+    accessClientId: string;
+    accessClientSecret: string;
   };
   buildReport: (
     args: {
@@ -30,6 +32,8 @@ const {
       allowPreviewDown: boolean;
       timeoutMs: number;
       maxResponseMs: number;
+      accessClientId: string;
+      accessClientSecret: string;
     },
     deps: {
       resolver?: { resolve4: (host: string) => Promise<string[]>; resolve6: (host: string) => Promise<string[]> };
@@ -43,11 +47,16 @@ const {
     productionDns: { ok: boolean; error: string };
     productionProbes: { path: string; status: number; ok: boolean; state: string }[];
     productionDiagnosis: string[][];
+    accessTokenConfigured: boolean;
   }>;
   renderReport: (report: unknown) => string;
   fetchWithTimeout: (
     url: string,
-    options: { fetcher: (url: string, init?: RequestInit) => Promise<Response>; timeoutMs: number },
+    options: {
+      fetcher: (url: string, init?: RequestInit) => Promise<Response>;
+      timeoutMs: number;
+      headers?: Record<string, string>;
+    },
   ) => Promise<{ ok: boolean; status: number; state: string; headers: Record<string, string> }>;
   inspectProbe: (
     pathname: string,
@@ -71,6 +80,8 @@ const baseArgs = {
   allowPreviewDown: false,
   timeoutMs: 1000,
   maxResponseMs: 5000,
+  accessClientId: "",
+  accessClientSecret: "",
 };
 
 function okFetcher() {
@@ -85,6 +96,25 @@ describe("post-release-status", () => {
     expect(args.previewUrl).toBe("http://192.168.0.185:3100");
     expect(args.strictProduction).toBe(false);
     expect(args.maxResponseMs).toBe(5000);
+    expect(args.accessClientId).toBe("");
+    expect(args.accessClientSecret).toBe("");
+  });
+
+  it("reads Cloudflare Access service token credentials from the environment", () => {
+    const previousId = process.env.CF_ACCESS_CLIENT_ID;
+    const previousSecret = process.env.CF_ACCESS_CLIENT_SECRET;
+    process.env.CF_ACCESS_CLIENT_ID = "service-client-id";
+    process.env.CF_ACCESS_CLIENT_SECRET = "service-client-secret";
+    try {
+      const args = parseArgs([]);
+      expect(args.accessClientId).toBe("service-client-id");
+      expect(args.accessClientSecret).toBe("service-client-secret");
+    } finally {
+      if (previousId === undefined) delete process.env.CF_ACCESS_CLIENT_ID;
+      else process.env.CF_ACCESS_CLIENT_ID = previousId;
+      if (previousSecret === undefined) delete process.env.CF_ACCESS_CLIENT_SECRET;
+      else process.env.CF_ACCESS_CLIENT_SECRET = previousSecret;
+    }
   });
 
   it("keeps non-strict monitoring usable while production DNS is not connected", async () => {
@@ -110,7 +140,8 @@ describe("post-release-status", () => {
     expect(text).toContain("Max response time: 5000ms");
     expect(text).toContain("Production connected: no");
     expect(text).toContain("Preview healthy: yes");
-    expect(text).not.toMatch(/token|secret|password/i);
+    expect(text).not.toMatch(/password/i);
+    expect(text).not.toMatch(/service-client-secret|gho_|sk-/i);
   });
 
   it("fails readiness in strict production mode when DNS is unresolved", async () => {
@@ -197,6 +228,79 @@ describe("post-release-status", () => {
     expect(result.ok).toBe(false);
     expect(result.status).toBe(302);
     expect(result.headers.location).toBeUndefined();
+  });
+
+  it("sends Cloudflare Access service token headers when credentials are provided", async () => {
+    let capturedHeaders: HeadersInit | undefined;
+    const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
+      capturedHeaders = init?.headers;
+      return new Response("{}", { status: 200 });
+    });
+
+    const result = await fetchWithTimeout("https://odip.mirai-dx-platform.com/api/health", {
+      fetcher,
+      timeoutMs: 1000,
+      headers: { "cf-access-client-id": "service-client-id", "cf-access-client-secret": "service-client-secret" },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(capturedHeaders).toEqual(
+      expect.objectContaining({
+        accept: expect.any(String),
+        "cf-access-client-id": "service-client-id",
+        "cf-access-client-secret": "service-client-secret",
+      }),
+    );
+  });
+
+  it("marks production connected when Access-authenticated probes return 200", async () => {
+    const report = await buildReport(
+      {
+        ...baseArgs,
+        strictProduction: true,
+        accessClientId: "service-client-id",
+        accessClientSecret: "service-client-secret",
+      },
+      {
+        resolver: {
+          resolve4: async () => ["203.0.113.10"],
+          resolve6: async () => [],
+        },
+        fetcher: okFetcher(),
+      },
+    );
+
+    expect(report.accessTokenConfigured).toBe(true);
+    expect(report.productionConnected).toBe(true);
+    expect(report.ready).toBe(true);
+    expect(renderReport(report)).toContain("Access service token: configured");
+  });
+
+  it("reports an Access boundary diagnosis when production returns 302 with Cloudflare edge headers", async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      if (url.includes("odip.mirai-dx-platform.com")) {
+        return new Response("", { status: 302, headers: { server: "cloudflare", "cf-ray": "abc-NRT" } });
+      }
+      return new Response("{}", { status: 200 });
+    });
+
+    const report = await buildReport(
+      { ...baseArgs, strictProduction: true },
+      {
+        resolver: {
+          resolve4: async () => ["203.0.113.10"],
+          resolve6: async () => [],
+        },
+        fetcher,
+      },
+    );
+
+    expect(report.productionConnected).toBe(false);
+    expect(report.productionEndpointUnhealthy).toBe(true);
+    const diagnosis = report.productionDiagnosis.map((row) => row[0]).join(",");
+    expect(diagnosis).toContain("Cloudflare Access boundary");
+    expect(renderReport(report)).toContain("Access service token: not configured");
+    expect(renderReport(report)).not.toContain("service-client-secret");
   });
 
   it("records /api/ready database health when the endpoint returns the standard payload", () => {

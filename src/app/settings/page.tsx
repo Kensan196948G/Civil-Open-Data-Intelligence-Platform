@@ -22,6 +22,22 @@ const SETTING_ICONS: Record<string, string> = {
 
 export default async function SettingsPage() {
   const canEdit = isAdminHeaders(await headers());
+
+  if (!canEdit) {
+    return (
+      <div className="flex max-w-[640px] flex-col gap-[14px]">
+        <h1 className="m-0 text-[1.4rem] font-semibold">⚙️ 設定</h1>
+        <div className="dc-card px-[18px] py-[17px]">
+          <h2 className="mb-2.5 mt-0 text-sm font-semibold text-[var(--ink)]">🔒 管理者専用</h2>
+          <p className="mb-0 text-[13px] text-[var(--ink-2)]">
+            設定の表示・変更には管理セッションが必要です。ページ下部の「🛡️ 管理操作トークン」からセッションを開始してください。
+          </p>
+        </div>
+        <AdminTokenPanel />
+      </div>
+    );
+  }
+
   const settings = await getOperationSettings();
   const settingRows = (
     Object.entries(OPERATION_SETTING_DEFS) as [

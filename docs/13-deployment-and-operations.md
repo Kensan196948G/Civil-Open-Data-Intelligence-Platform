@@ -7,7 +7,7 @@
 | Local | 開発 | Next.js, SQLite |
 | 現行共有Preview | 関係者検証 | Node.jsコンテナ、SQLiteまたはPostgreSQL/PostGIS compose、Cloudflare Access相当の前段保護 |
 | Staging | Cloudflare/Neon検証 | Cloudflare Workers (`@opennextjs/cloudflare`)、Access、Neon PostgreSQL/PostGIS staging branch (実環境証跡は未完) |
-| Production | 本番 | Cloudflare Workers、Hyperdrive、Neon PostgreSQL/PostGIS、`https://odip.mirai-dx-platform.com`。2026-08-01時点DB readiness障害中 |
+| Production | 本番 | Cloudflare Workers、Hyperdrive、Neon PostgreSQL/PostGIS、Cloudflare Access、`https://odip.mirai-dx-platform.com`。2026-08-01以降Access配下で稼働中（未認証は302） |
 
 ## 2. デプロイ方針
 
@@ -16,7 +16,7 @@ MVPではローカル、CI、Docker previewで品質を確認する。2026-07-19
 ただし以下は未解決のアプリケーションコード/実リソース側の制約であり、Workers本番切替前に解消または証跡化が必須:
 
 - `src/lib/url-guard.ts` の事前DNS検証は `resolve4` / `resolve6` へ変更済み。接続時ピン留めはNode.js/Undici Agentで実施する。Cloudflare Workersでは公式仕様上 `dns.lookup` が未実装で、同等の接続時ピン留めを保証できないため、`src/lib/http-client.ts` はWorkers runtimeを検知した場合に外部URL取得を `unsupported_runtime` として明示的に停止する
-- `wrangler.jsonc` の production route は `odip.mirai-dx-platform.com/*` に固定済み。production `workers_dev=false` により本番の `*.workers.dev` 直公開経路は使わない。2026-08-01時点でDNS、route、Worker、Hyperdriveは実在し `/api/health` は200だが、`/api/ready` は503 (`database=error`)。Workers Logsで、稼働deploymentがnative Prisma engineを探索して初期化失敗することを確認した。修正commit `83b1b91` は稼働deploymentより新しく未反映のため、承認済みCI/CDから最新mainを再デプロイしread-only smokeを再実行する。本番化・復旧手順は `docs/runbooks/cloudflare-production.md` を入口とする。Neon mainはread-only整合性確認済みでDB rollbackは不要
+- `wrangler.jsonc` の production route は `odip.mirai-dx-platform.com/*` に固定済み。production `workers_dev=false` により本番の `*.workers.dev` 直公開経路は使わない。2026-08-01にmain `5f76656` 相当を `codip-production` へ再デプロイし、Workers wasm修正 (`83b1b91`) を含む状態でAccess配下の本番が稼働している。未認証の `/api/health` / `/api/ready` はCloudflare Accessにより302となり、アプリ稼働の確認にはAccess service token付きprobeまたは認証済みセッションが必要。本番化・復旧手順は `docs/runbooks/cloudflare-production.md` を入口とする。Neon mainはread-only整合性確認済みでDB rollbackは不要
 
 Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、Cloudflareが現在推奨するNext.jsデプロイ経路が `@opennextjs/cloudflare` アダプタ経由のWorkersであり、レガシーの `@cloudflare/next-on-pages` ではないため。取得処理は将来Cloudflare Cron TriggersとWorkersへ分離する。
 
@@ -161,6 +161,8 @@ Prisma schemaはSQLite用 `prisma/schema.prisma` とPostgreSQL用 `prisma/postgr
 | `/api/health` | アプリプロセスの生存確認 | 連続して `200` 以外 |
 | `/api/ready` | DB接続を含むレディネス確認 | `503` または応答遅延 |
 | `/api/openapi` | API契約の公開確認 | `200` 以外またはOpenAPIバージョン欠落 |
+
+本番 `odip.mirai-dx-platform.com` はCloudflare Access配下のため、未認証アクセスは302を返します。外形監視はAccess service token（`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`）を付与したprobeを使い、302をアプリ障害と誤判定しない。token未設定時は `release:post-release-status` が「Cloudflare Access boundary」の診断と設定手順を出力して失敗する。
 
 デプロイ直後は、画面表示に加えて `/api/ready` を確認し、DB migrationと接続設定が正しく反映されていることを確認する。`release:smoke` は各HTTPリクエストにタイムアウトを設け、CI側の `curl` も `--connect-timeout` / `--max-time` を指定する。staging/production相当の実ターゲットへ向ける場合は `--read-only` を付け、管理トークン付きの書き込み系negative testは使い捨てCI/preview DBでのみ実行する。
 
