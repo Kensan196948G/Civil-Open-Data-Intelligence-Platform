@@ -142,8 +142,8 @@ async function main() {
     checks,
     "public ui:settings management metadata hidden",
     settingsHtml.includes("設定の表示・変更には管理セッションが必要です") &&
-      !settingsHtml.includes("接続確認の動作設定") &&
-      !settingsHtml.includes("APIキーの設定"),
+      !settingsHtml.includes("🔧 接続確認の動作設定") &&
+      !settingsHtml.includes("🔑 APIキーの設定"),
     settingsHtml.slice(0, 200),
   );
 
