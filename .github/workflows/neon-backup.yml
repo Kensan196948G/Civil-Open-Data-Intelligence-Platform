@@ -133,7 +133,7 @@ jobs:
           history_window_hours="${CODIP_NEON_HISTORY_WINDOW_HOURS:-24}"
           owner="${CODIP_BACKUP_OWNER:-release-manager}"
           evidence_path="$RUNNER_TEMP/neon-backup-evidence.json"
-          npm run release:create-neon-backup-evidence -- \
+          node scripts/tools/create-neon-backup-evidence.js \
             --project-id "$project_id" \
             --branch "$branch" \
             --endpoint-host "$CODIP_NEON_PGDUMP_HOST" \
@@ -143,7 +143,7 @@ jobs:
             --restore-drill-at "$CODIP_LAST_RESTORE_DRILL_AT" \
             --owner "$owner" \
             --pretty > "$evidence_path"
-          npm run release:check-neon-backup-evidence -- --evidence-file "$evidence_path"
+          node scripts/tools/check-neon-backup-evidence.js --evidence-file "$evidence_path"
           echo "evidence_path=$evidence_path" >> "$GITHUB_OUTPUT"
 
       - name: Upload pg_dump artifact
