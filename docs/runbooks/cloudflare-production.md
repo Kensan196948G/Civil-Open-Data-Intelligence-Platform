@@ -129,23 +129,23 @@ npm run release:smoke -- --read-only --base-url "https://odip.mirai-dx-platform.
 
 | 項目 | 記録 |
 | --- | --- |
-| Approval / change ticket |  |
-| commit SHA |  |
-| Cloudflare Worker version |  |
-| Custom Domain status |  |
-| DNS status |  |
-| Hostname conflict check |  |
-| Cloudflare zone status |  |
-| Access application / policy evidence |  |
-| Hyperdrive binding name / ID evidence |  |
-| Neon project / branch evidence |  |
-| Migration result |  |
-| `release:validate-env:production-target` result |  |
-| `release:production-evidence -- --strict` result |  |
-| `release:check-production-placeholders -- --env production` result |  |
-| Cloudflare logs / alert policy evidence |  |
-| Neon monitoring evidence |  |
-| Backup / restore evidence |  |
-| Smoke monitoring schedule |  |
-| `release:smoke --read-only` result |  |
-| Rollback owner / rollback target |  |
+| Approval / change ticket | PR #93 (2026-08-04)、本番デプロイ承認済みパイプライン |
+| commit SHA | `6dce57c`（本番反映）、PR head `fe71477` |
+| Cloudflare Worker version | `codip-production` Version ID `50ed1ab5-d601-4763-b76b-2142f8d99631` (2026-08-04T14:37:44Z) |
+| Custom Domain status | 非使用（zone route方式） |
+| DNS status | `odip.mirai-dx-platform.com` proxied AAAA `100::`、A 104.21.57.65 / 172.67.189.96、NXDOMAIN→旧 civilopendata 削除済 |
+| Hostname conflict check | 2026-07-20 に既存CNAME/Pages/Access衝突なしを確認 |
+| Cloudflare zone status | `mirai-dx-platform.com` active |
+| Access application / policy evidence | app `odip` (9af09a69-6338-4e9b-ad31-8434aa0a3f1e)、policy allow mirai-const.co.jp + kensan1969@gmail.com、未認証302 |
+| Hyperdrive binding name / ID evidence | `codip-production` / `1da7b81807374ec190addf146717d275` (caching disabled) |
+| Neon project / branch evidence | project `falling-dawn-93620497`、branch `main`、PG17.10 / PostGIS 3.5、staging-20260804・restore-drill-20260804 作成済 |
+| Migration result | 2/2適用済み、driftなし（2026-08-01/04確認） |
+| `release:validate-env:production-target` result | PASS（実ターゲット値） |
+| `release:production-evidence -- --strict` result | PASS（2026-08-04） |
+| `release:check-production-placeholders -- --env production` result | PASS |
+| Cloudflare logs / alert policy evidence | Observability enabled、専用alert policyはIssue #90追跡 |
+| Neon monitoring evidence | PITR window 24h、restore drill 2026-08-04 実施 |
+| Backup / restore evidence | Secrets/Variables設定済み、`restore-drill-20260804` (br-wild-shape-aff21r0u) |
+| Smoke monitoring schedule | 15分間隔 production-smoke。Access service token未設定のため302診断継続中 (Issue #90) |
+| `release:smoke --read-only` result | 未認証302のため要service token。ローカルpreview 85 checks OK、PR CI green |
+| Rollback owner / rollback target | human kensan / `wrangler rollback --env production` で直前version (2026-08-01T15:33:31Z) |
