@@ -2,7 +2,7 @@
 "use strict";
 
 const { PrismaPg } = require("@prisma/adapter-pg");
-const { PrismaClient } = require("../node_modules/.prisma/client-postgresql");
+const { PrismaClient } = require("../../node_modules/.prisma/client-postgresql");
 const { runDueIngestionJobs } = require("./ingestion-engine.js");
 
 async function main() {
