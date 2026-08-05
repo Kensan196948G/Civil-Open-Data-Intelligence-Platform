@@ -6,7 +6,7 @@
 | --- | --- |
 | Production monitoring | Access service token `codip-production-smoke-20260805` を発行し、Service Auth policy `odip-service-auth`（decision `non_identity`）を設定。`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` をGitHub Actions Secretsへ登録 |
 | Smoke | Production Smoke run 30969524446 成功（2026-08-05T02:30Z、`/api/health` 200 / `/api/ready` 200 `status=ready` `db=ok`）。以降15分間隔scheduled runがstrict判定 |
-| Backup | Neon pg_dump定期ジョブ初回scheduled成功（2026-08-04 run 30950851419、AES256暗号化artifact `codip-neon-pgdump-20260804T210642Z.dump.gpg`、証跡JSON `neon-backup-evidence`） |
+| Backup | Neon pg_dump初回成功（2026-08-04T21:05Z workflow_dispatch run 30950851419、AES256暗号化artifact `codip-neon-pgdump-20260804T210642Z.dump.gpg`、証跡JSON `neon-backup-evidence`）。scheduled初回は2026-08-06 03:17 JSTに確認予定 |
 | Ops | 運用台帳 `docs/operations/operations-ledger.md`（日次・週次・月次・四半期点検、SLO、Secret棚卸し）、インシデント対応Runbook `docs/runbooks/incident-response.md` を追加 |
 | Cleanup | Access検証用の一時service token 3件を削除し、本番tokenのみ残置 |
 | 残課題 | Cloudflare/Neonアラート通知先・通知テスト、GitHub Actions失敗通知先、証明書/APIキー有効期限棚卸し（運用台帳に記録） |

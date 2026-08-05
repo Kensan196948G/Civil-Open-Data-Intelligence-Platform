@@ -92,7 +92,8 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 | 日時 | 項目 | 結果 | 証跡 |
 | --- | --- | --- | --- |
 | 2026-08-04 | Neon restore drill | ✅ | `restore-drill-20260804`（`br-wild-shape-aff21r0u`） |
-| 2026-08-04 03:17 JST | Neon pg_dump定期初回 | ✅ | run 30950851419、`codip-neon-pgdump-20260804T210642Z.dump.gpg` |
+| 2026-08-04T21:05Z | Neon pg_dump初回（workflow_dispatch） | ✅ | run 30950851419、`codip-neon-pgdump-20260804T210642Z.dump.gpg` |
+| 2026-08-06 03:17 JST | Neon pg_dump scheduled初回 | ⏳ 未実施（予定） | 確認後に追記 |
 | 2026-08-05 02:30Z | production smoke初回成功 | ✅ | run 30969524446（health 200 / ready 200 db=ok） |
 | 2026-08-05 | Access service token設定 | ✅ | 本台帳 §4、`docs/runbooks/cloudflare-production.md` §1.0.1 |
 | 2026-08-05 | 運用台帳・incident runbook新設 | ✅ | 本ファイル、`docs/runbooks/incident-response.md` |

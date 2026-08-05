@@ -265,8 +265,9 @@ Cloudflare Workers本番では、データソース接続確認・サンプル�
 > release:check-neon-backup-evidence` は `CODIP_NEON_BACKUP_EVIDENCE_JSON`
 > またはworkflow生成JSONからPITR window、`pg_dump` 鮮度、restore drill鮮度を検査する
 > 完了証跡 (2026-08-04): Secrets/Variables登録、restore drill `restore-drill-20260804`、
-> 定期ジョブ初回成功 run 30950851419（artifact `codip-neon-pgdump-20260804T210642Z.dump.gpg`、証跡JSON `neon-backup-evidence`）
+> workflow_dispatch初回成功 run 30950851419（2026-08-04T21:05Z、artifact `codip-neon-pgdump-20260804T210642Z.dump.gpg`、証跡JSON `neon-backup-evidence`）
 > 保持期間: 暗号化dump 14日・証跡JSON 30日。PITR window 24h（変更は運用台帳で週次確認）
+> 残確認: scheduled初回成功は2026-08-06 03:17 JSTに確認する（実態を成功扱いしない）
 
 ## 6. ログ保持期限
 

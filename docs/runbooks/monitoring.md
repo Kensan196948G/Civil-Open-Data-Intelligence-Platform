@@ -10,7 +10,7 @@
 | DB readiness | Access認証済みで `/api/ready=ready`、manual production smoke 75/75成功 (2026-08-02) | 稼働 |
 | 定期smoke | Access service token設定済み。15分間隔 strict read-only probe成功（初回 2026-08-05T02:30Z run 30969524446） | 稼働 |
 | Neon | mainへread-only直結成功、migration 2/2、孤児・重複・不正geometry 0 | DB rollback不要 |
-| Backup | 定期pg_dump初回成功（2026-08-04 run 30950851419、暗号化artifact `codip-neon-pgdump-20260804T210642Z.dump.gpg`、証跡JSONあり） | 稼働 |
+| Backup | pg_dump初回成功（2026-08-04T21:05Z workflow_dispatch run 30950851419、暗号化artifact `codip-neon-pgdump-20260804T210642Z.dump.gpg`、証跡JSONあり）。scheduled初回は2026-08-06 03:17 JSTに検証予定 | 稼働（手動初回） |
 
 旧 `civilopendata.mirai-dx-platform.com` は現行ターゲットではない。DNS、Secrets、Access、DBを変更する前に、まず稼働deploymentとGit SHAを突き合わせる。
 

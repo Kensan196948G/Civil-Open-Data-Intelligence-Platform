@@ -11,7 +11,7 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | DB readiness / 主要業務 | ✅ | Access service token付きprobeで `/api/ready` 200 `status=ready` `db=ok`（2026-08-05T02:30Z run 30969524446） |
 | Root cause | 解消 | main `5f76656` 相当を `codip-production` へ再デプロイし、Workers wasm修正 (`83b1b91`) を反映 |
 | Neon integrity | ✅ read-only | migration 2/2、重複official URL・外部キー孤児・不正geometry 0。DB rollback不要 |
-| Backup | ✅ | 定期pg_dump初回成功（2026-08-04 run 30950851419、暗号化artifact・証跡JSONあり）、restore drill 2026-08-04実施 |
+| Backup | ✅（手動初回） | pg_dump初回成功（2026-08-04T21:05Z workflow_dispatch run 30950851419、暗号化artifact・証跡JSONあり）、restore drill 2026-08-04実施。scheduled初回は2026-08-06 03:17 JSTに確認予定 |
 | Monitoring | ✅ | Access service token設定済み、15分間隔smoke成功（初回 run 30969524446）。通知先・通知テストは運用台帳の残課題 |
 | Current decision | **GO（運用仕上げは残課題あり）** | アプリ・監視・バックアップは稼働。通知先設定、Cloudflare/Neonアラート、証明書/Secret棚卸しを運用台帳で継続管理 |
 
