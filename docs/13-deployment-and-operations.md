@@ -162,7 +162,7 @@ Prisma schemaはSQLite用 `prisma/schema.prisma` とPostgreSQL用 `prisma/postgr
 | `/api/ready` | DB接続を含むレディネス確認 | `503` または応答遅延 |
 | `/api/openapi` | API契約の公開確認 | `200` 以外またはOpenAPIバージョン欠落 |
 
-本番 `odip.mirai-dx-platform.com` はCloudflare Access配下のため、未認証アクセスは302を返します。外形監視はAccess service token（`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`）を付与したprobeを使い、302をアプリ障害と誤判定しない。token未設定時は `release:post-release-status` が「Cloudflare Access boundary」の診断と設定手順を出力して失敗する。
+本番 `odip.mirai-dx-platform.com` はCloudflare Access配下のため、未認証アクセスは302を返します。外形監視はAccess service token（`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`、2026-08-05設定済み）を付与したprobeを使い、302をアプリ障害と誤判定しない。token未設定時は `release:post-release-status` が「Cloudflare Access boundary」の診断と設定手順を出力して失敗する（フォールバック）。
 
 デプロイ直後は、画面表示に加えて `/api/ready` を確認し、DB migrationと接続設定が正しく反映されていることを確認する。`release:smoke` は各HTTPリクエストにタイムアウトを設け、CI側の `curl` も `--connect-timeout` / `--max-time` を指定する。staging/production相当の実ターゲットへ向ける場合は `--read-only` を付け、管理トークン付きの書き込み系negative testは使い捨てCI/preview DBでのみ実行する。
 
@@ -264,9 +264,9 @@ Cloudflare Workers本番では、データソース接続確認・サンプル�
 > `pg_dump` artifactとSecretを含まない証跡JSONを生成する。`npm run
 > release:check-neon-backup-evidence` は `CODIP_NEON_BACKUP_EVIDENCE_JSON`
 > またはworkflow生成JSONからPITR window、`pg_dump` 鮮度、restore drill鮮度を検査する
-> 残作業: `CODIP_NEON_PGDUMP_DATABASE_URL` / `CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE`
-> Secret登録、restore drill日時のVariables/dispatch入力、初回成功artifactの証跡化
-> Issue化: [#63](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/63)
+> 完了証跡 (2026-08-04): Secrets/Variables登録、restore drill `restore-drill-20260804`、
+> 定期ジョブ初回成功 run 30950851419（artifact `codip-neon-pgdump-20260804T210642Z.dump.gpg`、証跡JSON `neon-backup-evidence`）
+> 保持期間: 暗号化dump 14日・証跡JSON 30日。PITR window 24h（変更は運用台帳で週次確認）
 
 ## 6. ログ保持期限
 
