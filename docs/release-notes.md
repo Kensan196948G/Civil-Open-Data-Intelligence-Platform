@@ -1,5 +1,15 @@
 # リリースノート
 
+## 2026-08-05 P0 本番デプロイ・実データ収集開始
+
+| 区分 | 内容 |
+| --- | --- |
+| Production deploy | main `41400dc` 相当を `codip-production` へデプロイ（Version `0eaaaafa-9995-4607-afdb-6e34801f9c9e`、2026-08-05T04:58Z、gzip 2492.69 KiB） |
+| Migration | Neon productionへ `providers.ingestionRateLimitMinutes` / `ingestion_runs.schemaFingerprint・schemaChanged・deadLetterReason` を適用 |
+| Smoke | デプロイ後 run 30976480258 成功 |
+| 実データ収集 | CSV/GeoJSON/JSON・APIキー不要ソース20件へジョブを作成・有効化。初回一括実行で11 success / 7 dead_letter / 2 retrying。デッドレター7件は無効化し、13件の定期収集を継続 |
+| DNS修正 | `node:dns/promises` の `lookup` コールバック誤用を修正（#105）。全取得がタイムアウトしていた問題を解消し、JMA JSON 等を実取得 |
+
 ## 2026-08-05 P0 quality & spatial expansion（レート制御・スキーマドリフト・デッドレター・空間評価・品質監視）
 
 | 区分 | 内容 |
