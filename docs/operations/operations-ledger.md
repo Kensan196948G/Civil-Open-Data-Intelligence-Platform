@@ -97,6 +97,8 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 | 2026-08-05 02:30Z | production smoke初回成功 | ✅ | run 30969524446（health 200 / ready 200 db=ok） |
 | 2026-08-05 | Access service token設定 | ✅ | 本台帳 §4、`docs/runbooks/cloudflare-production.md` §1.0.1 |
 | 2026-08-05 | 運用台帳・incident runbook新設 | ✅ | 本ファイル、`docs/runbooks/incident-response.md` |
+| 2026-08-05T02:54Z | 本番デプロイ（main `579d9ea`） | ✅ | Version `71fdfb11-d97c-4278-bad1-632b8630d06b` |
+| 2026-08-05T02:55Z | デプロイ後production smoke | ✅ | run 30970704615（health 200 / ready 200 db=ok） |
 
 ## 6. 更新ルール
 
