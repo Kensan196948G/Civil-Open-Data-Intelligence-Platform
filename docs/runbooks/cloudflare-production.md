@@ -15,8 +15,8 @@
 | Routing | Zone route (`routes[].pattern=odip.mirai-dx-platform.com/*` + `zone_name`) + proxied AAAA `100::` DNSレコード、production `workers_dev=false` |
 | DB | Neon PostgreSQL/PostGIS via Cloudflare Hyperdrive (`codip-production`, ID `1da7b81807374ec190addf146717d275`, caching disabled) |
 | Neon | project `falling-dawn-93620497` (Civil-Open-Data-Intelligence-Platform, PG17, aws-us-west-2) default branch |
-| Access | Cloudflare Access app `odip`（policy: mirai-const.co.jp + kensan1969@gmail.com）。未認証は302→login |
-| Deployed | `codip-production` 2026-08-01T15:33:31Z（main `5f76656` 相当、Workers wasm修正反映済） |
+| Access | Cloudflare Access app `odip`（allow policy: mirai-const.co.jp + kensan1969@gmail.com、Service Auth policy `odip-service-auth` は監視用service tokenのみ）。未認証は302→login |
+| Deployed | `codip-production` 2026-08-04T14:37:44Z（Version `50ed1ab5-d601-4763-b76b-2142f8d99631`、PR #93 head `6dce57c` 相当。mainとの差分はCIのみ） |
 | Secrets | Cloudflare/GitHub Secrets only. Do not commit secret values |
 
 ## 1. Stop conditions
@@ -32,9 +32,20 @@
 | Smoke | `release:smoke --read-only` が本番URLに対して成功 |
 | Rollback | 直前Worker version、Neon復旧手段、担当者、判断時刻を記録済み |
 
-### 1.0.1 Access service token（監視用）
+### 1.0.1 Access service token（監視用・設定済み 2026-08-05）
 
-本番URLはCloudflare Access配下のため、未認証の `/api/health` / `/api/ready` は302を返す。scheduled production smokeを成立させるにはAccess service tokenを作成し、Cloudflare Accessのodip policyへservice authを追加したうえで、GitHub Actions Secret `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` へ登録する。Access変更は人間承認後のみ実施する。未設定時のsmokeは302を検知して「Cloudflare Access boundary」診断を出力し、アプリ障害と誤判定しない。
+本番URLはCloudflare Access配下のため、未認証の `/api/health` / `/api/ready` は302を返す。2026-08-05に監視用Access service tokenを発行し、Service Auth policyへ追加してGitHub Actions Secretへ登録した。Secrets値はCloudflare/GitHub Secretsのみに保持し、画面・ログ・commitへ出力しない。
+
+| 項目 | 値 |
+| --- | --- |
+| Service token | `codip-production-smoke-20260805`（id `8e38737a-d75e-4c69-bbb3-c7dee5a13230`、client_id `362ab9507b561cf59b8f1b4850213c96.access`） |
+| Access app | `odip`（id `9af09a69-6338-4e9b-ad31-8434aa0a3f1e`） |
+| Service Auth policy | `odip-service-auth`（id `eaa7686f-f0b3-452c-a2da-87996d70b57c`、decision `non_identity`、precedence 2、include=本番tokenのみ） |
+| GitHub Actions Secrets | `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` |
+| 初回成功証跡 | Production Smoke run 30969524446（2026-08-05T02:30Z、`/api/health` 200 / `/api/ready` 200 `status=ready` `db=ok`） |
+| 後片付け | 検証用一時token 3件は削除済み（policyにも含めていない） |
+
+ローテーションは「新token発行 → Secrets更新 → 旧tokenをpolicyから除外 → 旧token削除」の順で行う。policyのdecision値はAPI上 `non_identity`（Service Auth）である点に注意する。
 
 ## 1.1 New subdomain / routing gate
 
@@ -136,7 +147,7 @@ npm run release:smoke -- --read-only --base-url "https://odip.mirai-dx-platform.
 | DNS status | `odip.mirai-dx-platform.com` proxied AAAA `100::`、A 104.21.57.65 / 172.67.189.96、NXDOMAIN→旧 civilopendata 削除済 |
 | Hostname conflict check | 2026-07-20 に既存CNAME/Pages/Access衝突なしを確認 |
 | Cloudflare zone status | `mirai-dx-platform.com` active |
-| Access application / policy evidence | app `odip` (9af09a69-6338-4e9b-ad31-8434aa0a3f1e)、policy allow mirai-const.co.jp + kensan1969@gmail.com、未認証302 |
+| Access application / policy evidence | app `odip` (9af09a69-6338-4e9b-ad31-8434aa0a3f1e)、allow policy `odip` (ec96655a-d8c3-4354-bd08-596a5b7cc740) mirai-const.co.jp + kensan1969@gmail.com、Service Auth policy `odip-service-auth` (eaa7686f-f0b3-452c-a2da-87996d70b57c, non_identity, token 8e38737a-d75e-4c69-bbb3-c7dee5a13230)、未認証302、service token付きprobe 200 (2026-08-05) |
 | Hyperdrive binding name / ID evidence | `codip-production` / `1da7b81807374ec190addf146717d275` (caching disabled) |
 | Neon project / branch evidence | project `falling-dawn-93620497`、branch `main`、PG17.10 / PostGIS 3.5、staging-20260804・restore-drill-20260804 作成済 |
 | Migration result | 2/2適用済み、driftなし（2026-08-01/04確認） |
@@ -146,6 +157,6 @@ npm run release:smoke -- --read-only --base-url "https://odip.mirai-dx-platform.
 | Cloudflare logs / alert policy evidence | Observability enabled、専用alert policyはIssue #90追跡 |
 | Neon monitoring evidence | PITR window 24h、restore drill 2026-08-04 実施 |
 | Backup / restore evidence | Secrets/Variables設定済み、`restore-drill-20260804` (br-wild-shape-aff21r0u) |
-| Smoke monitoring schedule | 15分間隔 production-smoke。Access service token未設定のため302診断継続中 (Issue #90) |
-| `release:smoke --read-only` result | 未認証302のため要service token。ローカルpreview 85 checks OK、PR CI green |
+| Smoke monitoring schedule | 15分間隔 production-smoke。Access service token設定済み。初回成功 2026-08-05T02:30Z (run 30969524446) |
+| `release:smoke --read-only` result | 本番はAccess service token付き `release:post-release-status --strict-production` で `/api/health` 200・`/api/ready` 200 (db=ok) を確認 (2026-08-05)。ローカルpreview 85 checks OK、PR CI green |
 | Rollback owner / rollback target | human kensan / `wrangler rollback --env production` で直前version (2026-08-01T15:33:31Z) |

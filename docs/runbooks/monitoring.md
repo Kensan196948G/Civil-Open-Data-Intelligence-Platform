@@ -8,9 +8,9 @@
 | Cloudflare route / Worker | route・deploymentとも実在、`codip-production` は2026-08-01T15:33Zにmain `5f76656` 相当へ更新済み | 稼働 |
 | Access boundary | Cloudflare Access app `odip` が未認証アクセスを302でloginへ誘導 | 期待動作 |
 | DB readiness | Access認証済みで `/api/ready=ready`、manual production smoke 75/75成功 (2026-08-02) | 稼働 |
-| 定期smoke | scheduled production smokeは未認証302のため失敗継続 | Access service token設定が必要 (Issue #90) |
+| 定期smoke | Access service token設定済み。15分間隔 strict read-only probe成功（初回 2026-08-05T02:30Z run 30969524446） | 稼働 |
 | Neon | mainへread-only直結成功、migration 2/2、孤児・重複・不正geometry 0 | DB rollback不要 |
-| Backup | scheduled run 12/12失敗、暗号化artifact 0 | Issue #63、人間によるSecret/restore drill設定が必要 |
+| Backup | pg_dump初回成功（2026-08-04T21:05Z workflow_dispatch run 30950851419、暗号化artifact `codip-neon-pgdump-20260804T210642Z.dump.gpg`、証跡JSONあり）。scheduled初回は2026-08-06 03:17 JSTに検証予定 | 稼働（手動初回） |
 
 旧 `civilopendata.mirai-dx-platform.com` は現行ターゲットではない。DNS、Secrets、Access、DBを変更する前に、まず稼働deploymentとGit SHAを突き合わせる。
 
@@ -50,9 +50,20 @@
 - 結果をGitHub Actions Summaryと14日保持artifactへ保存
 - readiness失敗時はworkflowを失敗させ、GitHub Actions通知対象にする
 
-odipはCloudflare Access配下のため、workflowはGitHub Actions Secret `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`（Access service token）をprobeへ付与する。token未設定時は302を検知し「Cloudflare Access boundary」の診断と設定手順を出力して失敗する。実通知を成立させるには、リポジトリのActions失敗通知先と当番を人間が設定し、テスト通知の受信時刻を `CODIP_SMOKE_MONITORING_SCHEDULE` / `CODIP_MONITORING_CONTACTS` の証跡へ記録する。Cloudflare/Neon API tokenやDB接続文字列は使用しない。
+odipはCloudflare Access配下のため、workflowはGitHub Actions Secret `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`（Access service token）をprobeへ付与する。**2026-08-05にservice token・Service Auth policy・Secrets登録を完了し、workflow_dispatchで初回成功（run 30969524446）を確認済み**。以降は15分間隔のscheduled runがstrict判定を行う。token未設定時は302を検知し「Cloudflare Access boundary」の診断と設定手順を出力して失敗する（フォールバック）。Cloudflare/Neon API tokenやDB接続文字列は使用しない。
 
-Access service tokenの作成とGitHub Actions Secret登録は、Cloudflare Accessの変更を伴うため人間承認後に実施する。作成後、`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` をリポジトリSecretsへ登録し、workflow_dispatchで初回成功を確認する。
+実通知を成立させるには、リポジトリのActions失敗通知先と当番を人間が設定し、テスト通知の受信時刻を `CODIP_SMOKE_MONITORING_SCHEDULE` / `CODIP_MONITORING_CONTACTS` の証跡へ記録する。**通知先・通知テストは未設定の残課題**として運用台帳（`docs/operations/operations-ledger.md`）に記録する。
+
+### 1.1.2 SLO目標（暫定）
+
+| 指標 | 目標 | 計測方法 |
+| --- | --- | --- |
+| 可用性 | 月間 99.9% | production-smoke 成功割合（15分毎） |
+| `/api/ready` | 監視時刻 100% `status=ready`・`db=ok` | `release:post-release-status --strict-production` |
+| 応答時間 | P95 5秒以内（probeはmax 5000ms） | 各probeのresponseTimeMs |
+| 検知 | P1: 15分以内に検知・初動 | production-smoke失敗 + 通知 |
+
+エスカレーションは§1.1のP1/P2/P3表を正とし、復旧目標はP1=60分、P2=4時間、P3=次回改善サイクルとする。通知先・通知テストは未設定のため、2026-08-05時点では「監視は成立、通知はGitHub Actionsデフォルトに依存」と記録する。
 
 実ターゲットの監視証跡は、Secrets値や個人情報を出さずに次の環境変数で `production-evidence` へ渡す。値はレポートに表示されず、`set (recorded)` のみ出力される。
 

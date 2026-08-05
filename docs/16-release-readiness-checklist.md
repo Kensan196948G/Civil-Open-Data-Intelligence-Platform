@@ -2,18 +2,18 @@
 
 CODIPを共有プレビューまたは本番相当環境へ出す前に、次の項目を必ず確認する。
 
-## 0. 2026-08-04 再判定
+## 0. 2026-08-05 再判定
 
 | Gate | 状態 | 根拠 / 次の操作 |
 | --- | --- | --- |
 | Production URL | ✅ | `https://odip.mirai-dx-platform.com`、DNS/TLS/route到達 |
-| Application health | ✅ | Cloudflare Access配下。未認証は302、認証済みブラウザで正常閲覧確認 (2026-08-02) |
-| DB readiness / 主要業務 | ✅ | Access認証済みで `/api/ready=ready`、主要画面/API正常。2026-08-02のmanual production smoke 75/75成功 |
+| Application health | ✅ | Access service token付きprobeで `/api/health` 200（2026-08-05T02:30Z run 30969524446） |
+| DB readiness / 主要業務 | ✅ | Access service token付きprobeで `/api/ready` 200 `status=ready` `db=ok`（2026-08-05T02:30Z run 30969524446） |
 | Root cause | 解消 | main `5f76656` 相当を `codip-production` へ再デプロイし、Workers wasm修正 (`83b1b91`) を反映 |
 | Neon integrity | ✅ read-only | migration 2/2、重複official URL・外部キー孤児・不正geometry 0。DB rollback不要 |
-| Backup | ❌ | scheduled 12/12失敗、artifact 0。Issue #63 |
-| Monitoring | ⚠️ | scheduled production smokeは未認証302のため失敗継続。Access service token + 通知先の設定が必要 (Issue #90) |
-| Current decision | **CONDITIONAL GO** | アプリは稼働。監視service token (Issue #90) とbackup Secret/restore drill (Issue #63) の人間設定で完了条件を満たす |
+| Backup | ✅（手動初回） | pg_dump初回成功（2026-08-04T21:05Z workflow_dispatch run 30950851419、暗号化artifact・証跡JSONあり）、restore drill 2026-08-04実施。scheduled初回は2026-08-06 03:17 JSTに確認予定 |
+| Monitoring | ✅ | Access service token設定済み、15分間隔smoke成功（初回 run 30969524446）。通知先・通知テストは運用台帳の残課題 |
+| Current decision | **GO（運用仕上げは残課題あり）** | アプリ・監視・バックアップは稼働。通知先設定、Cloudflare/Neonアラート、証明書/Secret棚卸しを運用台帳で継続管理 |
 
 再デプロイ後は `/api/ready=200`、主要画面/API、管理negative、`release:smoke --read-only`、Workers Logs、Neon接続を再測定する。既知の正常な旧Worker versionは確認できないため、無根拠なrollbackは行わない。本番probeはAccess service token付きで実行し、302を障害と誤判定しない。
 

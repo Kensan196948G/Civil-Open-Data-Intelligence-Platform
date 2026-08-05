@@ -136,12 +136,12 @@ flowchart LR
 | 正式URL | `https://odip.mirai-dx-platform.com` | ✅ DNS/TLS/route到達 |
 | Access | Cloudflare Access app `odip`（mirai-const.co.jp + kensan1969@gmail.com） | ✅ 未認証は302→login |
 | Health / Ready | 未認証は302。Access認証済みブラウザで正常閲覧を確認 (2026-08-02) | ✅ Worker/DB稼働 |
-| 稼働deployment | `codip-production` 2026-08-01T15:33Z（main `5f76656` 相当） | ✅ Workers wasm修正反映済 |
+| 稼働deployment | `codip-production` 2026-08-04T14:37Z（Version `50ed1ab5-d601-4763-b76b-2142f8d99631`、PR #93 head `6dce57c` 相当） | ✅ Workers wasm修正反映済 |
 | Neon | PostgreSQL 17.10 / PostGIS 3.5、migration 2/2、整合性異常0 | ✅ DB rollback不要 |
-| Backup | scheduled 12/12失敗、暗号化artifact 0 | ❌ Issue #63 |
-| 定期smoke | scheduled production smokeは未認証302のため失敗継続。Access service token設定が必要 | ⚠️ Issue #90 |
+| Backup | pg_dump初回成功（2026-08-04T21:05Z workflow_dispatch run 30950851419、AES256暗号化artifact `codip-neon-pgdump-20260804T210642Z.dump.gpg`、14日保持）。scheduled初回は2026-08-06 03:17 JSTに検証予定 | ✅（手動初回） |
+| 定期smoke | Access service token設定済み（2026-08-05）。15分間隔 strict read-only probe成功（初回 run 30969524446） | ✅ |
 
-定期検知は `.github/workflows/production-smoke.yml` が15分ごとにstrict read-only probeを実行します。odipはCloudflare Access配下のため、監視にはAccess service token（`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`）をGitHub Actions Secretへ設定する必要があります。通知先設定と初回通知テストは人間の運用設定が必要です。
+定期検知は `.github/workflows/production-smoke.yml` が15分ごとにstrict read-only probeを実行します。odipはCloudflare Access配下のため、監視用Access service token（`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`）をGitHub Actions Secretへ設定済みです。Cloudflare/Neonアラート通知先と初回通知テストは運用台帳（`docs/operations/operations-ledger.md`）の残課題です。
 
 ---
 
@@ -258,12 +258,12 @@ flowchart LR
 
 - **Cloudflare Workers ランタイム互換**: [Issue #18](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/18)。SSRF事前DNS検証は `dns.promises.resolve4` / `resolve6` へ変更済み。接続時DNSピン留めはNode.js/Undiciで継続し、Cloudflare Workersでは同等保証ができないため外部URL取得を `unsupported_runtime` で安全停止する。PostgreSQL Prisma Clientは `@prisma/adapter-pg` によりHyperdrive `connectionString` を消費できる構成へ変更済み。残りは実Cloudflare/Neon証跡
 - **main branch protection**: 現在は有効。required checksは `verify` / `e2e` / `postgresql-compat` / `docker-preview` / `docker-image-security` / `analyze`、strict=true、admin enforcement=true。今後はrequired review数やCode Ownersの要否を運用成熟度に合わせて判断する
-- **本番監視のAccess対応**: `odip` はCloudflare Access配下のため、未認証のscheduled smokeは302を受け失敗します。監視用service tokenの作成と `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` のGitHub Actions Secret登録、通知テストが未完了 (Issue #90)。Access変更は人間承認境界
+- **本番監視のAccess対応**: ✅ 解決済み（2026-08-05）。監視用service token `codip-production-smoke-20260805`、Service Auth policy `odip-service-auth`、Secrets登録、初回smoke成功まで完了。通知先・通知テストのみ未設定
 - **Cloudflare staging Hyperdrive**: 現行 `CLOUDFLARE_API_TOKEN` にHyperdrive作成権限がないため (code 10000)、Cloudflare stagingデプロイはブロック中。Neon staging branch `staging-20260804` は作成済み。権限追加またはDashboard操作が必要
-- **Neon pg_dump定期ジョブの初回scheduled証跡**: [Issue #63](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/63)。Secrets (`CODIP_NEON_PGDUMP_DATABASE_URL` / `CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE`) と Variables（host照合・restore drill 2026-08-04）は設定済み。pg_dump 17 client修正をmainへ反映後、scheduled初回成功とartifact証跡を確認する
+- **Neon pg_dump定期ジョブ**: ✅ 初回成功（2026-08-04T21:05Z workflow_dispatch run 30950851419、暗号化artifact・証跡JSON）。scheduled初回成功は2026-08-06 03:17 JSTに確認予定。保持期間・復元手順は `docs/runbooks/database-deployment.md` §4.1、運用台帳を参照
 - **De-dockerization移行中**: [Issue #35](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/35)。Docker jobはbranch protection互換のため残し、先にDocker非依存の `node-preview` CIゲートを追加して差し替え先を育てる
 
-🔒 **本番アプリはCloudflare Access配下で稼働中**。残る本番ブロッカーは監視用Access service token（Issue #90）とNeon pg_dump Secrets設定（Issue #63）です。手順は [`docs/runbooks/cloudflare-production.md`](docs/runbooks/cloudflare-production.md) と [`docs/runbooks/monitoring.md`](docs/runbooks/monitoring.md) を参照してください。
+🔒 **本番アプリはCloudflare Access配下で稼働中**。本番監視（15分間隔smoke）とNeon定期バックアップは確立済みです。残るブロッカーはCloudflare staging Hyperdrive（staging専用）と、アラート通知先・通知テスト等の運用仕上げです。手順は [`docs/runbooks/cloudflare-production.md`](docs/runbooks/cloudflare-production.md)、[`docs/runbooks/monitoring.md`](docs/runbooks/monitoring.md)、[`docs/operations/operations-ledger.md`](docs/operations/operations-ledger.md) を参照してください。
 
 ---
 
@@ -417,6 +417,8 @@ production `runner` は `npm ci --omit=dev` を使い、起動時migrationを行
 | [docs/runbooks/monitoring.md](docs/runbooks/monitoring.md) | 監視・アラート・初動確認手順 |
 | [docs/runbooks/database-deployment.md](docs/runbooks/database-deployment.md) | DBデプロイ、バックアップ、SQLite復元、PostgreSQL/PostGIS移行前チェック |
 | [docs/runbooks/rollback.md](docs/runbooks/rollback.md) | 障害時の切り戻し手順 (判断フロー、Workers、GHCR、Neon PITR、Prisma、SQLite) |
+| [docs/runbooks/incident-response.md](docs/runbooks/incident-response.md) | インシデント対応・連絡・エスカレーション・メンテナンス・データ訂正Runbook |
+| [docs/operations/operations-ledger.md](docs/operations/operations-ledger.md) | 運用台帳（日次・週次・月次・四半期点検、SLO、証明書/Secret棚卸し） |
 
 ---
 
