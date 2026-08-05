@@ -3,6 +3,7 @@
 
 const net = require("node:net");
 const dns = require("node:dns/promises");
+const dnsCallback = require("node:dns");
 const crypto = require("node:crypto");
 const { Agent, fetch: undiciFetch } = require("undici");
 
@@ -92,7 +93,7 @@ function getPinnedAgent() {
     pinnedAgent = new Agent({
       connect: {
         lookup(hostname, options, callback) {
-          dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
+          dnsCallback.lookup(hostname, { ...options, all: true }, (err, addresses) => {
             if (err) {
               callback(err);
               return;
