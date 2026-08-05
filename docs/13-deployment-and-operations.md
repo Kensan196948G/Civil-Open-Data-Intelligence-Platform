@@ -172,6 +172,22 @@ Cloudflare Workers本番では、データソース接続確認・サンプル�
 
 既存DBへ `officialUrl` 一意制約を適用する前に、必ず `npm run db:check-duplicates` を実行する。重複がある場合は、どちらを正本にするかを人が判断し、削除または統合してからmigrationを適用する。
 
+### 2.6 定期収集パイプライン
+
+`.github/workflows/data-ingestion.yml` が30分毎（:03/:33 UTC）に `scripts/ingestion/run-due-jobs.js` を実行する。接続先は `CODIP_INGESTION_DATABASE_URL`（write権限のあるNeon URL）。ジョブは `ingestion_jobs` テーブルで管理し、`enabled=true` かつ `nextRunAt` が到来したものから最大3件（`CODIP_INGESTION_MAX_JOBS_PER_TICK` で変更可）を実行する。
+
+収集エンジン（`scripts/ingestion/ingestion-engine.js`）は次を実施する。
+
+- SSRFガード: 静的URL検証＋DNS解決結果の非公開IP拒否＋接続時DNSピン留め
+- 差分取得: `If-None-Match` / `If-Modified-Since`、304時は `skipped` として記録
+- 形式解析: CSV / GeoJSON / JSON（配列・items・オブジェクト）
+- クレンジング: 日付・数値・座標（Web Mercator簡易変換）正規化、dedupe key
+- 標準化: `standard_records` へ `sourceRecordId` 単位でupsertし、`ingestionRunId` でリネージュを保持
+- 実行履歴: `ingestion_runs` に挿入/更新/スキップ件数、ステータスコード、エラー、所要時間を記録
+- リトライ: 失敗時は15分×2^retry（最大12時間）で次回実行、`maxRetries` 到達で `failed`
+
+Workersランタイムは外部URL取得が `unsupported_runtime` のため、定期実行はGitHub Actions（Nodeホスト）で行う。管理APIの手動実行はNode/preview環境向け。
+
 ## 3. 運用監視
 
 | 監視対象 | 監視内容 |

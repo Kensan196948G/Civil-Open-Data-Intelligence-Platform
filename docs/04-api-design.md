@@ -279,6 +279,35 @@ MVP実装では、台帳の `lastCheckedAt`、直近取得ログ、品質スコ�
 | `lastFailureAt` | 直近失敗ログ日時 |
 | `consecutiveFailureCount` | 直近から連続する失敗数 |
 
+### 4.6 地点横断評価 実装済み
+
+`GET /api/v1/assessments/point?lat=&lng=&radiusM=&categories=`
+
+PostGIS `standard_records` が存在する環境では、指定地点の半径内レコードをカテゴリ・レイヤー別に集計し、最短距離（Point地物のみ近似値）を返す。未投入環境では候補レイヤーと `not_standardized` / `catalog_point_cross_section` 警告を返す。施工可否・安全性・法令適合の最終判断には使用しない（`decision_not_supported`）。
+
+### 4.7 データリネージュ 実装済み
+
+`GET /api/v1/sources/{id}/lineage`
+
+出典→定期収集ジョブ→実行履歴→標準レコード件数の追跡情報を返す。実行履歴には挿入・更新・スキップ件数、ステータスコード、エラー、ETag/Last-Modifiedの有無を含める。
+
+### 4.8 データソース推薦（AIコンシェルジュ） 実装済み
+
+`GET /api/v1/recommendations?query=横浜 橋梁 浸水&limit=5`
+
+キーワード・カテゴリ・タグ・品質スコア・利用シーンによるルールベース推薦を、推薦理由・地図レイヤーURL付きで返す。警告コードは `rule_based_ai` で、LLM/RAG導入前の実装であることを明示する。
+
+### 4.9 定期収集ジョブ管理API 実装済み
+
+| API | メソッド | 目的 |
+| --- | --- | --- |
+| `/api/admin/ingestion/jobs` | GET / POST | 定期収集ジョブ一覧・作成 |
+| `/api/admin/ingestion/jobs/{id}` | PATCH / DELETE | 定期収集ジョブ更新・削除 |
+| `/api/admin/ingestion/jobs/{id}/run` | POST | ジョブの手動実行（Node/preview環境向け） |
+| `/api/admin/ingestion/runs` | GET | 実行履歴一覧（status/limitで絞込） |
+
+定期実行はGitHub Actions `data-ingestion.yml` が30分毎に `scripts/ingestion/run-due-jobs.js` を実行する。ジョブはETag/Last-Modifiedによる差分判定、上限サイズ/レコード数、リトライ（指数バックオフ）、SSRFガード（静的検証＋接続時DNSピン留め）、CSV/GeoJSON/JSON解析、標準レコードupsert、リネージュ記録に対応する。Workersランタイムでは外部URL取得が `unsupported_runtime` のため、本番の定期実行はGitHub Actionsが担う。
+
 ## 5. 標準レコード形式
 
 ```json
@@ -328,6 +357,10 @@ MVP実装では、台帳の `lastCheckedAt`、直近取得ログ、品質スコ�
 | `/api/map/elevation` | 60 req/min/IP | 未認証で外部API取得を行うため |
 | `/api/sources/{id}/check` | 12 req/min/IP/source | 管理者操作でも公開元APIへ負荷をかけるため |
 | `/api/sources/{id}/fetch-sample` | 6 req/min/IP/source | 本文取得とDB保存を伴うため |
+| `/api/v1/assessments/point` | 120 req/min/IP | 標準レコード空間集計 |
+| `/api/v1/recommendations` | 120 req/min/IP | ルールベース推薦 |
+| `/api/v1/sources/{id}/lineage` | 120 req/min/IP | リネージュ取得 |
+| `/api/admin/ingestion/*` | 10〜60 req/min/IP | 定期収集ジョブ操作 |
 
 制限超過時は `429 rate_limited` と `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` を返す。
 

@@ -82,6 +82,7 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 | `NEON_API_KEY`（環境） | Neon API | 不明（要確認） | Neon Consoleで再発行 | human kensan |
 | `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` | production-smoke | tokenは既定で無期限 | 90日毎ローテーション推奨：新token→Secrets更新→旧token削除 | DevOps |
 | `CODIP_NEON_PGDUMP_DATABASE_URL` | 日次pg_dump | 不明（要確認） | Neon password再発行→Secrets更新 | human kensan |
+| `CODIP_INGESTION_DATABASE_URL` | 定期収集ジョブ（GitHub Actions） | 不明（要確認） | Neon password再発行→Secrets更新。write権限を持つ専用ロール化を推奨 | human kensan |
 | `CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE` | dump暗号化 | なし（任意変更） | 変更時は旧dump復号不可に注意 | human kensan |
 | 本番DBロール | Neon main接続 | なし | 最小権限維持・棚卸し月次 | DevOps |
 | TLS証明書 | Universal SSL | Cloudflare自動更新 | 自動（Dashboardで確認） | Cloudflare |
@@ -99,6 +100,8 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 | 2026-08-05 | 運用台帳・incident runbook新設 | ✅ | 本ファイル、`docs/runbooks/incident-response.md` |
 | 2026-08-05T02:54Z | 本番デプロイ（main `579d9ea`） | ✅ | Version `71fdfb11-d97c-4278-bad1-632b8630d06b` |
 | 2026-08-05T02:55Z | デプロイ後production smoke | ✅ | run 30970704615（health 200 / ready 200 db=ok） |
+| 2026-08-05 | データ収集パイプライン実装 | ✅ | 定期ジョブ/実行履歴/ETag/リトライ/CSV・GeoJSON/リネージュ。`data-ingestion.yml` 30分毎 |
+| 2026-08-05 | 地点横断・AI推薦・GIS出力実装 | ✅ | `/api/v1/assessments/point` `/recommendations`、地図レイヤー/計測/出力 |
 
 ## 6. 更新ルール
 

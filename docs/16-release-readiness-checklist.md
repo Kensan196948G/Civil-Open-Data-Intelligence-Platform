@@ -47,6 +47,8 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | ログ保持dry-run | `npm run db:prune -- --dry-run` | 取得ログ・サンプル保持期間の削除候補を確認できる |
 | 本番ビルド | `npm run build` | 成功 |
 | リリースゲート | `npm run release:gate` | fresh環境のSQLite migration preflightを含め、ブラウザ非依存ゲートが一括成功 |
+| 定期収集エンジン | `npx vitest run tests/unit/ingestion-engine.test.ts` | クレンジング・CSV/GeoJSON解析・upsert・304/リトライ/停止の10件が成功。実DB（ローカルPostGIS）でmigration適用・drift・失敗経路を検証 |
+| 地点横断・推薦・リネージュ | unit tests + build | `/api/v1/assessments/point` `/recommendations` `/sources/{id}/lineage` のルートがbuildされ、推薦スコアリング12件が成功 |
 | 起動スモーク | `CODIP_ADMIN_TOKEN=... npm run release:smoke -- --base-url http://127.0.0.1:3100` | 主要画面、未認証管理UI非表示、CSP/HSTS、監視API、OpenAPI v1 schema、seed最小件数、公開DTO、後続API契約、v1 warning契約、地点照会の不正入力、管理APIガード、管理セッションCSRF、悪性URL複数種の登録拒否が成功 |
 | 実ターゲットread-onlyスモーク | `npm run release:smoke -- --read-only --base-url https://odip.mirai-dx-platform.com` | staging/production DBへ書き込まず、主要画面、監視API、後続API、管理ガードを確認 |
 | Docker preview | GitHub Actions `docker-preview` job | production runner / preview runner build、production runner + PostgreSQL smoke、SQLite/PostgreSQL compose config、preview起動、ready、release smokeが成功 |
