@@ -55,6 +55,7 @@ model DataSource {
   sampleResponses SampleResponse[]
   qualityChecks   QualityCheck[]
   relatedUseCases RelatedUseCase[]
+  ingestionJob    IngestionJob?
 
   @@unique([officialUrl])
   @@map("data_sources")
@@ -146,6 +147,54 @@ model RelatedUseCase {
   description  String?
 
   @@map("related_use_cases")
+}
+
+model IngestionJob {
+  id              String         @id @default(cuid())
+  dataSourceId    String         @unique
+  dataSource      DataSource     @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+  name            String
+  enabled         Boolean        @default(false)
+  intervalMinutes Int            @default(1440)
+  maxRecords      Int            @default(500)
+  etag            String?
+  lastModified    String?
+  lastRunAt       DateTime?
+  nextRunAt       DateTime?
+  lastStatus      String?
+  retryCount      Int            @default(0)
+  maxRetries      Int            @default(3)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  runs            IngestionRun[]
+
+  @@index([enabled, nextRunAt])
+  @@map("ingestion_jobs")
+}
+
+model IngestionRun {
+  id               String        @id @default(cuid())
+  ingestionJobId   String
+  ingestionJob     IngestionJob  @relation(fields: [ingestionJobId], references: [id], onDelete: Cascade)
+  status           String        @default("pending") // pending / running / success / failed / skipped / stopped
+  triggeredBy      String        @default("manual")
+  requestUrl       String?
+  method           String        @default("GET")
+  statusCode       Int?
+  responseTimeMs   Int?
+  bytesReceived    Int?
+  recordsInserted  Int           @default(0)
+  recordsUpdated   Int           @default(0)
+  recordsSkipped   Int           @default(0)
+  errorType        String?
+  errorMessage     String?
+  note             String?
+  startedAt        DateTime      @default(now())
+  finishedAt       DateTime?
+
+  @@index([ingestionJobId, startedAt])
+  @@index([status, startedAt])
+  @@map("ingestion_runs")
 }
 
 model AuditLog {

@@ -450,6 +450,135 @@ const openApiDocument = {
         },
       },
     },
+    "/api/v1/assessments/point": {
+      get: {
+        tags: ["downstream"],
+        summary: "地点横断評価（カテゴリ別サマリー）を取得",
+        description:
+          "PostGIS standard_records が存在する環境では、指定地点の半径内にある標準レコードをカテゴリ・レイヤー別に集計して返す。未投入環境では候補レイヤーとnot_standardized warningを返す。",
+        parameters: [
+          { name: "lat", in: "query", required: true, schema: { type: "number", minimum: -90, maximum: 90 } },
+          { name: "lng", in: "query", required: true, schema: { type: "number", minimum: -180, maximum: 180 } },
+          { name: "radiusM", in: "query", schema: { type: "number", minimum: 1, maximum: 100000, default: 1000 } },
+          {
+            name: "categories",
+            in: "query",
+            description: "カンマ区切りカテゴリ。最大20件、各64文字以内。",
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          "200": { description: "地点横断サマリー（カテゴリ別件数・レイヤー別件数・最短距離）" },
+          "400": v1ErrorResponse,
+          "429": v1ErrorResponse,
+        },
+      },
+    },
+    "/api/v1/recommendations": {
+      get: {
+        tags: ["downstream"],
+        summary: "ルールベースのデータソース推薦（AIコンシェルジュ）",
+        description:
+          "キーワード・カテゴリ・タグ・品質・利用シーンからデータソースをスコアリングし、推薦理由付きで返す。LLM/RAG導入前のMVP実装。",
+        parameters: [
+          { name: "query", in: "query", required: true, schema: { type: "string", minLength: 2 } },
+          { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 20, default: 5 } },
+        ],
+        responses: {
+          "200": { description: "推薦データソース一覧（スコア・理由・地図レイヤーURL付き）" },
+          "400": v1ErrorResponse,
+          "429": v1ErrorResponse,
+        },
+      },
+    },
+    "/api/v1/sources/{id}/lineage": {
+      get: {
+        tags: ["downstream"],
+        summary: "データリネージュ（取得ジョブ・実行履歴・標準レコード件数）を取得",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "出典→定期収集ジョブ→実行履歴→標準レコードの追跡情報" },
+          "404": v1ErrorResponse,
+          "429": v1ErrorResponse,
+        },
+      },
+    },
+    "/api/admin/ingestion/jobs": {
+      get: {
+        tags: ["admin"],
+        summary: "定期収集ジョブ一覧を取得",
+        security: adminSecurity,
+        responses: {
+          "200": { description: "定期収集ジョブ一覧（直近5実行履歴付き）" },
+          "401": { description: "管理認証エラー" },
+          "429": { description: "レート制限超過" },
+        },
+      },
+      post: {
+        tags: ["admin"],
+        summary: "定期収集ジョブを作成",
+        security: adminSecurity,
+        responses: {
+          "201": { description: "作成成功" },
+          "400": { description: "入力不正" },
+          "401": { description: "管理認証エラー" },
+          "404": { description: "データソースなし" },
+          "429": { description: "レート制限超過" },
+        },
+      },
+    },
+    "/api/admin/ingestion/jobs/{id}": {
+      patch: {
+        tags: ["admin"],
+        summary: "定期収集ジョブを更新",
+        security: adminSecurity,
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "更新成功" },
+          "400": { description: "入力不正" },
+          "401": { description: "管理認証エラー" },
+          "429": { description: "レート制限超過" },
+        },
+      },
+      delete: {
+        tags: ["admin"],
+        summary: "定期収集ジョブを削除",
+        security: adminSecurity,
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "削除成功" },
+          "401": { description: "管理認証エラー" },
+          "404": { description: "対象なし" },
+          "429": { description: "レート制限超過" },
+        },
+      },
+    },
+    "/api/admin/ingestion/jobs/{id}/run": {
+      post: {
+        tags: ["admin"],
+        summary: "定期収集ジョブを手動実行",
+        security: adminSecurity,
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "実行結果（挿入・更新・スキップ件数）" },
+          "401": { description: "管理認証エラー" },
+          "404": { description: "対象なし" },
+          "429": { description: "レート制限超過" },
+        },
+      },
+    },
+    "/api/admin/ingestion/runs": {
+      get: {
+        tags: ["admin"],
+        summary: "定期収集実行履歴を取得",
+        security: adminSecurity,
+        responses: {
+          "200": { description: "実行履歴一覧" },
+          "401": { description: "管理認証エラー" },
+          "429": { description: "レート制限超過" },
+        },
+      },
+    },
     "/api/sources/{id}/check": {
       post: {
         tags: ["catalog"],

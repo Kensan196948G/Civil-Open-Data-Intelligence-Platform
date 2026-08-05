@@ -1,5 +1,18 @@
 # リリースノート
 
+## 2026-08-05 v2 data intelligence（定期収集・地点横断・GIS・AI推薦・リネージュ）
+
+| 区分 | 内容 |
+| --- | --- |
+| 定期収集 | `ingestion_jobs` / `ingestion_runs` モデル、管理API（一覧/作成/更新/削除/手動実行/履歴）、GitHub Actions `data-ingestion.yml` 30分毎実行 |
+| 収集エンジン | ETag/Last-Modified差分、SSRFガード（静的検証＋接続時DNSピン留め）、サイズ/レコード上限、指数バックオフリトライ、CSV/GeoJSON/JSON解析、標準レコードupsert |
+| クレンジング | 日付/数値/座標（Web Mercator簡易変換）正規化、dedupe key、欠損・上限チェック |
+| 地点横断 | `GET /api/v1/assessments/point` でカテゴリ・レイヤー別件数と最短距離を返す |
+| リネージュ | `GET /api/v1/sources/{id}/lineage` で出典→ジョブ→実行→標準レコードを追跡 |
+| AIコンシェルジュ | `GET /api/v1/recommendations` ルールベース推薦（キーワード・品質・利用シーン・根拠・地図URL） |
+| GISビューア | レイヤー一覧・重ね合わせ・凡例・透明度・GeoJSON/CSV出力・距離/面積計測 |
+| Secret | `CODIP_INGESTION_DATABASE_URL` をGitHub Actions Secretへ登録 |
+
 ## 2026-08-05 production monitoring established（Access service token・smoke green・運用台帳）
 
 | 区分 | 内容 |
