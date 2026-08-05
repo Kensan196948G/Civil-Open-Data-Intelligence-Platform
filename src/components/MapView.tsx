@@ -29,6 +29,7 @@ type ManagedLayer = {
   visible: boolean;
   opacity: number;
   featureCount: number | null;
+  filteredCount?: number;
   geoJson: GeoJsonObject | null;
   error: string | null;
 };
@@ -124,6 +125,13 @@ export default function MapView() {
   const [measuring, setMeasuring] = useState(false);
   const [measurePoints, setMeasurePoints] = useState<[number, number][]>([]);
   const [measureShape, setMeasureShape] = useState<"line" | "polygon">("line");
+  const [bboxMode, setBboxMode] = useState(false);
+  const [bboxPoints, setBboxPoints] = useState<[number, number][]>([]);
+  const [attributeQuery, setAttributeQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Array<{ recordId: string; title: string; sourceUrl: string; category: string }>>([]);
+  const [searchMessage, setSearchMessage] = useState("");
+  const [timeFrom, setTimeFrom] = useState("");
+  const [timeTo, setTimeTo] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -167,6 +175,24 @@ export default function MapView() {
   );
 
   function handleMapClick(latNum: number, lngNum: number) {
+    if (bboxMode) {
+      setBboxPoints((current) => {
+        const next = [...current, [latNum, lngNum] as [number, number]];
+        if (next.length === 2) {
+          const [a, b] = next;
+          const bbox = [Math.min(a[1], b[1]), Math.min(a[0], b[0]), Math.max(a[1], b[1]), Math.max(a[0], b[0])] as [
+            number,
+            number,
+            number,
+            number,
+          ];
+          void applyBbox(bbox);
+          return [];
+        }
+        return next;
+      });
+      return;
+    }
     if (measuring) {
       setMeasurePoints((current) => [...current, [latNum, lngNum]]);
       return;
@@ -319,7 +345,86 @@ export default function MapView() {
     setMeasuring(false);
   }
 
+  async function applyBbox(bbox: [number, number, number, number]) {
+    setLayerMessage("");
+    setBboxMode(false);
+    setBboxPoints([]);
+    const updated = [...layers];
+    for (let index = 0; index < updated.length; index++) {
+      const layer = updated[index];
+      if (!layer.visible) continue;
+      try {
+        const response = await fetch(
+          `/api/v1/layers/${layer.sourceId}/features?bbox=${bbox.join(",")}&limit=2000`,
+        );
+        const body = await response.json();
+        const features = body?.data?.features ?? body?.features;
+        if (!response.ok || !features) throw new Error("features を取得できませんでした");
+        const collection: FeatureCollection = { type: "FeatureCollection", features: features as Feature[] };
+        updated[index] = {
+          ...layer,
+          geoJson: collection,
+          featureCount: Array.isArray(features) ? features.length : layer.featureCount,
+          error: null,
+        };
+      } catch (error) {
+        updated[index] = { ...layer, error: error instanceof Error ? error.message : "取得失敗" };
+      }
+    }
+    setLayers(updated);
+    setLayerMessage(`🔲 矩形検索を適用: ${bbox.join(", ")}`);
+  }
+
+  async function runAttributeSearch() {
+    const q = attributeQuery.trim();
+    if (q.length < 2) {
+      setSearchMessage("⚠️ 2文字以上で入力してください");
+      return;
+    }
+    try {
+      const response = await fetch(`/api/v1/records/search?q=${encodeURIComponent(q)}&limit=20`);
+      const body = await response.json();
+      const records = body?.data?.records ?? [];
+      setSearchResults(
+        records.map((record: { recordId: string; title: string; sourceUrl: string; category: string }) => ({
+          recordId: record.recordId,
+          title: record.title,
+          sourceUrl: record.sourceUrl,
+          category: record.category,
+        })),
+      );
+      setSearchMessage(`✅ ${records.length}件見つかりました`);
+    } catch {
+      setSearchMessage("⚠️ 検索に失敗しました");
+    }
+  }
+
+  function inTimeRange(feature: Feature): boolean {
+    const props = (feature.properties ?? {}) as Record<string, unknown>;
+    const observed = String(props.observedAt ?? props.publishedAt ?? props.retrievedAt ?? "");
+    if (!observed) return true;
+    const value = new Date(observed).getTime();
+    if (Number.isNaN(value)) return true;
+    if (timeFrom && value < new Date(timeFrom).getTime()) return false;
+    if (timeTo && value > new Date(timeTo).getTime()) return false;
+    return true;
+  }
+
   const visibleGeoJsonLayers = layers.filter((layer) => layer.visible && layer.geoJson);
+  const filteredLayers = useMemo(
+    () =>
+      visibleGeoJsonLayers.map((layer) => {
+        const collection = layer.geoJson as FeatureCollection;
+        const features = collection.features.filter(inTimeRange);
+        return {
+          ...layer,
+          geoJson: { ...collection, features } as GeoJsonObject,
+          filteredCount: features.length,
+        };
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visibleGeoJsonLayers, timeFrom, timeTo],
+  );
   const measuredLength = useMemo(() => measureLength(measurePoints), [measurePoints]);
   const measuredArea = useMemo(() => measureArea(measurePoints), [measurePoints]);
 
@@ -340,7 +445,7 @@ export default function MapView() {
           {measurePoints.length >= 3 && measureShape === "polygon" && (
             <Polygon positions={measurePoints} pathOptions={{ color: "#f59e0b", weight: 3, fillOpacity: 0.15 }} />
           )}
-          {visibleGeoJsonLayers.map((layer) => (
+          {filteredLayers.map((layer) => (
             <GeoJSON
               key={layer.layerId}
               data={layer.geoJson as GeoJsonObject}
@@ -436,6 +541,16 @@ export default function MapView() {
           >
             {measuring && measureShape === "polygon" ? "🛑 面積計測を終了" : "🗺️ 面積計測"}
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              setBboxMode((current) => !current);
+              setBboxPoints([]);
+            }}
+            className="dc-btn-ghost"
+          >
+            {bboxMode ? "🛑 矩形検索を終了" : "🔲 矩形検索"}
+          </button>
           <button type="button" onClick={exportGeoJson} className="dc-btn-ghost" disabled={visibleGeoJsonLayers.length === 0}>
             ⬇️ GeoJSON出力
           </button>
@@ -443,6 +558,11 @@ export default function MapView() {
             ⬇️ CSV出力
           </button>
         </div>
+        {bboxMode && (
+          <p className="mb-2 mt-0 text-[11.5px] text-[var(--amber)]" role="status">
+            🔲 地図上で2点をクリックして矩形範囲を指定してください（現在 {bboxPoints.length} 点）
+          </p>
+        )}
 
         <h2 className="mb-2 mt-0 text-sm font-semibold text-[var(--ink)]">🗂️ データレイヤー</h2>
         <p className="mb-2 mt-0 text-[11.5px] text-[var(--muted)]">
@@ -462,7 +582,11 @@ export default function MapView() {
                 <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: layer.color }} aria-hidden="true" />
                 <span className="font-medium">{layer.title}</span>
                 <span className="ml-auto text-[10.5px] text-[var(--faint)]">
-                  {layer.featureCount != null ? `${layer.featureCount}件` : "未投入"}
+                  {layer.featureCount != null
+                    ? layer.filteredCount != null
+                      ? `${layer.filteredCount}/${layer.featureCount}件`
+                      : `${layer.featureCount}件`
+                    : "未投入"}
                 </span>
               </label>
               {layer.visible && (
@@ -485,6 +609,62 @@ export default function MapView() {
           ))}
         </div>
         {layerMessage && <p className="mt-1 text-[11.5px] text-[var(--danger)]">{layerMessage}</p>}
+
+        <h2 className="mb-2 mt-4 text-sm font-semibold text-[var(--ink)]">🔎 属性検索・時間フィルタ</h2>
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <input
+            type="search"
+            aria-label="属性検索キーワード"
+            placeholder="例: 浸水 / 橋梁 / 横浜"
+            className="dc-input box-border w-56 text-xs"
+            value={attributeQuery}
+            onChange={(event) => setAttributeQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void runAttributeSearch();
+            }}
+          />
+          <button type="button" onClick={() => void runAttributeSearch()} className="dc-btn-ghost">
+            🔎 検索
+          </button>
+          <label className="flex items-center gap-1 text-[11.5px] text-[var(--muted)]">
+            開始
+            <input
+              type="date"
+              aria-label="時間フィルタ開始日"
+              value={timeFrom}
+              onChange={(event) => setTimeFrom(event.target.value)}
+              className="dc-input text-xs"
+            />
+          </label>
+          <label className="flex items-center gap-1 text-[11.5px] text-[var(--muted)]">
+            終了
+            <input
+              type="date"
+              aria-label="時間フィルタ終了日"
+              value={timeTo}
+              onChange={(event) => setTimeTo(event.target.value)}
+              className="dc-input text-xs"
+            />
+          </label>
+        </div>
+        {searchMessage && <p className="mb-1 text-[11.5px] text-[var(--muted)]">{searchMessage}</p>}
+        {searchResults.length > 0 && (
+          <ul className="m-0 mb-2 max-h-44 list-none overflow-auto rounded-lg border border-[var(--line)] p-2">
+            {searchResults.map((record) => (
+              <li key={record.recordId} className="mb-1 text-[12px]">
+                <a
+                  href={record.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-[var(--blue)] hover:underline"
+                >
+                  {record.title}
+                </a>
+                <span className="ml-2 text-[10.5px] text-[var(--faint)]">{record.category}</span>
+              </li>
+            ))}
+          </ul>
+        )}
 
         <h2 className="mb-2 mt-4 text-sm font-semibold text-[var(--ink)]">📐 GeoJSON オーバーレイ</h2>
         <p className="mb-2 mt-0 text-[11.5px] text-[var(--muted)]">

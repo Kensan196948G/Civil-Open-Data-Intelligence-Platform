@@ -501,16 +501,63 @@ function nextRunDelayMinutes(status, retryCount) {
   return Math.min(60 * 12, 15 * 2 ** Math.min(retryCount, 5));
 }
 
+function computeSchemaFingerprint(candidates) {
+  const keys = new Set();
+  for (const candidate of candidates.slice(0, 50)) {
+    const raw = candidate.properties?.raw;
+    if (raw && typeof raw === "object") {
+      for (const key of Object.keys(raw)) keys.add(String(key));
+    }
+  }
+  const canonical = [...keys].sort().join("|");
+  return crypto.createHash("sha256").update(`v1|${canonical}|${candidates.length}`).digest("hex").slice(0, 32);
+}
+
 async function runIngestionJob(prisma, options = {}) {
   const { jobId, triggeredBy = "manual", now = new Date(), fetchImpl, maxBytes, timeoutMs } = options;
   const job = await prisma.ingestionJob.findUnique({
     where: { id: jobId },
-    include: { dataSource: true },
+    include: { dataSource: { include: { provider: true } } },
   });
   if (!job) throw new Error(`ingestion job not found: ${jobId}`);
   const targetUrl = job.dataSource.endpointUrl || job.dataSource.officialUrl;
   if (!targetUrl) {
     throw new Error(`data source ${job.dataSource.id} has no endpointUrl/officialUrl`);
+  }
+
+  const provider = job.dataSource.provider;
+  if (provider && provider.ingestionRateLimitMinutes > 0) {
+    const lastProviderRun = await prisma.ingestionRun.findFirst({
+      where: {
+        ingestionJob: { dataSource: { providerId: provider.id } },
+        status: { notIn: ["pending", "running", "skipped"] },
+      },
+      orderBy: { startedAt: "desc" },
+    });
+    if (
+      lastProviderRun &&
+      now.getTime() - lastProviderRun.startedAt.getTime() < provider.ingestionRateLimitMinutes * 60_000
+    ) {
+      const run = await prisma.ingestionRun.create({
+        data: {
+          ingestionJobId: jobId,
+          status: "skipped",
+          triggeredBy,
+          requestUrl: targetUrl,
+          note: `provider rate limit (${provider.ingestionRateLimitMinutes}min)`,
+          finishedAt: now,
+        },
+      });
+      await prisma.ingestionJob.update({
+        where: { id: jobId },
+        data: {
+          lastRunAt: now,
+          nextRunAt: new Date(now.getTime() + job.intervalMinutes * 60_000),
+          lastStatus: "skipped",
+        },
+      });
+      return { status: "skipped", inserted: 0, updated: 0, skipped: 0, reason: "provider_rate_limit", runId: run.id };
+    }
   }
 
   const run = await prisma.ingestionRun.create({
@@ -550,15 +597,17 @@ async function runIngestionJob(prisma, options = {}) {
 
   if (!fetchResult.ok) {
     const retryCount = job.retryCount + 1;
-    const status = retryCount >= job.maxRetries ? "failed" : "retrying";
+    const exhausted = retryCount >= job.maxRetries;
+    const status = exhausted ? "dead_letter" : "retrying";
     await prisma.ingestionRun.update({
       where: { id: run.id },
       data: {
         ...baseRunUpdate,
-        status: "failed",
+        status: exhausted ? "dead_letter" : "failed",
         errorType: fetchResult.errorType ?? "unknown",
         errorMessage: fetchResult.errorMessage ?? null,
-        note: retryCount < job.maxRetries ? `再試行 ${retryCount}/${job.maxRetries}` : `リトライ上限到達 ${job.maxRetries}`,
+        deadLetterReason: exhausted ? fetchResult.errorMessage ?? `リトライ上限到達 ${job.maxRetries}` : null,
+        note: exhausted ? "デッドレターキューへ送信" : `再試行 ${retryCount}/${job.maxRetries}`,
         finishedAt: now,
       },
     });
@@ -578,22 +627,39 @@ async function runIngestionJob(prisma, options = {}) {
   try {
     candidates = parsePayload(fetchResult.bodyText, fetchResult.contentType, job.dataSource);
   } catch (error) {
+    const message = error?.message ?? "parse error";
     await prisma.ingestionRun.update({
       where: { id: run.id },
-      data: { ...baseRunUpdate, status: "failed", errorType: "parse_error", errorMessage: error?.message ?? "parse error", finishedAt: now },
+      data: {
+        ...baseRunUpdate,
+        status: "dead_letter",
+        errorType: "parse_error",
+        errorMessage: message,
+        deadLetterReason: message,
+        note: "デッドレターキューへ送信（形式・スキーマ不整合）",
+        finishedAt: now,
+      },
     });
     await prisma.ingestionJob.update({
       where: { id: jobId },
       data: {
         lastRunAt: now,
-        nextRunAt: new Date(now.getTime() + nextRunDelayMinutes("failed", job.retryCount + 1) * 60_000),
-        lastStatus: "failed",
-        retryCount: job.retryCount + 1,
+        nextRunAt: new Date(now.getTime() + 24 * 60 * 60_000),
+        lastStatus: "dead_letter",
+        retryCount: job.maxRetries,
       },
     });
-    return { status: "failed", inserted: 0, updated: 0, skipped: 0 };
+    return { status: "dead_letter", inserted: 0, updated: 0, skipped: 0, reason: message };
   }
 
+  const schemaFingerprint = computeSchemaFingerprint(candidates);
+  const previousSuccess = await prisma.ingestionRun.findFirst({
+    where: { ingestionJobId: jobId, status: "success" },
+    orderBy: { startedAt: "desc" },
+  });
+  const schemaChanged = Boolean(
+    previousSuccess && previousSuccess.schemaFingerprint && previousSuccess.schemaFingerprint !== schemaFingerprint,
+  );
   const counts = await upsertStandardRecords(prisma, {
     dataSourceId: job.dataSource.id,
     ingestionRunId: run.id,
@@ -608,7 +674,11 @@ async function runIngestionJob(prisma, options = {}) {
       recordsInserted: counts.inserted,
       recordsUpdated: counts.updated,
       recordsSkipped: counts.skipped,
-      note: `${candidates.length}件中 ${counts.inserted}挿入 / ${counts.updated}更新 / ${counts.skipped}スキップ`,
+      schemaFingerprint,
+      schemaChanged,
+      note:
+        `${candidates.length}件中 ${counts.inserted}挿入 / ${counts.updated}更新 / ${counts.skipped}スキップ` +
+        (schemaChanged ? " / スキーマ変化を検出" : ""),
       finishedAt: now,
     },
   });
@@ -675,6 +745,7 @@ module.exports = {
   normalizeNumber,
   normalizeCoordinate,
   dedupeKey,
+  computeSchemaFingerprint,
   runIngestionJob,
   runDueIngestionJobs,
   stopIngestionRun,

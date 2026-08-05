@@ -22,12 +22,13 @@ export function runIngestionJob(
     maxBytes?: number;
     timeoutMs?: number;
   },
-): Promise<{ status: string; inserted: number; updated: number; skipped: number }>;
+): Promise<{ status: string; inserted: number; updated: number; skipped: number; reason?: string; runId?: string }>;
 
 export function normalizeDate(value: unknown): Date | null;
 export function normalizeNumber(value: unknown): number | null;
 export function normalizeCoordinate(value: unknown, axis: "lng" | "lat"): number | null;
 export function dedupeKey(input: Record<string, unknown>): string;
+export function computeSchemaFingerprint(candidates: Array<Record<string, unknown>>): string;
 export function parseCsv(text: string): Record<string, string>[];
 export function parsePayload(
   bodyText: string,

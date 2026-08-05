@@ -3,7 +3,7 @@ import { requireAdminRequest } from "@/lib/admin-auth";
 import { prisma } from "@/lib/db";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 
-const VALID_STATUSES = new Set(["pending", "running", "success", "failed", "skipped", "stopped"]);
+const VALID_STATUSES = new Set(["pending", "running", "success", "failed", "skipped", "stopped", "dead_letter"]);
 
 export async function GET(request: NextRequest) {
   const authError = requireAdminRequest(request);

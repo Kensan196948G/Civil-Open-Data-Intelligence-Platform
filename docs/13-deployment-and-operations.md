@@ -185,6 +185,11 @@ Cloudflare Workers本番では、データソース接続確認・サンプル�
 - 標準化: `standard_records` へ `sourceRecordId` 単位でupsertし、`ingestionRunId` でリネージュを保持
 - 実行履歴: `ingestion_runs` に挿入/更新/スキップ件数、ステータスコード、エラー、所要時間を記録
 - リトライ: 失敗時は15分×2^retry（最大12時間）で次回実行、`maxRetries` 到達で `failed`
+- 提供元別レート制限: `providers.ingestionRateLimitMinutes` を設定すると、同一提供元の直近実行から指定分数経過するまで `skipped`（provider_rate_limit）にする
+- スキーマドリフト: 取得データの列フィンガープリントを比較し、前回成功と異なる場合は `ingestion_runs.schemaChanged=true` と note へ記録
+- デッドレターキュー: リトライ上限到達・parse失敗は `status=dead_letter` と `deadLetterReason` を保存し、`/api/admin/ingestion/runs?status=dead_letter` で確認できる
+
+各実行後、`data-ingestion.yml` は `scripts/ingestion/quality-monitor.cjs` で品質監視サマリー（デッドレター・スキーマ変化・停滞ジョブ・件数急減/急増）を出力する。`--strict` を指定すると異常検出時に失敗させられる（既定はレポートのみ）。
 
 Workersランタイムは外部URL取得が `unsupported_runtime` のため、定期実行はGitHub Actions（Nodeホスト）で行う。管理APIの手動実行はNode/preview環境向け。
 

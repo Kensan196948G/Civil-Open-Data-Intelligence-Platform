@@ -285,6 +285,24 @@ MVP実装では、台帳の `lastCheckedAt`、直近取得ログ、品質スコ�
 
 PostGIS `standard_records` が存在する環境では、指定地点の半径内レコードをカテゴリ・レイヤー別に集計し、最短距離（Point地物のみ近似値）を返す。未投入環境では候補レイヤーと `not_standardized` / `catalog_point_cross_section` 警告を返す。施工可否・安全性・法令適合の最終判断には使用しない（`decision_not_supported`）。
 
+### 4.6a ジオメトリ空間評価 実装済み
+
+`POST /api/v1/assessments/geometry`
+
+```json
+{
+  "mode": "circle",
+  "center": { "lat": 35.44, "lng": 139.64 },
+  "radiusM": 1000,
+  "bufferM": 100,
+  "q": "橋梁",
+  "limit": 100,
+  "cursor": 0
+}
+```
+
+`mode` は `circle` / `bbox` / `polygon`。`bbox` は `[minLng,minLat,maxLng,maxLat]`、`polygon` はGeoJSONオブジェクト。`bufferM` でバッファ拡張、`q` でタイトル・住所・プロパティのキーワード絞込が可能。`circle` では距離順（最近傍）で返す。未投入環境では候補レイヤーと `catalog_geometry_assessment` 警告を返す。
+
 ### 4.7 データリネージュ 実装済み
 
 `GET /api/v1/sources/{id}/lineage`
@@ -305,8 +323,9 @@ PostGIS `standard_records` が存在する環境では、指定地点の半径�
 | `/api/admin/ingestion/jobs/{id}` | PATCH / DELETE | 定期収集ジョブ更新・削除 |
 | `/api/admin/ingestion/jobs/{id}/run` | POST | ジョブの手動実行（Node/preview環境向け） |
 | `/api/admin/ingestion/runs` | GET | 実行履歴一覧（status/limitで絞込） |
+| `/api/admin/ingestion/quality-summary` | GET | 品質監視サマリー（デッドレター・スキーマ変化・停滞ジョブ・件数異常） |
 
-定期実行はGitHub Actions `data-ingestion.yml` が30分毎に `scripts/ingestion/run-due-jobs.js` を実行する。ジョブはETag/Last-Modifiedによる差分判定、上限サイズ/レコード数、リトライ（指数バックオフ）、SSRFガード（静的検証＋接続時DNSピン留め）、CSV/GeoJSON/JSON解析、標準レコードupsert、リネージュ記録に対応する。Workersランタイムでは外部URL取得が `unsupported_runtime` のため、本番の定期実行はGitHub Actionsが担う。
+定期実行はGitHub Actions `data-ingestion.yml` が30分毎に `scripts/ingestion/run-due-jobs.js` を実行する。ジョブはETag/Last-Modifiedによる差分判定、上限サイズ/レコード数、リトライ（指数バックオフ）、SSRFガード（静的検証＋接続時DNSピン留め）、CSV/GeoJSON/JSON解析、標準レコードupsert、リネージュ記録に対応する。**提供元別レート制限**（`providers.ingestionRateLimitMinutes`）、**スキーマドリフト検出**（取得列のフィンガープリント比較）、**デッドレターキュー**（リトライ上限到達・parse失敗を `dead_letter` として保存）にも対応する。Workersランタイムでは外部URL取得が `unsupported_runtime` のため、本番の定期実行はGitHub Actionsが担う。
 
 ## 5. 標準レコード形式
 
@@ -360,6 +379,7 @@ PostGIS `standard_records` が存在する環境では、指定地点の半径�
 | `/api/v1/assessments/point` | 120 req/min/IP | 標準レコード空間集計 |
 | `/api/v1/recommendations` | 120 req/min/IP | ルールベース推薦 |
 | `/api/v1/sources/{id}/lineage` | 120 req/min/IP | リネージュ取得 |
+| `/api/v1/assessments/geometry` | 60 req/min/IP | 空間評価（POST） |
 | `/api/admin/ingestion/*` | 10〜60 req/min/IP | 定期収集ジョブ操作 |
 
 制限超過時は `429 rate_limited` と `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` を返す。
