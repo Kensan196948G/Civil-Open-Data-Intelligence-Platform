@@ -9,7 +9,7 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | Production URL | ✅ | `https://odip.mirai-dx-platform.com`、DNS/TLS/route到達 |
 | Application health | ✅ | Access service token付きprobeで `/api/health` 200（2026-08-05T02:30Z run 30969524446） |
 | DB readiness / 主要業務 | ✅ | Access service token付きprobeで `/api/ready` 200 `status=ready` `db=ok`（2026-08-05T02:30Z run 30969524446） |
-| Root cause | 解消 | main `579d9ea` を `codip-production` へデプロイ（Version `71fdfb11-d97c-4278-bad1-632b8630d06b`、2026-08-05T02:54Z） |
+| Root cause | 解消 | main `056b772` を `codip-production` へデプロイ（Version `df4809a3-7f17-4f80-be27-63f1798d0cd7`、2026-08-05T03:58Z） |
 | Neon integrity | ✅ read-only | migration 2/2、重複official URL・外部キー孤児・不正geometry 0。DB rollback不要 |
 | Backup | ✅（手動初回） | pg_dump初回成功（2026-08-04T21:05Z workflow_dispatch run 30950851419、暗号化artifact・証跡JSONあり）、restore drill 2026-08-04実施。scheduled初回は2026-08-06 03:17 JSTに確認予定 |
 | Monitoring | ✅ | Access service token設定済み、15分間隔smoke成功（初回 run 30969524446）。通知先・通知テストは運用台帳の残課題 |

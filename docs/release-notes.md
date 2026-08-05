@@ -1,5 +1,13 @@
 # リリースノート
 
+## 2026-08-05 v2 data intelligence 本番デプロイ
+
+| 区分 | 内容 |
+| --- | --- |
+| Production deploy | main `056b772` を `codip-production` へデプロイ（Version `df4809a3-7f17-4f80-be27-63f1798d0cd7`、2026-08-05T03:58Z、gzip 2386.71 KiB） |
+| Migration | Neon productionへ `ingestion_jobs` / `ingestion_runs` / `standard_records.ingestionRunId` を適用（非破壊） |
+| Smoke | デプロイ後 run 30973772209 成功（health 200 / ready 200 db=ok）。scheduled run 30972974222 も成功 |
+
 ## 2026-08-05 v2 data intelligence（定期収集・地点横断・GIS・AI推薦・リネージュ）
 
 | 区分 | 内容 |

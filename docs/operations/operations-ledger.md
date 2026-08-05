@@ -102,6 +102,9 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 | 2026-08-05T02:55Z | デプロイ後production smoke | ✅ | run 30970704615（health 200 / ready 200 db=ok） |
 | 2026-08-05 | データ収集パイプライン実装 | ✅ | 定期ジョブ/実行履歴/ETag/リトライ/CSV・GeoJSON/リネージュ。`data-ingestion.yml` 30分毎 |
 | 2026-08-05 | 地点横断・AI推薦・GIS出力実装 | ✅ | `/api/v1/assessments/point` `/recommendations`、地図レイヤー/計測/出力 |
+| 2026-08-05T03:58Z | 本番デプロイ（main `056b772`） | ✅ | Version `df4809a3-7f17-4f80-be27-63f1798d0cd7` |
+| 2026-08-05T03:59Z | デプロイ後production smoke | ✅ | run 30973772209（health 200 / ready 200 db=ok） |
+| 2026-08-05T03:41Z | scheduled production smoke（初の自動成功） | ✅ | run 30972974222 |
 
 ## 6. 更新ルール
 
