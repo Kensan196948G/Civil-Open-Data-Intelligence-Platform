@@ -75,8 +75,8 @@ requireText("Neon backup workflow", neonBackup, "::add-mask::$CODIP_BACKUP_ENCRY
 requireText("Neon backup workflow", neonBackup, "pg_dump --format=custom --no-owner --no-privileges --file");
 requireText("Neon backup workflow", neonBackup, "gpg --batch --yes --pinentry-mode loopback");
 requireText("Neon backup workflow", neonBackup, "shred -u \"$dump_path\" || rm -f \"$dump_path\"");
-requireText("Neon backup workflow", neonBackup, "npm run release:create-neon-backup-evidence");
-requireText("Neon backup workflow", neonBackup, "npm run release:check-neon-backup-evidence");
+requireText("Neon backup workflow", neonBackup, "release:create-neon-backup-evidence");
+requireText("Neon backup workflow", neonBackup, "release:check-neon-backup-evidence");
 requireText("Neon backup workflow", neonBackup, "github-actions-artifact://");
 requireText("Neon backup workflow", neonBackup, "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
 requireText("Neon backup workflow", neonBackup, "retention-days: 14");
