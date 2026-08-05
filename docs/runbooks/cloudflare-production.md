@@ -16,7 +16,7 @@
 | DB | Neon PostgreSQL/PostGIS via Cloudflare Hyperdrive (`codip-production`, ID `1da7b81807374ec190addf146717d275`, caching disabled) |
 | Neon | project `falling-dawn-93620497` (Civil-Open-Data-Intelligence-Platform, PG17, aws-us-west-2) default branch |
 | Access | Cloudflare Access app `odip`（allow policy: mirai-const.co.jp + kensan1969@gmail.com、Service Auth policy `odip-service-auth` は監視用service tokenのみ）。未認証は302→login |
-| Deployed | `codip-production` 2026-08-04T14:37:44Z（Version `50ed1ab5-d601-4763-b76b-2142f8d99631`、PR #93 head `6dce57c` 相当。mainとの差分はCIのみ） |
+| Deployed | `codip-production` 2026-08-05T02:54:26Z（Version `71fdfb11-d97c-4278-bad1-632b8630d06b`、main `579d9ea`） |
 | Secrets | Cloudflare/GitHub Secrets only. Do not commit secret values |
 
 ## 1. Stop conditions
@@ -141,8 +141,8 @@ npm run release:smoke -- --read-only --base-url "https://odip.mirai-dx-platform.
 | 項目 | 記録 |
 | --- | --- |
 | Approval / change ticket | PR #93 (2026-08-04)、本番デプロイ承認済みパイプライン |
-| commit SHA | `6dce57c`（本番反映）、PR head `fe71477` |
-| Cloudflare Worker version | `codip-production` Version ID `50ed1ab5-d601-4763-b76b-2142f8d99631` (2026-08-04T14:37:44Z) |
+| commit SHA | `579d9ea`（main確定・本番反映。前回 `6dce57c` / PR head `fe71477`） |
+| Cloudflare Worker version | `codip-production` Version ID `71fdfb11-d97c-4278-bad1-632b8630d06b` (2026-08-05T02:54:26Z) |
 | Custom Domain status | 非使用（zone route方式） |
 | DNS status | `odip.mirai-dx-platform.com` proxied AAAA `100::`、A 104.21.57.65 / 172.67.189.96、NXDOMAIN→旧 civilopendata 削除済 |
 | Hostname conflict check | 2026-07-20 に既存CNAME/Pages/Access衝突なしを確認 |
@@ -157,6 +157,6 @@ npm run release:smoke -- --read-only --base-url "https://odip.mirai-dx-platform.
 | Cloudflare logs / alert policy evidence | Observability enabled、専用alert policyはIssue #90追跡 |
 | Neon monitoring evidence | PITR window 24h、restore drill 2026-08-04 実施 |
 | Backup / restore evidence | Secrets/Variables設定済み、`restore-drill-20260804` (br-wild-shape-aff21r0u) |
-| Smoke monitoring schedule | 15分間隔 production-smoke。Access service token設定済み。初回成功 2026-08-05T02:30Z (run 30969524446) |
+| Smoke monitoring schedule | 15分間隔 production-smoke。Access service token設定済み。初回成功 2026-08-05T02:30Z (run 30969524446)、デプロイ後再確認 02:55Z (run 30970704615) |
 | `release:smoke --read-only` result | 本番はAccess service token付き `release:post-release-status --strict-production` で `/api/health` 200・`/api/ready` 200 (db=ok) を確認 (2026-08-05)。ローカルpreview 85 checks OK、PR CI green |
 | Rollback owner / rollback target | human kensan / `wrangler rollback --env production` で直前version (2026-08-01T15:33:31Z) |

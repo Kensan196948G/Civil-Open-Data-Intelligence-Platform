@@ -5,7 +5,7 @@
 | 項目 | 実測 | 判定 |
 | --- | --- | --- |
 | Production URL | `https://odip.mirai-dx-platform.com` | 正式ターゲット |
-| Cloudflare route / Worker | route・deploymentとも実在、`codip-production` は2026-08-01T15:33Zにmain `5f76656` 相当へ更新済み | 稼働 |
+| Cloudflare route / Worker | route・deploymentとも実在、`codip-production` は2026-08-05T02:54Zにmain `579d9ea`（Version `71fdfb11-d97c-4278-bad1-632b8630d06b`）へ更新済み | 稼働 |
 | Access boundary | Cloudflare Access app `odip` が未認証アクセスを302でloginへ誘導 | 期待動作 |
 | DB readiness | Access認証済みで `/api/ready=ready`、manual production smoke 75/75成功 (2026-08-02) | 稼働 |
 | 定期smoke | Access service token設定済み。15分間隔 strict read-only probe成功（初回 2026-08-05T02:30Z run 30969524446） | 稼働 |
