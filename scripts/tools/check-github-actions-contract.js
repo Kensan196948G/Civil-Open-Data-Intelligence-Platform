@@ -58,7 +58,7 @@ requireText("CI workflow", ci, "sha256sum -c -");
 requireText("CI workflow", ci, "./actionlint -color");
 requireText("CI workflow", ci, "docker-image-security:");
 requireText("CI workflow", ci, "aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25");
-requireText("CI workflow", ci, "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0");
+requireText("CI workflow", ci, "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1");
 requireText("CI workflow", ci, "fetch-depth: 0");
 requireText("CI workflow", ci, "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020");
 requireText("CI workflow", ci, "gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7");
@@ -90,7 +90,7 @@ requireText("Production smoke workflow", productionSmoke, "permissions:\n  conte
 requireText("Production smoke workflow", productionSmoke, "--strict-production");
 requireText("Production smoke workflow", productionSmoke, "--allow-preview-down");
 requireText("Production smoke workflow", productionSmoke, "https://odip.mirai-dx-platform.com");
-requireText("Production smoke workflow", productionSmoke, "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0");
+requireText("Production smoke workflow", productionSmoke, "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1");
 requireText("Production smoke workflow", productionSmoke, "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020");
 requireText("Production smoke workflow", productionSmoke, "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
 requireText("Production smoke workflow", productionSmoke, "retention-days: 14");
@@ -118,7 +118,7 @@ requireText("node-preview job", nodePreviewJob, "Direct Node preview release smo
 requireText("node-preview job", nodePreviewJob, "npm run start:checked -- --hostname 127.0.0.1 --port 3110");
 requireText("node-preview job", nodePreviewJob, "http://127.0.0.1:3110/api/ready");
 requireText("node-preview job", nodePreviewJob, "npm run release:smoke -- --base-url http://127.0.0.1:3110");
-requireText("CodeQL workflow", codeql, "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0");
+requireText("CodeQL workflow", codeql, "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1");
 requireText("CodeQL workflow", codeql, "github/codeql-action/init@1ad29ea4a422cce9a242a9fae469541dcd08addc");
 requireText("CodeQL workflow", codeql, "github/codeql-action/analyze@1ad29ea4a422cce9a242a9fae469541dcd08addc");
 requireText("CodeQL workflow", codeql, "continue-on-error: true");

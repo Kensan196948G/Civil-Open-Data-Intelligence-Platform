@@ -51,7 +51,7 @@ requireText("CI workflow", ci, "severity: CRITICAL,HIGH");
 requireText("CI workflow", ci, "ignore-unfixed: true");
 requireText("CI workflow", ci, 'exit-code: "1"');
 requireText("CI workflow", ci, "scanners: vuln");
-requireText("CI workflow", ci, "docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0");
+requireText("CI workflow", ci, "docker/login-action@dbcb813823bdd20940b903addbd779551569679f");
 requireText("CI workflow", ci, "docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c");
 requireText("CI workflow", ci, "docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302");
 requireText("CI workflow", ci, "docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a");
