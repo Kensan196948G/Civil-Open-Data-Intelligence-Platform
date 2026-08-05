@@ -1,5 +1,15 @@
 # リリースノート
 
+## 2026-08-05 P0 quality & spatial expansion（レート制御・スキーマドリフト・デッドレター・空間評価・品質監視）
+
+| 区分 | 内容 |
+| --- | --- |
+| 収集エンジン | `providers.ingestionRateLimitMinutes` による提供元別レート制御、`ingestion_runs.schemaFingerprint/schemaChanged` によるスキーマドリフト検出、`dead_letter` ステータスと `deadLetterReason` |
+| 品質監視 | `scripts/ingestion/quality-monitor.cjs`（data-ingestion.ymlに統合）と `GET /api/admin/ingestion/quality-summary`（デッドレター・スキーマ変化・停滞ジョブ・件数急減/急増） |
+| 空間評価 | `POST /api/v1/assessments/geometry`（circle/bbox/polygon・バッファ・キーワード・最近傍）、`/api/v1/layers/{id}/features?q=` 属性絞込 |
+| GIS UI | 矩形検索（2点指定）、属性検索結果一覧、時間範囲フィルタ |
+| ジョブ展開 | `scripts/ingestion/seed-jobs.cjs` でCSV/GeoJSON/JSON・APIキー不要ソースへ定期収集ジョブを自動作成可能 |
+
 ## 2026-08-05 v2 data intelligence 本番デプロイ
 
 | 区分 | 内容 |

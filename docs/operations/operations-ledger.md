@@ -105,6 +105,7 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 | 2026-08-05T03:58Z | 本番デプロイ（main `056b772`） | ✅ | Version `df4809a3-7f17-4f80-be27-63f1798d0cd7` |
 | 2026-08-05T03:59Z | デプロイ後production smoke | ✅ | run 30973772209（health 200 / ready 200 db=ok） |
 | 2026-08-05T03:41Z | scheduled production smoke（初の自動成功） | ✅ | run 30972974222 |
+| 2026-08-05 | P0品質・空間拡張実装 | ✅ | レート制御・スキーマドリフト・デッドレター・空間評価API・品質監視 |
 
 ## 6. 更新ルール
 

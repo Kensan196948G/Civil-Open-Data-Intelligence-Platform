@@ -429,6 +429,7 @@ const openApiDocument = {
           { name: "id", in: "path", required: true, schema: { type: "string" } },
           { name: "bbox", in: "query", schema: { type: "string" } },
           { name: "format", in: "query", schema: { type: "string", enum: ["geojson"] } },
+          { name: "q", in: "query", schema: { type: "string", minLength: 2 } },
           { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 5000 } },
           { name: "cursor", in: "query", schema: { type: "integer", minimum: 0, maximum: 100000 } },
         ],
@@ -499,6 +500,19 @@ const openApiDocument = {
         responses: {
           "200": { description: "出典→定期収集ジョブ→実行履歴→標準レコードの追跡情報" },
           "404": v1ErrorResponse,
+          "429": v1ErrorResponse,
+        },
+      },
+    },
+    "/api/v1/assessments/geometry": {
+      post: {
+        tags: ["downstream"],
+        summary: "ジオメトリ空間評価（circle/bbox/polygon・バッファ・交差・最近傍）を取得",
+        description:
+          "PostGIS standard_records に対し、円・矩形・ポリゴンの空間条件＋バッファ＋キーワードで検索し、カテゴリ/レイヤー別集計とレコードを返す。未投入環境では候補レイヤーを返す。",
+        responses: {
+          "200": { description: "空間評価結果" },
+          "400": v1ErrorResponse,
           "429": v1ErrorResponse,
         },
       },
@@ -574,6 +588,18 @@ const openApiDocument = {
         security: adminSecurity,
         responses: {
           "200": { description: "実行履歴一覧" },
+          "401": { description: "管理認証エラー" },
+          "429": { description: "レート制限超過" },
+        },
+      },
+    },
+    "/api/admin/ingestion/quality-summary": {
+      get: {
+        tags: ["admin"],
+        summary: "データ品質監視サマリーを取得",
+        security: adminSecurity,
+        responses: {
+          "200": { description: "実行ステータス件数・デッドレター・スキーマ変化・停滞ジョブ・件数異常" },
           "401": { description: "管理認証エラー" },
           "429": { description: "レート制限超過" },
         },

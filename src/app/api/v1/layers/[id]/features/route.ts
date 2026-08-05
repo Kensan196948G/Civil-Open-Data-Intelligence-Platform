@@ -39,6 +39,7 @@ export async function GET(request: NextRequest, { params }: Params) {
 
   const format = request.nextUrl.searchParams.get("format") ?? "geojson";
   const bbox = parseBbox(request.nextUrl.searchParams.get("bbox"));
+  const q = request.nextUrl.searchParams.get("q")?.trim() ?? "";
   const limit = intParam(request.nextUrl.searchParams, "limit", 1_000, 1, 5_000);
   const cursor = cursorParam(request.nextUrl.searchParams);
   if (format !== "geojson") {
@@ -78,6 +79,7 @@ export async function GET(request: NextRequest, { params }: Params) {
   const standardized = await findStandardFeaturesForLayer({
     sourceId: source.id,
     bbox: bbox.value,
+    q: q || undefined,
     limit,
     cursor,
   });

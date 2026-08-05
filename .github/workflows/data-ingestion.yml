@@ -51,3 +51,12 @@ jobs:
             exit 1
           fi
           node scripts/ingestion/run-due-jobs.js
+
+      - name: Data quality monitoring summary
+        shell: bash
+        run: |
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::Missing secrets.CODIP_INGESTION_DATABASE_URL"
+            exit 1
+          fi
+          node scripts/ingestion/quality-monitor.js

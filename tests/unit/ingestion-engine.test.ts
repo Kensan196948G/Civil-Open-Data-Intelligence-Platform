@@ -22,6 +22,7 @@ function mockPrisma() {
       create: vi.fn(),
       update: vi.fn(),
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
     },
     standardRecord: {
       findFirst: vi.fn(),
@@ -184,6 +185,100 @@ describe("ingestion engine", () => {
     expect(result.status).toBe("retrying");
     expect(prisma.ingestionJob.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ retryCount: 1, lastStatus: "retrying" }) }),
+    );
+  });
+
+  it("moves exhausted retries into dead-letter queue", async () => {
+    const prisma = mockPrisma();
+    prisma.ingestionJob.findUnique.mockResolvedValue({
+      id: "job_1",
+      etag: null,
+      lastModified: null,
+      retryCount: 2,
+      maxRetries: 3,
+      maxRecords: 500,
+      intervalMinutes: 60,
+      dataSource,
+    });
+    prisma.ingestionRun.create.mockResolvedValue({ id: "run_1" });
+    prisma.ingestionRun.update.mockResolvedValue({ id: "run_1" });
+    prisma.ingestionJob.update.mockResolvedValue({ id: "job_1" });
+    const fetchImpl = vi.fn().mockResolvedValue({ status: 503, headers: new Map() });
+
+    const result = await runIngestionJob(prisma as never, { jobId: "job_1", fetchImpl });
+    expect(result.status).toBe("dead_letter");
+    expect(prisma.ingestionRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "dead_letter", deadLetterReason: "HTTP 503" }),
+      }),
+    );
+  });
+
+  it("respects provider-level rate limits", async () => {
+    const prisma = mockPrisma();
+    prisma.ingestionJob.findUnique.mockResolvedValue({
+      id: "job_1",
+      etag: null,
+      lastModified: null,
+      retryCount: 0,
+      maxRetries: 3,
+      maxRecords: 500,
+      intervalMinutes: 60,
+      dataSource: { ...dataSource, provider: { id: "provider_1", ingestionRateLimitMinutes: 60 } },
+    });
+    prisma.ingestionRun.findFirst.mockResolvedValue({
+      id: "prev_run",
+      startedAt: new Date(Date.now() - 10 * 60_000),
+    });
+    prisma.ingestionRun.create.mockResolvedValue({ id: "run_1" });
+    prisma.ingestionJob.update.mockResolvedValue({ id: "job_1" });
+
+    const result = await runIngestionJob(prisma as never, { jobId: "job_1", fetchImpl: vi.fn() });
+    expect(result.status).toBe("skipped");
+    expect(result.reason).toBe("provider_rate_limit");
+    expect(prisma.ingestionRun.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "skipped" }) }),
+    );
+  });
+
+  it("flags schema changes against previous successful run", async () => {
+    const prisma = mockPrisma();
+    prisma.ingestionJob.findUnique.mockResolvedValue({
+      id: "job_1",
+      etag: null,
+      lastModified: null,
+      retryCount: 0,
+      maxRetries: 3,
+      maxRecords: 500,
+      intervalMinutes: 60,
+      dataSource,
+    });
+    prisma.ingestionRun.create.mockResolvedValue({ id: "run_1" });
+    prisma.ingestionRun.findFirst.mockResolvedValue({
+      id: "prev_run",
+      schemaFingerprint: "different-fingerprint",
+    });
+    prisma.standardRecord.findFirst.mockResolvedValue(null);
+    prisma.standardRecord.create.mockResolvedValue({ id: "std_1" });
+    prisma.ingestionRun.update.mockResolvedValue({ id: "run_1" });
+    prisma.ingestionJob.update.mockResolvedValue({ id: "job_1" });
+    const fetchImpl = vi.fn().mockResolvedValue({
+      status: 200,
+      headers: new Map([["content-type", "application/json"]]),
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(JSON.stringify([{ title: "A", address: "横浜", newField: "x" }])));
+          controller.close();
+        },
+      }),
+    });
+
+    const result = await runIngestionJob(prisma as never, { jobId: "job_1", fetchImpl });
+    expect(result.status).toBe("success");
+    expect(prisma.ingestionRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ schemaChanged: true, schemaFingerprint: expect.any(String) }),
+      }),
     );
   });
 

@@ -395,6 +395,96 @@ export async function findStandardRecordsForPoint(input: {
   };
 }
 
+export async function findStandardRecordsForGeometry(input: {
+  mode: "circle" | "bbox" | "polygon";
+  center?: { lat: number; lng: number };
+  radiusM?: number;
+  bbox?: [number, number, number, number];
+  polygonGeoJson?: unknown;
+  bufferM?: number;
+  q?: string;
+  limit: number;
+  cursor: number;
+}): Promise<StandardRecordQueryResult | null> {
+  if (!(await standardRecordsAvailable())) return null;
+
+  const PostgreSQLPrisma = getPostgreSQLPrismaHelpers();
+  const bufferM = input.bufferM ?? 0;
+  let spatialSql: PostgreSQLPrismaTypes.Sql;
+  let orderSql: PostgreSQLPrismaTypes.Sql;
+
+  if (input.mode === "circle" && input.center) {
+    const { lat, lng } = input.center;
+    const radiusM = input.radiusM ?? 1_000;
+    spatialSql = PostgreSQLPrisma.sql`AND ST_DWithin(
+      sr.geometry::geography,
+      ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography,
+      ${radiusM + bufferM}
+    )`;
+    orderSql = PostgreSQLPrisma.sql`ORDER BY ST_Distance(
+      sr.geometry::geography,
+      ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography
+    ) ASC, sr.id ASC`;
+  } else if (input.mode === "bbox" && input.bbox) {
+    const [minLng, minLat, maxLng, maxLat] = input.bbox;
+    const envelope = PostgreSQLPrisma.sql`ST_MakeEnvelope(${minLng}, ${minLat}, ${maxLng}, ${maxLat}, 4326)`;
+    spatialSql =
+      bufferM > 0
+        ? PostgreSQLPrisma.sql`AND sr.geometry && ST_Expand(${envelope}, ${bufferM / 111_320})
+            AND ST_DWithin(sr.geometry::geography, ${envelope}::geography, ${bufferM})`
+        : PostgreSQLPrisma.sql`AND sr.geometry && ${envelope} AND ST_Intersects(sr.geometry, ${envelope})`;
+    orderSql = PostgreSQLPrisma.sql`ORDER BY sr."updatedAt" DESC, sr.id ASC`;
+  } else if (input.mode === "polygon" && input.polygonGeoJson) {
+    const polygonSql = PostgreSQLPrisma.sql`ST_SetSRID(ST_GeomFromGeoJSON(${JSON.stringify(input.polygonGeoJson)}), 4326)`;
+    spatialSql =
+      bufferM > 0
+        ? PostgreSQLPrisma.sql`AND ST_DWithin(sr.geometry::geography, ${polygonSql}::geography, ${bufferM})`
+        : PostgreSQLPrisma.sql`AND ST_Intersects(sr.geometry, ${polygonSql})`;
+    orderSql = PostgreSQLPrisma.sql`ORDER BY sr."updatedAt" DESC, sr.id ASC`;
+  } else {
+    return null;
+  }
+
+  const qSql =
+    input.q && input.q.trim().length >= 2
+      ? PostgreSQLPrisma.sql`AND (sr.title ILIKE ${`%${input.q.trim()}%`}
+          OR sr.address ILIKE ${`%${input.q.trim()}%`}
+          OR sr."properties"::text ILIKE ${`%${input.q.trim()}%`})`
+      : PostgreSQLPrisma.empty;
+
+  const countRows = await prisma.$queryRaw<{ count: number | bigint }[]>`
+    SELECT COUNT(*)::int AS "count"
+    FROM "standard_records" sr
+    WHERE sr.geometry IS NOT NULL
+      AND 1=1
+      ${spatialSql}
+      ${qSql}
+  `;
+  const total = Number(countRows[0]?.count ?? 0);
+
+  const rows = await prisma.$queryRaw<RawStandardRecord[]>`
+    SELECT ${standardRecordSelectSql()}
+    FROM "standard_records" sr
+    JOIN "data_sources" ds ON ds.id = sr."dataSourceId"
+    JOIN "providers" p ON p.id = ds."providerId"
+    WHERE sr.geometry IS NOT NULL
+      AND 1=1
+      ${spatialSql}
+      ${qSql}
+    ${orderSql}
+    LIMIT ${input.limit + 1}
+    OFFSET ${input.cursor}
+  `;
+
+  const visibleRows = rows.slice(0, input.limit);
+  return {
+    records: visibleRows.map(standardRecordDto),
+    total,
+    nextCursor: rows.length > input.limit ? String(input.cursor + input.limit) : null,
+    standardized: true,
+  };
+}
+
 export async function findStandardLayers(input: {
   q?: string;
   category?: string;
@@ -478,6 +568,7 @@ export async function findStandardLayers(input: {
 export async function findStandardFeaturesForLayer(input: {
   sourceId: string;
   bbox?: [number, number, number, number];
+  q?: string;
   limit: number;
   cursor: number;
 }): Promise<StandardFeatureCollectionResult | null> {
@@ -495,6 +586,12 @@ export async function findStandardFeaturesForLayer(input: {
     ? PostgreSQLPrisma.sql`AND sr.geometry && ST_MakeEnvelope(${input.bbox[0]}, ${input.bbox[1]}, ${input.bbox[2]}, ${input.bbox[3]}, 4326)
         AND ST_Intersects(sr.geometry, ST_MakeEnvelope(${input.bbox[0]}, ${input.bbox[1]}, ${input.bbox[2]}, ${input.bbox[3]}, 4326))`
     : PostgreSQLPrisma.empty;
+  const qSql =
+    input.q && input.q.trim().length >= 2
+      ? PostgreSQLPrisma.sql`AND (sr.title ILIKE ${`%${input.q.trim()}%`}
+          OR sr.address ILIKE ${`%${input.q.trim()}%`}
+          OR sr."properties"::text ILIKE ${`%${input.q.trim()}%`})`
+      : PostgreSQLPrisma.empty;
 
   const rows = await prisma.$queryRaw<RawStandardRecord[]>`
     SELECT ${standardRecordSelectSql()}
@@ -504,6 +601,7 @@ export async function findStandardFeaturesForLayer(input: {
     WHERE sr."dataSourceId" = ${input.sourceId}
       AND sr.geometry IS NOT NULL
       ${bboxSql}
+      ${qSql}
     ORDER BY sr."updatedAt" DESC, sr.id ASC
     LIMIT ${input.limit + 1}
     OFFSET ${input.cursor}

@@ -16,6 +16,7 @@ model Provider {
   officialUrl      String?
   country          String?
   note             String?
+  ingestionRateLimitMinutes Int @default(0)
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
   dataSources      DataSource[]
@@ -191,6 +192,9 @@ model IngestionRun {
   errorType        String?
   errorMessage     String?
   note             String?
+  schemaFingerprint String?
+  schemaChanged    Boolean       @default(false)
+  deadLetterReason String?
   startedAt        DateTime        @default(now())
   finishedAt       DateTime?
   standardRecords  StandardRecord[]

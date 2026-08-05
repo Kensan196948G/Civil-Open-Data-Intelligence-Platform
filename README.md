@@ -153,10 +153,12 @@ flowchart LR
 | 🔍 検索 | キーワード、カテゴリ、提供元、形式、APIキー要否、状態、タグ |
 | 🗺️ 地図 | OpenStreetMap、GeoJSON貼り付け、レイヤー重ね合わせ・凡例・透明度、GeoJSON/CSV出力、距離/面積計測、標高目安 |
 | 📥 定期収集 | ジョブ管理API、30分毎GitHub Actions実行、ETag/Last-Modified差分、リトライ、CSV/GeoJSON/JSON解析、標準レコードupsert |
-| 🧹 クレンジング | 日付/数値/座標（Web Mercator簡易変換）正規化、dedupe key、欠損・上限チェック |
+| 🧹 クレンジング | 日付/数値/座標（Web Mercator簡易変換）正規化、dedupe key、欠損・上限チェック、提供元別レート制限 |
+| 🧪 品質監視 | デッドレターキュー、スキーマドリフト検出、停滞ジョブ、件数急減/急増サマリー（`/api/admin/ingestion/quality-summary`） |
 | 🧬 リネージュ | `/api/v1/sources/{id}/lineage`（出典→ジョブ→実行→標準レコード） |
 | 🤖 AIコンシェルジュ | `/api/v1/recommendations`（ルールベース推薦・根拠・地図レイヤーURL付き） |
 | 📍 地点横断 | `/api/v1/assessments/point`（PostGISカテゴリ別集計・最短距離） |
+| 📐 空間評価 | `/api/v1/assessments/geometry`（circle/bbox/polygon・バッファ・キーワード・最近傍） |
 | 🧾 運用ログ | 接続確認ログ、サンプルレスポンス、保持期間dry-run |
 | 🛡️ セキュリティ | 管理API保護、CSRF、Rate Limit、SSRF対策、秘密URL拒否 |
 | 🔗 後続API | `/api/v1/records/search`, `/point`, `/layers`, `/freshness`, `/assessments/point`, `/recommendations` |
@@ -267,9 +269,9 @@ flowchart LR
 - **Cloudflare staging Hyperdrive**: 現行 `CLOUDFLARE_API_TOKEN` にHyperdrive作成権限がないため (code 10000)、Cloudflare stagingデプロイはブロック中。Neon staging branch `staging-20260804` は作成済み。権限追加またはDashboard操作が必要
 - **Neon pg_dump定期ジョブ**: ✅ 初回成功（2026-08-04T21:05Z workflow_dispatch run 30950851419、暗号化artifact・証跡JSON）。scheduled初回成功は2026-08-06 03:17 JSTに確認予定。保持期間・復元手順は `docs/runbooks/database-deployment.md` §4.1、運用台帳を参照
 - **De-dockerization移行中**: [Issue #35](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/35)。Docker jobはbranch protection互換のため残し、先にDocker非依存の `node-preview` CIゲートを追加して差し替え先を育てる
-- **ETLの実データ展開**: 定期収集パイプライン・クレンジング・リネージュは実装済み。実データ50種類への展開、データ提供元別レート制御、スキーマドリフト検出、デッドレターキューは次サイクル（docs/14ロードマップ）
+- **ETLの実データ展開**: 定期収集・クレンジング・リネージュ・提供元別レート制御・スキーマドリフト検出・デッドレターキューは実装済み。実データ50種類への展開と稼働チューニングは継続中（docs/14ロードマップ）
 - **AIの本格化**: ルールベース推薦（`/api/v1/recommendations`）は実装済み。LLM/RAG、AI品質監視、コネクタ自動生成、自然文検索は未導入（P1）
-- **GIS分析の深化**: レイヤー重ね合わせ・計測・出力は実装済み。範囲/バッファ/交差検索、属性検索、時系列スライダー、3D/PLATEAUは未導入（P0/P2）
+- **GIS分析の深化**: レイヤー重ね合わせ・計測・出力・矩形検索・属性検索・時間フィルタは実装済み。ポリゴンUI・バッファUI・時系列スライダーUI・GeoPackage/PDF出力・3D/PLATEAUは未導入（P0/P2）
 
 🔒 **本番アプリはCloudflare Access配下で稼働中**。本番監視（15分間隔smoke）とNeon定期バックアップは確立済みです。残るブロッカーはCloudflare staging Hyperdrive（staging専用）と、アラート通知先・通知テスト等の運用仕上げです。手順は [`docs/runbooks/cloudflare-production.md`](docs/runbooks/cloudflare-production.md)、[`docs/runbooks/monitoring.md`](docs/runbooks/monitoring.md)、[`docs/operations/operations-ledger.md`](docs/operations/operations-ledger.md) を参照してください。
 
