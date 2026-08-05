@@ -136,7 +136,7 @@ flowchart LR
 | 正式URL | `https://odip.mirai-dx-platform.com` | ✅ DNS/TLS/route到達 |
 | Access | Cloudflare Access app `odip`（mirai-const.co.jp + kensan1969@gmail.com） | ✅ 未認証は302→login |
 | Health / Ready | Access service token付きprobeで200（2026-08-05T02:55Z run 30970704615）。未認証は302 | ✅ Worker/DB稼働 |
-| 稼働deployment | `codip-production` 2026-08-05T02:54Z（Version `71fdfb11-d97c-4278-bad1-632b8630d06b`、main `579d9ea`） | ✅ 最新main反映済 |
+| 稼働deployment | `codip-production` 2026-08-05T03:58Z（Version `df4809a3-7f17-4f80-be27-63f1798d0cd7`、main `056b772`） | ✅ v2機能反映済 |
 | Neon | PostgreSQL 17.10 / PostGIS 3.5、migration 2/2、整合性異常0 | ✅ DB rollback不要 |
 | Backup | pg_dump初回成功（2026-08-04T21:05Z workflow_dispatch run 30950851419、AES256暗号化artifact `codip-neon-pgdump-20260804T210642Z.dump.gpg`、14日保持）。scheduled初回は2026-08-06 03:17 JSTに検証予定 | ✅（手動初回） |
 | 定期smoke | Access service token設定済み（2026-08-05）。15分間隔 strict read-only probe成功（初回 run 30969524446、デプロイ後 run 30970704615） | ✅ |

@@ -16,7 +16,7 @@
 | DB | Neon PostgreSQL/PostGIS via Cloudflare Hyperdrive (`codip-production`, ID `1da7b81807374ec190addf146717d275`, caching disabled) |
 | Neon | project `falling-dawn-93620497` (Civil-Open-Data-Intelligence-Platform, PG17, aws-us-west-2) default branch |
 | Access | Cloudflare Access app `odip`（allow policy: mirai-const.co.jp + kensan1969@gmail.com、Service Auth policy `odip-service-auth` は監視用service tokenのみ）。未認証は302→login |
-| Deployed | `codip-production` 2026-08-05T02:54:26Z（Version `71fdfb11-d97c-4278-bad1-632b8630d06b`、main `579d9ea`） |
+| Deployed | `codip-production` 2026-08-05T03:58Z（Version `df4809a3-7f17-4f80-be27-63f1798d0cd7`、main `056b772`、gzip 2386.71 KiB） |
 | Secrets | Cloudflare/GitHub Secrets only. Do not commit secret values |
 
 ## 1. Stop conditions
@@ -141,8 +141,8 @@ npm run release:smoke -- --read-only --base-url "https://odip.mirai-dx-platform.
 | 項目 | 記録 |
 | --- | --- |
 | Approval / change ticket | PR #93 (2026-08-04)、本番デプロイ承認済みパイプライン |
-| commit SHA | `579d9ea`（main確定・本番反映。前回 `6dce57c` / PR head `fe71477`） |
-| Cloudflare Worker version | `codip-production` Version ID `71fdfb11-d97c-4278-bad1-632b8630d06b` (2026-08-05T02:54:26Z) |
+| commit SHA | `056b772`（main確定・本番反映。前回 `579d9ea`） |
+| Cloudflare Worker version | `codip-production` Version ID `df4809a3-7f17-4f80-be27-63f1798d0cd7` (2026-08-05T03:58Z) |
 | Custom Domain status | 非使用（zone route方式） |
 | DNS status | `odip.mirai-dx-platform.com` proxied AAAA `100::`、A 104.21.57.65 / 172.67.189.96、NXDOMAIN→旧 civilopendata 削除済 |
 | Hostname conflict check | 2026-07-20 に既存CNAME/Pages/Access衝突なしを確認 |
