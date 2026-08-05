@@ -136,10 +136,10 @@ flowchart LR
 | 正式URL | `https://odip.mirai-dx-platform.com` | ✅ DNS/TLS/route到達 |
 | Access | Cloudflare Access app `odip`（mirai-const.co.jp + kensan1969@gmail.com） | ✅ 未認証は302→login |
 | Health / Ready | Access service token付きprobeで200（2026-08-05T02:55Z run 30970704615）。未認証は302 | ✅ Worker/DB稼働 |
-| 稼働deployment | `codip-production` 2026-08-05T03:58Z（Version `df4809a3-7f17-4f80-be27-63f1798d0cd7`、main `056b772`） | ✅ v2機能反映済 |
+| 稼働deployment | `codip-production` 2026-08-05T04:58Z（Version `0eaaaafa-9995-4607-afdb-6e34801f9c9e`、main `41400dc` 相当） | ✅ P0品質・空間評価反映済 |
 | Neon | PostgreSQL 17.10 / PostGIS 3.5、migration 2/2、整合性異常0 | ✅ DB rollback不要 |
 | Backup | pg_dump初回成功（2026-08-04T21:05Z workflow_dispatch run 30950851419、AES256暗号化artifact `codip-neon-pgdump-20260804T210642Z.dump.gpg`、14日保持）。scheduled初回は2026-08-06 03:17 JSTに検証予定 | ✅（手動初回） |
-| 定期smoke | Access service token設定済み（2026-08-05）。15分間隔 strict read-only probe成功（初回 run 30969524446、デプロイ後 run 30970704615） | ✅ |
+| 定期smoke | Access service token設定済み（2026-08-05）。15分間隔 strict read-only probe成功（初回 30969524446、scheduled 30972974222、P0デプロイ後 30976480258） | ✅ |
 
 定期検知は `.github/workflows/production-smoke.yml` が15分ごとにstrict read-only probeを実行します。odipはCloudflare Access配下のため、監視用Access service token（`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`）をGitHub Actions Secretへ設定済みです。Cloudflare/Neonアラート通知先と初回通知テストは運用台帳（`docs/operations/operations-ledger.md`）の残課題です。
 
