@@ -101,6 +101,8 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 | 2026-08-09 16:18 UTC ほか | Weather-Marine Data Ingestion（直近） | ✅ | run 31323451526 / 31322767842 / 31322036351。10分毎に継続成功 |
 | 2026-08-10 | 統合後新画面のE2E回帰テスト追加 | ✅ | `tests/e2e/integrated-screens.spec.ts`（16件・CI検証予定） |
 | 2026-08-10 | 総合評価・改善計画・監視アラートRunbook作成 | ✅ | `docs/evaluation/`、`docs/runbooks/alerts-and-notifications.md` |
+| 2026-08-10 | 本番デプロイ（main `3ec5e8f`、PR #114） | ✅ | Version `d1528b5d-b5e6-47e9-aa4b-1070868161f6`。デプロイ後Production Smoke run 31325075110 success（/api/health 200 / /api/ready 200 db=ok） |
+| 2026-08-10 | /reports未コミット問題の修正 | ✅ | `.gitignore` の `reports/` パターンが `src/app/reports/` と `src/app/api/v1/reports/` を誤除外していたため `/reports/`（ルート限定）へ変更し、2ファイルをコミット |
 | 2026-08-05 02:30Z | production smoke初回成功 | ✅ | run 30969524446（health 200 / ready 200 db=ok） |
 | 2026-08-05 | Access service token設定 | ✅ | 本台帳 §4、`docs/runbooks/cloudflare-production.md` §1.0.1 |
 | 2026-08-05 | 運用台帳・incident runbook新設 | ✅ | 本ファイル、`docs/runbooks/incident-response.md` |

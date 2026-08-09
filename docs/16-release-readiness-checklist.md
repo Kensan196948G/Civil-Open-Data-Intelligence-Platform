@@ -8,12 +8,13 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 
 | Gate | 状態 | 根拠 / 次の操作 |
 | --- | --- | --- |
-| Production URL | ✅ | `https://odip.mirai-dx-platform.com`、Worker `codip-production` Version `57b17ee1-1703-437d-bddb-63d068adf9c5`（main `2c6e73f` 相当） |
-| Application health / DB readiness | ✅ | Access service token付きprobeで `/api/health` `/api/ready` 200（Production Smoke run 31322616071 ほか継続成功） |
-| 統合機能のE2E回帰 | 🟡 追加済み | `tests/e2e/integrated-screens.spec.ts`（地形/気象海象/判定/現場/レポート・16件）を新設。CI `e2e` ジョブで検証予定 |
+| Production URL | ✅ | `https://odip.mirai-dx-platform.com`、Worker `codip-production` Version `d1528b5d-b5e6-47e9-aa4b-1070868161f6`（main `3ec5e8f`、PR #114） |
+| Application health / DB readiness | ✅ | Access service token付きprobeで `/api/health` `/api/ready` 200（デプロイ後 run 31325075110: health 200・788ms / ready 200 db=ok・1421ms） |
+| 統合機能のE2E回帰 | ✅ | `tests/e2e/integrated-screens.spec.ts`（地形/気象海象/判定/現場/レポート・16件）を新設し、CI `e2e` ジョブpass（run 31324701074） |
 | Monitoring / Alerts | ⚠️ 検知は稼働・通知未設定 | アラート通知先・通知テストは未設定。設定手順は `docs/runbooks/alerts-and-notifications.md`（P0） |
 | Backup | ✅ | 日次AES256 pg_dump成功（直近 run 31271930146）。2026-08-07の1回はrunner未獲得で失敗→翌日復旧（運用台帳§5） |
 | 評価・改善文書 | ✅ | `docs/evaluation/`（改善前評価・競合分析・代替率・改善計画）作成済み |
+| /reports未コミット修正 | ✅ | `.gitignore` の `reports/` パターンを `/reports/` へ修正し、`src/app/reports/page.tsx` と `src/app/api/v1/reports/route.ts` をコミット（本番へ反映済み） |
 
 | Gate | 状態 | 根拠 / 次の操作 |
 | --- | --- | --- |
