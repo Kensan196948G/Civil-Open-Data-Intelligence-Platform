@@ -2,8 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
+import dynamic from "next/dynamic";
 
-type TabId = "weather" | "marine" | "decision" | "sites" | "reports" | "etl";
+const SiteMap = dynamic(() => import("./SiteMap").then((m) => m.SiteMap), {
+  ssr: false,
+  loading: () => <div className="flex h-full items-center justify-center text-[12px] text-[var(--muted)]">⏳ 地図を読み込み中...</div>,
+});
+
+type TabId = "weather" | "marine" | "decision" | "sites" | "thresholds" | "reports" | "etl";
 
 type Site = {
   id: string;
@@ -50,11 +56,32 @@ type DecisionResult = {
   generatedAt: string;
 };
 
+type ForecastDay = {
+  date: string;
+  weatherCode: number | null;
+  tempMaxC: number | null;
+  tempMinC: number | null;
+  precipSumMm: number | null;
+  windMaxMs: number | null;
+};
+
+type Threshold = {
+  id: string;
+  siteId: string | null;
+  workType: string;
+  metric: string;
+  op: string;
+  value: number;
+  severity: "warn" | "stop";
+  note: string | null;
+};
+
 const TABS: { id: TabId; label: string }[] = [
   { id: "weather", label: "🌦️ 気象" },
   { id: "marine", label: "🌊 海象" },
   { id: "decision", label: "🧭 施工判定" },
   { id: "sites", label: "🚧 現場管理" },
+  { id: "thresholds", label: "🎚️ 閾値管理" },
   { id: "reports", label: "📊 レポート" },
   { id: "etl", label: "⚙️ 取得状況" },
 ];
@@ -75,6 +102,11 @@ export function WeatherWorkspace({ initialTab }: { initialTab: TabId }) {
   const [marine, setMarine] = useState<MarineRow[]>([]);
   const [etl, setEtl] = useState<{ jobs: { id: number; name: string; status: string; records: number; lastObservedAt: string | null }[] } | null>(null);
   const [message, setMessage] = useState("");
+  const [forecast, setForecast] = useState<ForecastDay[]>([]);
+  const [thresholds, setThresholds] = useState<Threshold[]>([]);
+  const [aiCommentary, setAiCommentary] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [etlRunning, setEtlRunning] = useState(false);
   const [decision, setDecision] = useState<DecisionResult | null>(null);
   const [workType, setWorkType] = useState("concrete");
   const [windowStart, setWindowStart] = useState(defaultWindowStart());
@@ -122,6 +154,109 @@ export function WeatherWorkspace({ initialTab }: { initialTab: TabId }) {
       setMarine(mb?.data?.observations ?? []);
     } catch {
       setMessage("観測データの取得に失敗しました");
+    }
+  }
+
+  async function loadForecast() {
+    if (!siteId) return;
+    const site = sites.find((s) => s.id === siteId);
+    if (!site) return;
+    setMessage("");
+    try {
+      const response = await fetch(`/api/v1/weather/forecast?lat=${site.lat}&lon=${site.lon}`);
+      const body = await response.json();
+      if (!response.ok) {
+        setMessage(body?.error?.message ?? "週間予報の取得に失敗しました");
+        return;
+      }
+      setForecast(body.data.days ?? []);
+    } catch {
+      setMessage("週間予報の取得に失敗しました");
+    }
+  }
+
+  async function loadThresholds() {
+    if (!siteId) return;
+    try {
+      const response = await fetch(`/api/v1/thresholds?siteId=${encodeURIComponent(siteId)}`);
+      const body = await response.json();
+      setThresholds(body?.data?.thresholds ?? []);
+    } catch {
+      setMessage("閾値一覧の取得に失敗しました");
+    }
+  }
+
+  async function createThreshold(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const payload = {
+      siteId: String(form.get("siteId") ?? "") === "global" ? null : siteId,
+      workType: String(form.get("workType") ?? ""),
+      metric: String(form.get("metric") ?? ""),
+      op: String(form.get("op") ?? ">="),
+      value: Number(form.get("value")),
+      severity: String(form.get("severity") ?? "warn"),
+      note: String(form.get("note") ?? "").trim() || null,
+    };
+    const response = await fetch("/api/v1/thresholds", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      setMessage(body?.error?.message ?? "閾値登録に失敗しました (管理認証が必要です)");
+      return;
+    }
+    setMessage("✅ 閾値を登録しました");
+    void loadThresholds();
+  }
+
+  async function deleteThreshold(id: string) {
+    const response = await fetch(`/api/v1/thresholds/${id}`, { method: "DELETE" });
+    if (!response.ok) {
+      setMessage("閾値削除に失敗しました (管理認証が必要です)");
+      return;
+    }
+    setMessage("✅ 閾値を削除しました");
+    void loadThresholds();
+  }
+
+  async function runEtl(jobId: number) {
+    setEtlRunning(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/v1/etl/run/${jobId}`, { method: "POST" });
+      const body = await response.json();
+      if (!response.ok) {
+        setMessage(body?.error?.message ?? "ETL実行に失敗しました");
+        return;
+      }
+      setMessage(`✅ ${body.data.output}`);
+    } catch {
+      setMessage("ETL実行に失敗しました");
+    } finally {
+      setEtlRunning(false);
+    }
+  }
+
+  async function runAi() {
+    if (!siteId) return;
+    setAiLoading(true);
+    setAiCommentary("");
+    setMessage("");
+    try {
+      const response = await fetch(`/api/v1/weather/ai-analysis?siteId=${encodeURIComponent(siteId)}&workType=${encodeURIComponent(workType)}`);
+      const body = await response.json();
+      if (!response.ok) {
+        setMessage(body?.error?.message ?? "AI解説の取得に失敗しました");
+        return;
+      }
+      setAiCommentary(body.data.commentary);
+    } catch {
+      setMessage("AI解説の取得に失敗しました");
+    } finally {
+      setAiLoading(false);
     }
   }
 
@@ -241,23 +376,66 @@ export function WeatherWorkspace({ initialTab }: { initialTab: TabId }) {
       </div>
 
       {tab === "weather" ? (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricCard label="気温" value={weather[0]?.temperatureC} unit="℃" />
-          <MetricCard label="湿度" value={weather[0]?.humidityPct} unit="%" />
-          <MetricCard label="降水量 (10分)" value={weather[0]?.precipMm} unit="mm" />
-          <MetricCard label="風速" value={weather[0]?.windSpeedMs} unit="m/s" />
-          <div className="rounded-lg border border-[var(--line)] p-3 sm:col-span-2">
-            <h3 className="mb-2 mt-0 text-[13px] font-semibold">風配図 (直近200件)</h3>
-            <WindRose data={windRose} />
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <MetricCard label="気温" value={weather[0]?.temperatureC} unit="℃" />
+            <MetricCard label="湿度" value={weather[0]?.humidityPct} unit="%" />
+            <MetricCard label="降水量 (10分)" value={weather[0]?.precipMm} unit="mm" />
+            <MetricCard label="風速" value={weather[0]?.windSpeedMs} unit="m/s" />
+            <div className="rounded-lg border border-[var(--line)] p-3 sm:col-span-2">
+              <h3 className="mb-2 mt-0 text-[13px] font-semibold">風配図 (直近200件)</h3>
+              <WindRose data={windRose} />
+            </div>
+            <div className="rounded-lg border border-[var(--line)] p-3 sm:col-span-2">
+              <h3 className="mb-2 mt-0 text-[13px] font-semibold">最新観測の出典・時刻</h3>
+              <p className="m-0 text-[12px] text-[var(--muted)]">
+                {weather[0]
+                  ? `観測時刻: ${new Date(weather[0].observedAt).toLocaleString("ja-JP")} / ソース: ${weather[0].source} / 品質: QCフラグ0のみ採用`
+                  : "観測データがありません (取り込みジョブ未実行または未設定)"}
+              </p>
+              <p className="m-0 text-[11px] text-[var(--faint)]">出典: 気象庁 AMeDAS (https://www.jma.go.jp/bosai/amedas/)</p>
+            </div>
           </div>
-          <div className="rounded-lg border border-[var(--line)] p-3 sm:col-span-2">
-            <h3 className="mb-2 mt-0 text-[13px] font-semibold">最新観測の出典・時刻</h3>
-            <p className="m-0 text-[12px] text-[var(--muted)]">
-              {weather[0]
-                ? `観測時刻: ${new Date(weather[0].observedAt).toLocaleString("ja-JP")} / ソース: ${weather[0].source} / 品質: QCフラグ0のみ採用`
-                : "観測データがありません (取り込みジョブ未実行または未設定)"}
+          <div className="rounded-lg border border-[var(--line)] p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h3 className="m-0 text-[13px] font-semibold">📅 週間予報 (7日間・参考情報)</h3>
+              <button type="button" className="dc-btn-ghost" onClick={() => void loadForecast()}>
+                🔄 週間予報を取得
+              </button>
+            </div>
+            {forecast.length === 0 ? (
+              <p className="m-0 text-[11.5px] text-[var(--muted)]">取得ボタンで7日間の予報を表示します (Open-Meteo 参考情報)。</p>
+            ) : (
+              <div className="overflow-auto">
+                <table className="w-full text-left text-[11.5px]">
+                  <thead>
+                    <tr className="border-b border-[var(--line)] text-[var(--muted)]">
+                      <th className="py-1 pr-2 font-medium">日付</th>
+                      <th className="py-1 pr-2 font-medium">天気コード</th>
+                      <th className="py-1 pr-2 font-medium">最高気温</th>
+                      <th className="py-1 pr-2 font-medium">最低気温</th>
+                      <th className="py-1 pr-2 font-medium">降水量</th>
+                      <th className="py-1 pr-2 font-medium">最大風速</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {forecast.map((day) => (
+                      <tr key={day.date} className="border-b border-[var(--line)]">
+                        <td className="py-1 pr-2">{day.date}</td>
+                        <td className="py-1 pr-2">{day.weatherCode ?? "—"}</td>
+                        <td className="py-1 pr-2">{day.tempMaxC ?? "—"}℃</td>
+                        <td className="py-1 pr-2">{day.tempMinC ?? "—"}℃</td>
+                        <td className="py-1 pr-2">{day.precipSumMm ?? "—"}mm</td>
+                        <td className="py-1 pr-2">{day.windMaxMs ?? "—"}m/s</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p className="mb-0 mt-2 text-[11px] text-[var(--faint)]">
+              出典: Open-Meteo Forecast API (参考情報)。気象庁の注意報・警報は必ず別途確認してください。
             </p>
-            <p className="m-0 text-[11px] text-[var(--faint)]">出典: 気象庁 AMeDAS (https://www.jma.go.jp/bosai/amedas/)</p>
           </div>
         </div>
       ) : null}
@@ -328,7 +506,13 @@ export function WeatherWorkspace({ initialTab }: { initialTab: TabId }) {
             <button type="button" className="dc-btn-accent" onClick={() => void runDecision()} disabled={loading || !siteId}>
               {loading ? "⏳ 判定中..." : "🧭 判定実行"}
             </button>
+            <button type="button" className="dc-btn-ghost" onClick={() => void runAi()} disabled={aiLoading || !siteId}>
+              {aiLoading ? "⏳ 生成中..." : "🤖 AI参考解説"}
+            </button>
           </div>
+          {aiCommentary !== "" ? (
+            <pre className="m-0 whitespace-pre-wrap rounded-lg border border-[var(--line)] p-3 text-[12px]">{aiCommentary}</pre>
+          ) : null}
           {decision !== null ? (
             <div className={`rounded-lg border p-3 ${decision.status === "stop" ? "border-[var(--red)] bg-[var(--red-bg)]" : decision.status === "caution" ? "border-[var(--amber)] bg-[var(--amber-bg)]" : "border-[var(--green)] bg-[var(--green-bg)]"}`}>
               <div className="text-lg font-bold">
@@ -364,6 +548,21 @@ export function WeatherWorkspace({ initialTab }: { initialTab: TabId }) {
             </ul>
           </div>
           <div className="dc-card px-[18px] py-[17px]">
+            <h2 className="mb-2 mt-0 text-sm font-semibold">🗾 全国地図</h2>
+            <div className="h-[320px] overflow-hidden rounded-lg border border-[var(--line)]">
+              <SiteMap
+                sites={sites}
+                onSelect={(site) => {
+                  setSiteId(site.id);
+                  void loadObservations();
+                }}
+              />
+            </div>
+            <p className="mb-0 mt-2 text-[11px] text-[var(--faint)]">
+              マーカーをクリックすると現場を選択します。地図: © OpenStreetMap contributors
+            </p>
+          </div>
+          <div className="dc-card px-[18px] py-[17px]">
             <h2 className="mb-2 mt-0 text-sm font-semibold">現場登録 (管理認証必須)</h2>
             <form className="grid grid-cols-2 gap-2" onSubmit={createSite}>
               <input name="code" required placeholder="コード (例: TYO-07)" className="dc-input text-xs" aria-label="コード" />
@@ -377,6 +576,96 @@ export function WeatherWorkspace({ initialTab }: { initialTab: TabId }) {
               <input name="lat" required type="number" step="any" placeholder="緯度" className="dc-input text-xs" aria-label="緯度" />
               <input name="lon" required type="number" step="any" placeholder="経度" className="dc-input text-xs" aria-label="経度" />
               <input name="address" placeholder="住所 (任意)" className="dc-input col-span-2 text-xs" aria-label="住所" />
+              <button type="submit" className="dc-btn-accent col-span-2">
+                登録
+              </button>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {tab === "thresholds" ? (
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div className="dc-card px-[18px] py-[17px]">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h2 className="m-0 text-sm font-semibold">🎚️ 閾値一覧 (現場別 + グローバル)</h2>
+              <button type="button" className="dc-btn-ghost" onClick={() => void loadThresholds()}>
+                🔄 再読込
+              </button>
+            </div>
+            <div className="max-h-96 overflow-auto">
+              <table className="w-full text-left text-[11.5px]">
+                <thead>
+                  <tr className="border-b border-[var(--line)] text-[var(--muted)]">
+                    <th className="py-1 pr-2 font-medium">作業</th>
+                    <th className="py-1 pr-2 font-medium">指標</th>
+                    <th className="py-1 pr-2 font-medium">基準</th>
+                    <th className="py-1 pr-2 font-medium">種別</th>
+                    <th className="py-1 pr-2 font-medium">備考</th>
+                    <th className="py-1 pr-2 font-medium"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {thresholds.map((threshold) => (
+                    <tr key={threshold.id} className="border-b border-[var(--line)]">
+                      <td className="py-1 pr-2">{threshold.workType}</td>
+                      <td className="py-1 pr-2 font-mono">{threshold.metric}</td>
+                      <td className="py-1 pr-2 font-mono">
+                        {threshold.op}
+                        {threshold.value}
+                      </td>
+                      <td className="py-1 pr-2">
+                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${threshold.severity === "stop" ? "bg-[var(--red-bg)] text-[var(--red)]" : "bg-[var(--amber-bg)] text-[var(--amber)]"}`}>
+                          {threshold.severity === "stop" ? "中止" : "警戒"}
+                        </span>
+                        {threshold.siteId === null ? <span className="ml-1 text-[10px] text-[var(--faint)]">global</span> : null}
+                      </td>
+                      <td className="py-1 pr-2">{threshold.note ?? "—"}</td>
+                      <td className="py-1 pr-2">
+                        <button type="button" className="dc-btn-ghost" onClick={() => void deleteThreshold(threshold.id)}>
+                          🗑️
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="dc-card px-[18px] py-[17px]">
+            <h2 className="mb-2 mt-0 text-sm font-semibold">閾値登録 (管理認証必須)</h2>
+            <form className="grid grid-cols-2 gap-2" onSubmit={createThreshold}>
+              <select name="siteId" className="dc-input text-xs" aria-label="適用範囲">
+                <option value="site">この現場のみ</option>
+                <option value="global">グローバル (全現場)</option>
+              </select>
+              <select name="workType" className="dc-input text-xs" aria-label="作業種別">
+                {WORK_TYPES.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.label}
+                  </option>
+                ))}
+              </select>
+              <select name="metric" className="dc-input text-xs" aria-label="指標">
+                <option value="precipMm1h">precipMm1h (1h降雨)</option>
+                <option value="temperatureC">temperatureC (気温)</option>
+                <option value="windSpeedMs">windSpeedMs (風速)</option>
+                <option value="sigWaveHM">sigWaveHM (有義波高)</option>
+              </select>
+              <div className="flex items-center gap-1">
+                <select name="op" className="dc-input text-xs" aria-label="演算子">
+                  <option value=">=">&gt;=</option>
+                  <option value="&lt;">&lt;</option>
+                  <option value="&lt;=">&lt;=</option>
+                  <option value="&gt;">&gt;</option>
+                </select>
+                <input name="value" required type="number" step="any" className="dc-input text-xs" aria-label="値" />
+              </div>
+              <select name="severity" className="dc-input text-xs" aria-label="種別">
+                <option value="warn">警戒 (warn)</option>
+                <option value="stop">中止 (stop)</option>
+              </select>
+              <input name="note" placeholder="備考 (任意)" className="dc-input text-xs" aria-label="備考" />
               <button type="submit" className="dc-btn-accent col-span-2">
                 登録
               </button>
@@ -433,6 +722,15 @@ export function WeatherWorkspace({ initialTab }: { initialTab: TabId }) {
           <p className="mb-0 mt-2 text-[11px] text-[var(--faint)]">
             AMeDAS: 10分毎 / Open-Meteo Marine: 10分毎 (参考情報)。取り込みは GitHub Actions の定期ワークフローが実行します。
           </p>
+          <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--line)] pt-3">
+            <button type="button" className="dc-btn-accent" onClick={() => void runEtl(1)} disabled={etlRunning}>
+              {etlRunning ? "⏳ 実行中..." : "▶️ AMeDAS を手動実行 (Node環境のみ)"}
+            </button>
+            <button type="button" className="dc-btn-ghost" onClick={() => void runEtl(2)} disabled={etlRunning}>
+              {etlRunning ? "⏳ 実行中..." : "▶️ Marine を手動実行 (Node環境のみ)"}
+            </button>
+            <span className="text-[11px] text-[var(--faint)]">Cloudflare Workers では GitHub Actions の workflow_dispatch を使用します。</span>
+          </div>
         </div>
       ) : null}
 

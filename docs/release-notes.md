@@ -17,6 +17,16 @@
 - 🗄️ 統合元2リポジトリの Git bundle + GitHub メタデータ保全
   (`docs/migration/preservation/`)
 
+## 2026-08-09 (2): 統合ギャップ解消
+
+- 📅 週間予報 `/api/v1/weather/forecast` (Open-Meteo 7日間・参考情報)
+- 🗾 全国地図 (現場タブ・Leaflet マーカー選択)
+- 🎚️ 閾値管理 UI (一覧/登録/削除)
+- 💾 地形案件保存 `TerrainAnalysisRun` + `/api/v1/terrain/runs`
+- ▶️ ETL手動実行 `/api/v1/etl/run/{id}` (Node環境) + 取得状況タブ
+- 🤖 AI参考解説 `/api/v1/weather/ai-analysis` (ルールベース)
+- 🗄️ 本番Neonへのマイグレーション自動適用を weather 取り込みワークフローへ追加
+
 ## 2026-08-05 P0 本番デプロイ・実データ収集開始
 
 | 区分 | 内容 |

@@ -15,7 +15,7 @@
 | # | 機能 | 状態 | 移行分類 | 中核での実装計画 |
 | --- | --- | --- | --- | --- |
 | W-01 | 現場管理 (一覧/登録/詳細) | 実装済み | 🔵 再設計統合 | Prisma `ConstructionSite` + `/api/v1/sites` + `/sites` UI |
-| W-02 | 全国地図 (40件・エリアフィルター) | 実装済み | 🔵 再設計統合 | `/sites` UI (Leaflet/MapLibre + 台帳リンク) |
+| W-02 | 全国地図 (40件・エリアフィルター) | 実装済み | 🔵 再設計統合 | ✅ `/weather` 現場タブに Leaflet 全国地図 (マーカー選択) |
 | W-03 | AMeDAS 気象データ収集 (10分毎) | 実装済み | 🔵 再設計統合 | `scripts/ingestion/weather-jma.js` + `WeatherObservation` |
 | W-04 | 波浪・潮位・海流 (JMA wave/Open-Meteo Marine) | 実装済み | 🔵 再設計統合 | `scripts/ingestion/marine-openmeteo.js` + `MarineObservation` |
 | W-05 | 取りこぼし再取得 (現在→前3hブロック) | 実装済み | 🔵 再設計統合 | 同上 (fetch fallback) |
@@ -24,7 +24,7 @@
 | W-08 | 施工可否判定 (go/caution/stop, 欠測はfail-closed) | 実装済み | 🔵 再設計統合 | `src/lib/decision/engine.ts` + `/api/v1/decisions` |
 | W-09 | コンクリート打設支援 (気温/降雨/風) | 実装済み | 🟢 そのまま移植 | `/decisions` UI + 既定閾値シード |
 | W-10 | 海上作業支援 (波高/風速/潜水/輸送) | 実装済み | 🟢 そのまま移植 | 同上 |
-| W-11 | 週間予報表示 | 実装済み (UI) | 🟣 重複統合・置換 | 中核 `connectors/jma-xml.ts` を活用 |
+| W-11 | 週間予報表示 | 実装済み (UI) | 🔵 再設計統合 | ✅ `/api/v1/weather/forecast` (Open-Meteo 7日間・参考情報・30分キャッシュ) + `/weather` UI |
 | W-12 | 風配図 | 実装済み (UI) | 🔵 再設計統合 | `/weather` UI の風配チャート |
 | W-13 | 履歴分析 (月次統計) | 実装済み | 🔵 再設計統合 | `/api/v1/analysis/historical` |
 | W-14 | 50年確率波 (Gumbel/Weibull, 年最大) | 実装済み | 🟢 そのまま移植 | `src/lib/analysis/return-period.ts` + `/api/v1/analysis/wave50` |
@@ -32,8 +32,8 @@
 | W-16 | 監査ログ (actor/action/detail, 判定再構成) | 実装済み | 🟣 重複統合・置換 | 中核 `AuditLog` + `/api/admin/audit-events` |
 | W-17 | 認証 (bcrypt JWT / M365 ROPC / APIキー) | 実装済み | 🟣 重複統合・置換 | 中核 `admin-auth` (token/proxy/session) を採用 |
 | W-18 | レート制限・セキュリティヘッダー | 実装済み | 🟣 重複統合・置換 | 中核 `rate-limit` + 既存ヘッダー方針 |
-| W-19 | AI支援 (Anthropic + ルールベースfallback) | 実装済み | 🔵 再設計統合 | 中核 `recommendations` と統合 (LLM APIキーはenv管理) |
-| W-20 | ETLジョブ管理 (手動実行/status) | 実装済み | 🔵 再設計統合 | `/api/v1/etl/*` + `scripts/ingestion` |
+| W-19 | AI支援 (Anthropic + ルールベースfallback) | 実装済み | 🔵 再設計統合 | ✅ `/api/v1/weather/ai-analysis` (ルールベース参考解説) + 判定タブ UI |
+| W-20 | ETLジョブ管理 (手動実行/status) | 実装済み | 🔵 再設計統合 | ✅ `/api/v1/etl/run/{id}` (Node環境) + status + UI |
 | W-21 | Prometheus メトリクス | 実装済み | 🟣 重複統合・置換 | 中核 `/api/health` 等の運用監視で代替 |
 | W-22 | バックアップ (pg_dump) | 実装済み | 🟣 重複統合・置換 | 中核 `neon-backup` workflow が既存 |
 

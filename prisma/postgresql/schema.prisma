@@ -359,3 +359,17 @@ model DecisionRecord {
   @@index([siteId, generatedAt])
   @@map("decision_records")
 }
+
+model TerrainAnalysisRun {
+  id        String   @id @default(cuid())
+  lat       Float
+  lon       Float
+  tab       String // terrain / section / confirm / output
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([lat, lon])
+  @@index([createdAt])
+  @@map("terrain_analysis_runs")
+}

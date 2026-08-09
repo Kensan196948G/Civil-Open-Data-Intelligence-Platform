@@ -340,6 +340,7 @@ Horn法 (3x3近傍勾配) と TPI (地形位置指数) による解析を行う�
 | `/api/v1/terrain/section` | GET | 始点→終点 (30m〜20km) の縦断プロファイル・勾配統計 |
 | `/api/v1/terrain/confirm` | GET | 実測メトリクスのルール評価による確認支援カード |
 | `/api/v1/terrain/export` | GET | Markdown/CSV/JSON レポート出力 |
+| `/api/v1/terrain/runs` | GET/POST | 保存済み地形案件一覧・保存 (管理認証) |
 
 共通仕様:
 
@@ -362,10 +363,13 @@ Horn法 (3x3近傍勾配) と TPI (地形位置指数) による解析を行う�
 | `/api/v1/observations/weather/latest` | GET | 最新気象観測 |
 | `/api/v1/observations/marine` | GET/POST | 海象観測一覧・取り込み |
 | `/api/v1/observations/marine/latest` | GET | 最新海象観測 |
+| `/api/v1/weather/forecast` | GET | 週間予報 (Open-Meteo 参考情報・30分キャッシュ) |
+| `/api/v1/weather/ai-analysis` | GET | AI参考解説 (ルールベース・参考情報) |
 | `/api/v1/decisions` | POST | 施工可否判定 (go/caution/stop + 監査スナップショット) |
 | `/api/v1/analysis/historical` | GET | 月次履歴統計 (気象・海象) |
 | `/api/v1/analysis/wave50` | GET | 50年確率波推算 (Gumbel/Weibull) |
 | `/api/v1/etl/status` | GET | AMeDAS/Open-Meteo Marine 取り込み状態 |
+| `/api/v1/etl/run/{id}` | POST | ETL手動実行 (Node環境のみ。Workersはworkflow_dispatchで実行) |
 | `/api/v1/reports` | POST | 日次/週次/月次/判定/海象/年次レポート (CSV/Markdown) |
 
 判定仕様 (wmcdss の fail-closed 設計を踏襲):
