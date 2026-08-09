@@ -9,10 +9,12 @@
 | # | 改善 | 内容 | 証跡 |
 | --- | --- | --- | --- |
 | 1 | 🐛 地形画面のクライアントクラッシュ修正 | レイヤー切替時に `event.currentTarget` をstate更新関数内で読む非安全パターンを修正（`Cannot read properties of null (reading 'value')` を解消） | `src/components/terrain/TerrainWorkspace.tsx` |
-| 2 | 🧪 統合後新画面のE2E 16件 | /terrain /weather /decisions /sites /reports のUI構造・権限ガード（401）・AI参考解説・アクセシビリティ基本を追加 | `tests/e2e/integrated-screens.spec.ts` |
+| 2 | 🧪 統合後新画面のE2E 16件 | /terrain /weather /decisions /sites /reports のUI構造・権限ガード（401）・AI参考解説・アクセシビリティ基本を追加。CI e2e pass（run 31324701074） | `tests/e2e/integrated-screens.spec.ts` |
 | 3 | 🔔 監視アラートRunbook | 通知未設定の現状・GitHub/Cloudflare/Neonの設定手順・月次通知試験・エスカレーション基準・リスク受容条件 | `docs/runbooks/alerts-and-notifications.md` |
 | 4 | 📋 運用文書更新 | README本番状態の最新化、バックアップ失敗1回（runner未獲得）と復旧の記録、docs/13・release checklist更新 | README / docs/13 / docs/16 / 運用台帳 |
 | 5 | 📊 評価書作成 | 18軸採点・強み/弱み・競合分析・代替率・改善計画 | `docs/evaluation/` |
+| 6 | 🚨 /reports未コミット問題の修正 | `.gitignore` の `reports/` が `src/app/reports/` と `src/app/api/v1/reports/` を誤除外。`/reports/`（ルート限定）へ修正し2ファイルをコミット。本番へデプロイ済み | `.gitignore` / `src/app/reports/page.tsx` / `src/app/api/v1/reports/route.ts` |
+| 7 | 🚀 本番デプロイ＋スモーク検証 | main `3ec5e8f` をデプロイ（Version `d1528b5d-b5e6-47e9-aa4b-1070868161f6`）。デプロイ後Production Smoke success（run 31325075110: health 200・ready 200 db=ok） | 運用台帳 / release checklist |
 
 ---
 
@@ -27,18 +29,18 @@
 | 5 | データ品質 | 68 | 68 | — | 実データ50種展開はPhase 1 |
 | 6 | AI有効性 | 40 | 42 | +2 | AI参考解説の公開動作をE2Eで検証（ルールベースのまま） |
 | 7 | 設計 | 78 | 78 | — | — |
-| 8 | コード品質 | 78 | 80 | +2 | クラッシュ原因の根本修正・ESLint/typecheck 0件 |
+| 8 | コード品質 | 78 | 82 | +4 | クラッシュ原因の根本修正・gitignoreによる未コミット機能発見・ESLint/typecheck 0件 |
 | 9 | 性能・拡張性 | 55 | 55 | — | ロードテスト未実施 |
 | 10 | セキュリティ | 80 | 80 | — | 権限ガードのE2E検証追加 |
-| 11 | 可用性・バックアップ | 72 | 74 | +2 | バックアップ失敗1回の原因記録・復旧実績・E2E回帰網 |
+| 11 | 可用性・バックアップ | 72 | 75 | +3 | バックアップ失敗1回の原因記録・復旧実績・本番デプロイ後smoke成功 |
 | 12 | 監視・障害対応 | 55 | 60 | +5 | 通知設定の手順・基準・試験計画をRunbook化。実行はP0残課題 |
-| 13 | テスト | 70 | 78 | +8 | 統合後新画面E2E 16件追加、全画面の権限ガード検証 |
+| 13 | テスト | 70 | 80 | +10 | 統合後新画面E2E 16件追加・CI pass、全画面の権限ガード検証、/reports実装の回帰担保 |
 | 14 | CI/CD・リリース | 80 | 82 | +2 | E2Eが全画面をカバーし回帰安全網が拡大 |
 | 15 | 運用保守性 | 62 | 65 | +3 | アラート手順・バックアップ実績・台帳更新 |
-| 16 | 文書 | 75 | 82 | +7 | 評価書・競合分析・改善計画・アラートRunbook追加、README最新化 |
+| 16 | 文書 | 75 | 84 | +9 | 評価書・競合分析・改善計画・アラートRunbook追加、README・台帳・チェックリスト最新化 |
 | 17 | 費用対効果 | 70 | 70 | — | — |
 | 18 | 競合代替性 | 55 | 55 | — | 機能代替はPhase 2以降 |
-| **平均** | — | **67.1** | **69.2** | **+2.1** | — |
+| **平均** | — | **67.1** | **69.6** | **+2.5** | — |
 
 ---
 
