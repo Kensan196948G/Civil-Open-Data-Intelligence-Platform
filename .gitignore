@@ -50,5 +50,5 @@ backups/
 .mcp.json
 state.json
 
-# claudeos internal reports
-reports/
+# claudeos internal reports (ルート直下のみ。src/app/reports/ 等のアプリ画面は除外しない)
+/reports/
