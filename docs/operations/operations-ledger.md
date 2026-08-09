@@ -94,7 +94,13 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 | --- | --- | --- | --- |
 | 2026-08-04 | Neon restore drill | ✅ | `restore-drill-20260804`（`br-wild-shape-aff21r0u`） |
 | 2026-08-04T21:05Z | Neon pg_dump初回（workflow_dispatch） | ✅ | run 30950851419、`codip-neon-pgdump-20260804T210642Z.dump.gpg` |
-| 2026-08-06 03:17 JST | Neon pg_dump scheduled初回 | ⏳ 未実施（予定） | 確認後に追記 |
+| 2026-08-07 03:44 JST | Neon pg_dump scheduled初回 | ❌ 失敗 | run 31126295159。原因: GitHub hosted runnerが獲得できずjob未実行（アプリ/DB起因ではない）。翌日以降は成功 |
+| 2026-08-07 03:31 JST | Neon pg_dump scheduled | ✅ | run 31207338589 |
+| 2026-08-08 03:26 JST | Neon pg_dump scheduled | ✅ | run 31271930146 |
+| 2026-08-09 16:21 UTC | Production Smoke（直近） | ✅ | run 31322616071。15分毎に継続成功 |
+| 2026-08-09 16:18 UTC ほか | Weather-Marine Data Ingestion（直近） | ✅ | run 31323451526 / 31322767842 / 31322036351。10分毎に継続成功 |
+| 2026-08-10 | 統合後新画面のE2E回帰テスト追加 | ✅ | `tests/e2e/integrated-screens.spec.ts`（16件・CI検証予定） |
+| 2026-08-10 | 総合評価・改善計画・監視アラートRunbook作成 | ✅ | `docs/evaluation/`、`docs/runbooks/alerts-and-notifications.md` |
 | 2026-08-05 02:30Z | production smoke初回成功 | ✅ | run 30969524446（health 200 / ready 200 db=ok） |
 | 2026-08-05 | Access service token設定 | ✅ | 本台帳 §4、`docs/runbooks/cloudflare-production.md` §1.0.1 |
 | 2026-08-05 | 運用台帳・incident runbook新設 | ✅ | 本ファイル、`docs/runbooks/incident-response.md` |

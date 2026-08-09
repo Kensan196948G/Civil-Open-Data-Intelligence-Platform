@@ -16,7 +16,7 @@ MVPではローカル、CI、Docker previewで品質を確認する。2026-07-19
 ただし以下は未解決のアプリケーションコード/実リソース側の制約であり、Workers本番切替前に解消または証跡化が必須:
 
 - `src/lib/url-guard.ts` の事前DNS検証は `resolve4` / `resolve6` へ変更済み。接続時ピン留めはNode.js/Undici Agentで実施する。Cloudflare Workersでは公式仕様上 `dns.lookup` が未実装で、同等の接続時ピン留めを保証できないため、`src/lib/http-client.ts` はWorkers runtimeを検知した場合に外部URL取得を `unsupported_runtime` として明示的に停止する
-- `wrangler.jsonc` の production route は `odip.mirai-dx-platform.com/*` に固定済み。production `workers_dev=false` により本番の `*.workers.dev` 直公開経路は使わない。2026-08-01にmain `5f76656` 相当を `codip-production` へ再デプロイし、Workers wasm修正 (`83b1b91`) を含む状態でAccess配下の本番が稼働している。未認証の `/api/health` / `/api/ready` はCloudflare Accessにより302となり、アプリ稼働の確認にはAccess service token付きprobeまたは認証済みセッションが必要。本番化・復旧手順は `docs/runbooks/cloudflare-production.md` を入口とする。Neon mainはread-only整合性確認済みでDB rollbackは不要
+- `wrangler.jsonc` の production route は `odip.mirai-dx-platform.com/*` に固定済み。production `workers_dev=false` により本番の `*.workers.dev` 直公開経路は使わない。2026-08-09時点の本番は main `2c6e73f` 相当（Worker Version `57b17ee1-1703-437d-bddb-63d068adf9c5`）が稼働し、Production Smoke 15分毎成功を継続している。未認証の `/api/health` / `/api/ready` はCloudflare Accessにより302となり、アプリ稼働の確認にはAccess service token付きprobeまたは認証済みセッションが必要。本番化・復旧手順は `docs/runbooks/cloudflare-production.md`、アラート通知設定は `docs/runbooks/alerts-and-notifications.md` を入口とする。Neon mainはread-only整合性確認済みでDB rollbackは不要
 
 Cloudflare Pages ではなく Cloudflare Workers を採用しているのは、Cloudflareが現在推奨するNext.jsデプロイ経路が `@opennextjs/cloudflare` アダプタ経由のWorkersであり、レガシーの `@cloudflare/next-on-pages` ではないため。取得処理は将来Cloudflare Cron TriggersとWorkersへ分離する。
 

@@ -10,7 +10,7 @@
 
 **CODIP** は、国土交通省、国土地理院、気象庁、自治体、道路、河川、防災、都市計画、インフラ、環境などに分散している公開データを、土木建設業務で再利用しやすい形に整理するための共通データ基盤です。
 
-現行MVPは **データソース台帳、取得確認、取得ログ、地図プレビュー、品質状態、後続API、PostgreSQL/PostGIS標準レコード読取経路** を中心に実装しています。共有preview `http://192.168.0.185:3100/` は稼働中です。本番Cloudflare Workers + Hyperdrive + Neonも配備済みですが、2026-08-01時点は稼働Workerが最新のPrisma wasm修正を含まず、DB readiness障害中です。復旧完了までは本番を業務利用可能と判定しません。
+現行MVPは **データソース台帳、取得確認、取得ログ、地図プレビュー、品質状態、後続API、PostgreSQL/PostGIS標準レコード読取経路** を中心に実装しています。共有preview `http://192.168.0.185:3100/` は稼働中です。本番Cloudflare Workers + Hyperdrive + Neonも配備済みで、**本番 `https://odip.mirai-dx-platform.com` は2026-08-05以降 Access 保護下で継続稼働中**（15分毎のstrict read-only smoke成功、日次暗号化バックアップ・復元ドリル実施済み）。詳細は「本番稼働状況」と [docs/16-release-readiness-checklist.md](docs/16-release-readiness-checklist.md) を参照してください。
 
 > 公開データを探すだけのサイトではなく、土木建設システムが公開データを安全に再利用するための共通データハブです。
 
@@ -119,7 +119,7 @@ flowchart TD
 
 ---
 
-## 🚨 本番稼働状況 (2026-08-04)
+## 🚨 本番稼働状況 (2026-08-10)
 
 ```mermaid
 flowchart LR
@@ -136,7 +136,7 @@ flowchart LR
 | 正式URL | `https://odip.mirai-dx-platform.com` | ✅ DNS/TLS/route到達 |
 | Access | Cloudflare Access app `odip`（mirai-const.co.jp + kensan1969@gmail.com） | ✅ 未認証は302→login |
 | Health / Ready | Access service token付きprobeで200（2026-08-05T02:55Z run 30970704615）。未認証は302 | ✅ Worker/DB稼働 |
-| 稼働deployment | `codip-production` 2026-08-05T04:58Z（Version `0eaaaafa-9995-4607-afdb-6e34801f9c9e`、main `41400dc` 相当） | ✅ P0品質・空間評価反映済 |
+| 稼働deployment | `codip-production`（Version `57b17ee1-1703-437d-bddb-63d068adf9c5`、main `2c6e73f` 相当） | ✅ 統合機能・P0品質反映済 |
 | Neon | PostgreSQL 17.10 / PostGIS 3.5、migration 2/2、整合性異常0 | ✅ DB rollback不要 |
 | Backup | pg_dump初回成功（2026-08-04T21:05Z workflow_dispatch run 30950851419、AES256暗号化artifact `codip-neon-pgdump-20260804T210642Z.dump.gpg`、14日保持）。scheduled初回は2026-08-06 03:17 JSTに検証予定 | ✅（手動初回） |
 | 定期smoke | Access service token設定済み（2026-08-05）。15分間隔 strict read-only probe成功（初回 30969524446、scheduled 30972974222、P0デプロイ後 30976480258） | ✅ |
@@ -278,7 +278,7 @@ flowchart LR
 - **main branch protection**: 現在は有効。required checksは `verify` / `e2e` / `postgresql-compat` / `docker-preview` / `docker-image-security` / `analyze`、strict=true、admin enforcement=true。今後はrequired review数やCode Ownersの要否を運用成熟度に合わせて判断する
 - **本番監視のAccess対応**: ✅ 解決済み（2026-08-05）。監視用service token `codip-production-smoke-20260805`、Service Auth policy `odip-service-auth`、Secrets登録、初回smoke成功まで完了。通知先・通知テストのみ未設定
 - **Cloudflare staging Hyperdrive**: 現行 `CLOUDFLARE_API_TOKEN` にHyperdrive作成権限がないため (code 10000)、Cloudflare stagingデプロイはブロック中。Neon staging branch `staging-20260804` は作成済み。権限追加またはDashboard操作が必要
-- **Neon pg_dump定期ジョブ**: ✅ 初回成功（2026-08-04T21:05Z workflow_dispatch run 30950851419、暗号化artifact・証跡JSON）。scheduled初回成功は2026-08-06 03:17 JSTに確認予定。保持期間・復元手順は `docs/runbooks/database-deployment.md` §4.1、運用台帳を参照
+- **Neon pg_dump定期ジョブ**: ✅ 初回成功（2026-08-04T21:05Z workflow_dispatch run 30950851419、暗号化artifact・証跡JSON）。scheduledは2026-08-07/08/09に成功（2026-08-07の1回はGitHub runner未獲得による失敗→翌日復旧）。保持期間・復元手順は `docs/runbooks/database-deployment.md` §4.1、運用台帳を参照
 - **De-dockerization移行中**: [Issue #35](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/35)。Docker jobはbranch protection互換のため残し、先にDocker非依存の `node-preview` CIゲートを追加して差し替え先を育てる
 - **ETLの実データ展開**: 定期収集・クレンジング・リネージュ・提供元別レート制御・スキーマドリフト検出・デッドレターキューは実装済み。実データ50種類への展開と稼働チューニングは継続中（docs/14ロードマップ）
 - **AIの本格化**: ルールベース推薦（`/api/v1/recommendations`）は実装済み。LLM/RAG、AI品質監視、コネクタ自動生成、自然文検索は未導入（P1）
