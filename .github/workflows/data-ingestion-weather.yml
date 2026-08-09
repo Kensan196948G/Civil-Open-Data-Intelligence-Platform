@@ -1,0 +1,45 @@
+name: Weather-Marine Data Ingestion
+
+on:
+  schedule:
+    # Every 10 minutes at :04/:14/:24/:34/:44/:54 UTC
+    - cron: "4,14,24,34,44,54 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: weather-data-ingestion
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.CODIP_INGESTION_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate PostgreSQL Prisma client
+        run: npm run db:pg:generate
+
+      - name: Run AMeDAS + Open-Meteo Marine ingestion
+        shell: bash
+        run: |
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::Missing secrets.CODIP_INGESTION_DATABASE_URL"
+            exit 1
+          fi
+          node scripts/ingestion/run-weather-jobs.js

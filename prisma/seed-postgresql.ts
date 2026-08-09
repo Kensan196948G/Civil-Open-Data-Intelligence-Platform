@@ -1,4 +1,5 @@
 import { INITIAL_TAGS, PROVIDERS, SOURCES } from "./seed-data";
+import { seedWeatherDemo } from "./seed-weather-demo";
 
 type PgClientModule = typeof import("../node_modules/.prisma/client-postgresql");
 
@@ -54,7 +55,7 @@ async function main() {
         });
       }
 
-      for (const uc of useCases) {
+    for (const uc of useCases) {
         const found = await prisma.relatedUseCase.findFirst({
           where: { dataSourceId: source.id, useCaseName: uc.useCaseName },
         });
@@ -63,6 +64,8 @@ async function main() {
         }
       }
     }
+
+    await seedWeatherDemo(prisma);
 
     const nationalLandSource = await prisma.dataSource.findUnique({
       where: { officialUrl: "https://nlftp.mlit.go.jp/ksj/" },

@@ -257,3 +257,105 @@ model AppSetting {
 
   @@map("app_settings")
 }
+
+model ConstructionSite {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  name           String
+  kind           String // land / marine / both
+  lat            Float
+  lon            Float
+  jmaStationId   String?
+  waveGridLat    Float?
+  waveGridLon    Float?
+  address        String?
+  note           String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  thresholds     WeatherThreshold[]
+  weather        WeatherObservation[]
+  marine         MarineObservation[]
+  decisions      DecisionRecord[]
+
+  @@index([kind])
+  @@map("construction_sites")
+}
+
+model WeatherThreshold {
+  id         String   @id @default(cuid())
+  siteId     String?
+  site       ConstructionSite? @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  workType   String // concrete / crane / marine_lift / marine_dive / marine_transport
+  metric     String // precip_mm_1h / temperature_c / wind_speed_ms / sig_wave_h_m ...
+  op         String // >= / <= / < / > / == / !=
+  value      Float
+  severity   String // warn / stop
+  activeFrom DateTime?
+  activeTo   DateTime?
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([workType, metric])
+  @@map("weather_thresholds")
+}
+
+model WeatherObservation {
+  id            String   @id @default(cuid())
+  siteId        String
+  site          ConstructionSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  observedAt    DateTime
+  temperatureC  Float?
+  humidityPct   Float?
+  pressureHpa   Float?
+  precipMm      Float?
+  windSpeedMs   Float?
+  windGustMs    Float?
+  windDirDeg    Float?
+  sunshineH     Float?
+  fetchedAt     DateTime @default(now())
+  dataVersion   Int      @default(1)
+  source        String   @default("jma")
+
+  @@unique([siteId, observedAt, dataVersion])
+  @@index([siteId, observedAt])
+  @@map("weather_observations")
+}
+
+model MarineObservation {
+  id             String   @id @default(cuid())
+  siteId         String
+  site           ConstructionSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  observedAt     DateTime
+  sigWaveHM      Float?
+  wavePeriodS    Float?
+  waveDirDeg     Float?
+  tideLevelM     Float?
+  currentSpeedMs Float?
+  currentDirDeg  Float?
+  fetchedAt      DateTime @default(now())
+  dataVersion    Int      @default(1)
+  source         String   @default("jma_wave")
+
+  @@unique([siteId, observedAt, dataVersion])
+  @@index([siteId, observedAt])
+  @@map("marine_observations")
+}
+
+model DecisionRecord {
+  id                 String   @id @default(cuid())
+  siteId             String
+  site               ConstructionSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  workType           String
+  targetWindowStart  DateTime
+  targetWindowEnd    DateTime
+  status             String // go / caution / stop
+  reason             String
+  inputs             Json
+  thresholdsSnapshot Json
+  generatedBy        String   @default("system")
+  generatedAt        DateTime @default(now())
+
+  @@index([siteId, generatedAt])
+  @@map("decision_records")
+}

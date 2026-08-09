@@ -50,6 +50,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:seed": "prisma db seed",
+    "ingest:weather": "node scripts/ingestion/run-weather-jobs.js",
     "db:studio": "prisma studio",
     "cf:typegen": "node node_modules/wrangler/bin/wrangler.js types",
     "cf:build": "node scripts/tools/with-env.js CODIP_CLOUDFLARE_BUILD=true -- node node_modules/@opennextjs/cloudflare/dist/cli/index.js build",
@@ -64,6 +65,7 @@
     "@prisma/adapter-pg": "^6.19.3",
     "@prisma/client": "^6.19.3",
     "leaflet": "^1.9.4",
+    "maplibre-gl": "^5.24.0",
     "next": "^15.5.22",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -96,6 +98,7 @@
     "brace-expansion@^1": "1.1.18",
     "brace-expansion@^2": "2.1.4",
     "brace-expansion@^5": "5.0.9",
-    "undici@^7": "7.29.0"
+    "undici@^7": "7.29.0",
+    "nanoid": "3.3.17"
   }
 }

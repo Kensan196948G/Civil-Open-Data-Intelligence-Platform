@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { INITIAL_TAGS, PROVIDERS, SOURCES } from "./seed-data";
+import { seedWeatherDemo } from "./seed-weather-demo";
 
 const prisma = new PrismaClient();
 
@@ -67,6 +68,7 @@ async function main() {
   }
 
   const count = await prisma.dataSource.count();
+  await seedWeatherDemo(prisma);
   console.log(`Seed completed: ${count} data sources registered.`);
 }
 

@@ -165,6 +165,17 @@ flowchart LR
 | 🐳 Docker | production runner / preview runner / PostgreSQL preview |
 | 🚦 CI | lint、型、単体、build、release smoke、PostGIS、Docker、CodeQL |
 
+### 🧭 統合機能 (2026-08-09: Civil-Terrain-Slope-Risk-Viewer / wmcdss 吸収)
+
+| 区分 | 内容 |
+| --- | --- |
+| ⛰️ 地形分析 | `/terrain`: MapLibre地図 (GSI標準/淡色/写真/傾斜量図/陰影起伏)、地点検索、単点標高、Horn法傾斜統計・TPI地形分類・断面分析・根拠付き確認カード、共有URL、Markdown/CSV/JSONレポート |
+| 🌦️ 気象・海象 | `/weather`: AMeDAS 10分毎収集、Open-Meteo Marine参考情報、欠測・停滞検知、風配図、ETL状態 |
+| 🧭 施工判定 | `/decisions`: コンクリート打設・クレーン・海上揚重・潜水・海上輸送の go/caution/stop 判定 (欠測はfail-closed、監査スナップショット保存) |
+| 🚧 現場管理 | `/sites`: 現場一覧・登録 (陸上/海上/両方、AMeDAS局番) |
+| 📊 レポート | `/reports`: 日次/週次/月次/判定履歴/海象/年次 (CSV/Markdown) |
+| 📡 定期収集 | `.github/workflows/data-ingestion-weather.yml` (10分毎) + `scripts/ingestion/run-weather-jobs.js` |
+
 ---
 
 ## 🚦 過去のリリースゲート証跡
