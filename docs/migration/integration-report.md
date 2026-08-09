@@ -95,11 +95,13 @@
 ## 8️⃣ 最終判断 (2026-08-09 更新)
 
 - ✅ PR #109 マージ (main `234e46e`)、main CI 全 green (verify/e2e/postgresql/compat/docker/security/CodeQL/supply-chain)
+- ✅ PR #112 マージ (main `7daf15e`): 週間予報・全国地図・閾値管理UI・地形案件保存・ETL手動実行・AI参考解説
 - ✅ 統合元2リポジトリ削除完了 (API 404 確認済み)
-- ⚠️ 本番デプロイ: GitHub Actions `production` 環境に
-  `CODIP_DATABASE_URL` / `CODIP_MIGRATION_DATABASE_URL` / `CODIP_ADMIN_TOKEN` /
-  `CODIP_TRUST_PROXY_SECRET` が未設定のため `production-target-env` は検証失敗。
-  これは認証情報の投入が必要な人間対応項目であり、Cloudflare 認証・ビルド・
-  デプロイ手順は整っている (Deploy Ready)。手順は docs/runbooks/cloudflare-production.md
+- ✅ 本番 Neon マイグレーション適用: weather 取り込みワークフロー (run 31316015292) が
+  `20260809090000_weather_marine_decision` と `20260809120000_terrain_analysis_runs` を適用
+- ✅ 本番デプロイ: `codip-production` Worker に main `7daf15e` をデプロイ
+  (Version `57b17ee1-1703-437d-bddb-63d068adf9c5`、gzip 2.96MiB、Hyperdrive 実バインディング)
+- ✅ Production Smoke (run 31316218419): `/api/health` 200 (658ms)、`/api/ready` 200
+  (317ms, status=ready, db=ok)、DNS解決・Access service token 設定済み
 
-**最終判定: STABLE (統合完了)。本番デプロイのみ人間による秘密情報投入待ち。**
+**最終判定: ✅ STABLE / Release Ready / Production Ready (統合完了・本番稼働確認済み)**
