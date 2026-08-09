@@ -20,6 +20,13 @@
 | `prs.json` | Pull Request 全件 |
 | `releases.json` | Release 一覧 (0件) |
 
+## 🔐 機密情報の扱い
+
+`repo-meta.json` は GitHub API の生メタデータを保存したもので、`temp_clone_token`
+(一時クローン用トークン) を含んでいました。2026-08-09 にフィールドを除去し、
+履歴上の旧コミットは `.gitleaks.toml` のスコープ付き allowlist で管理します
+(トークンは一時的・クローン専用で失効済み)。
+
 ## 🔒 削除条件チェック
 
 - [x] Git履歴・最終commit SHA・Issue・PR・リリース保存

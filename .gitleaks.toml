@@ -1,0 +1,9 @@
+title = "CODIP gitleaks allowlist"
+
+[extend]
+useDefault = true
+
+[[allowlist]]
+description = "GitHub API repo metadata temp_clone_token (ephemeral, scoped, clone-only). Redacted from current files; allowlisted for the historical migration snapshot committed on 2026-08-09."
+regexes = ['"temp_clone_token"\s*:\s*"[^"]+"']
+paths = ['docs/migration/preservation/.*/repo-meta\.json']
