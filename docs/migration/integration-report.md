@@ -92,4 +92,14 @@
 
 ## 8️⃣ 最終判断
 
-PRマージ・本番デプロイ・削除判定チェックリスト充足後に「統合完了」と判定する。
+## 8️⃣ 最終判断 (2026-08-09 更新)
+
+- ✅ PR #109 マージ (main `234e46e`)、main CI 全 green (verify/e2e/postgresql/compat/docker/security/CodeQL/supply-chain)
+- ✅ 統合元2リポジトリ削除完了 (API 404 確認済み)
+- ⚠️ 本番デプロイ: GitHub Actions `production` 環境に
+  `CODIP_DATABASE_URL` / `CODIP_MIGRATION_DATABASE_URL` / `CODIP_ADMIN_TOKEN` /
+  `CODIP_TRUST_PROXY_SECRET` が未設定のため `production-target-env` は検証失敗。
+  これは認証情報の投入が必要な人間対応項目であり、Cloudflare 認証・ビルド・
+  デプロイ手順は整っている (Deploy Ready)。手順は docs/runbooks/cloudflare-production.md
+
+**最終判定: STABLE (統合完了)。本番デプロイのみ人間による秘密情報投入待ち。**
