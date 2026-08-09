@@ -27,6 +27,13 @@
 - 🤖 AI参考解説 `/api/v1/weather/ai-analysis` (ルールベース)
 - 🗄️ 本番Neonへのマイグレーション自動適用を weather 取り込みワークフローへ追加
 
+## 2026-08-09 (3): 本番デプロイ完了
+
+- 🚀 Cloudflare Worker `codip-production` へ main `7daf15e` をデプロイ
+  (Version `57b17ee1`, gzip 2.96MiB, Hyperdrive 実バインディング)
+- 🗄️ 本番 Neon (falling-dawn-93620497) へ weather/marine + terrain_analysis_runs マイグレーション適用
+- ✅ Production Smoke: `/api/health` 200 / `/api/ready` 200 (status=ready, db=ok) / DNS・Access 正常
+
 ## 2026-08-05 P0 本番デプロイ・実データ収集開始
 
 | 区分 | 内容 |
