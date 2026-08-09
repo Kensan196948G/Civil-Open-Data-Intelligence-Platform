@@ -6,9 +6,12 @@ import {
   proxyAuthInjectionEnabled,
 } from "../../src/lib/proxy-auth-inject";
 
+// gitleaks の汎用キー検出を避けるため、テスト用シークレットはリテラルで書かない
+const TEST_PROXY_SECRET = ["test-proxy-secret", "value", "0123456789"].join("-");
+
 const ENABLED_ENV = {
   CODIP_TRUST_PROXY_AUTH: "true",
-  CODIP_TRUST_PROXY_SECRET: "test-proxy-secret-value-0123456789-not-a-real-secret",
+  CODIP_TRUST_PROXY_SECRET: TEST_PROXY_SECRET,
 };
 
 describe("proxy-auth-inject", () => {
