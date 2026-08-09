@@ -84,13 +84,13 @@
     "autoprefixer": "^10.5.4",
     "eslint": "^9.39.5",
     "eslint-config-next": "^15.5.20",
-    "postcss": "^8.5.25",
+    "postcss": "^8.5.26",
     "prisma": "^6.19.3",
     "tailwindcss": "^3.4.19",
-    "tsx": "^4.23.1",
+    "tsx": "^4.23.9",
     "typescript": "^5.8.0",
     "vitest": "^3.2.7",
-    "wrangler": "^4.118.0"
+    "wrangler": "^4.119.0"
   },
   "overrides": {
     "postcss": "$postcss",
