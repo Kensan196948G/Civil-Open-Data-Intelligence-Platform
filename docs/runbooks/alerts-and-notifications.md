@@ -1,6 +1,6 @@
 # 🔔 アラート・通知設定 Runbook
 
-> 🗓️ 最終更新: 2026-08-10 ｜ 状態: **通知先・通知テストは未設定（2026-08-10時点）** ｜ 正本: 本ファイル＋[運用台帳](../operations/operations-ledger.md)
+> 🗓️ 最終更新: 2026-08-10 ｜ 状態: **Cloudflare通知ポリシー作成・テスト送信済み（GitHub/Neon通知とTeams連携は設定待ち）** ｜ 正本: 本ファイル＋[運用台帳](../operations/operations-ledger.md)
 
 CODIPの障害検知（Production Smoke 15分毎・Neonバックアップ日次・データ収集10/30分毎）はGitHub Actionsで自動実行されているが、**失敗時に誰へ通知するかは未設定**。本Runbookは、少人数（IT/DX 7名）で確実に気づける通知経路を確立するための手順書である。
 
@@ -10,14 +10,23 @@ CODIPの障害検知（Production Smoke 15分毎・Neonバックアップ日次�
 
 | 監視対象 | 頻度 | 検知 | 通知 |
 | --- | --- | --- | --- |
-| 本番health/ready | 15分 | ✅ Production Smoke（`post-release-status --strict-production`） | ❌ 未設定 |
-| Neonバックアップ | 日次 03:17 JST | ✅ `neon-backup.yml` | ❌ 未設定 |
-| データ収集 | 10/30分 | ✅ `data-ingestion.yml` / `data-ingestion-weather.yml` | ❌ 未設定 |
-| CI/ビルド | PR/merge毎 | ✅ `ci.yml` | ❌ 未設定（失敗はActions画面のみ） |
-| Workersエラー | 日次確認 | ✅ Workers Logs/Traces（手動） | ❌ 未設定 |
+| 本番health/ready | 15分 | ✅ Production Smoke（`post-release-status --strict-production`） | 🟡 GitHub既定通知のみ（専用Webhook未設定） |
+| Neonバックアップ | 日次 03:17 JST | ✅ `neon-backup.yml` | 🟡 GitHub既定通知のみ |
+| データ収集 | 10/30分 | ✅ `data-ingestion.yml` / `data-ingestion-weather.yml` | 🟡 GitHub既定通知のみ |
+| CI/ビルド | PR/merge毎 | ✅ `ci.yml` | 🟡 GitHub既定通知のみ |
+| Workersエラー | 日次確認 | ✅ Workers Logs/Traces（手動） | ✅ Cloudflare policy `CODIP Worker Error Alert`（2026-08-10作成・テスト送信済み） |
 | Neon容量・接続 | 月次確認 | ❌ 手動予定 | ❌ 未設定 |
 
-**結論**: 監視自体は稼働しているが、障害の「気づき」が人間の画面確認に依存しており、24時間の無人検知が成立していない。本Runbookの手順を実施して通知経路を確立することをP0とする。
+**結論**: Cloudflare側のWorkerエラー通知ポリシーは作成・テスト送信済み。GitHub Actions失敗の専用通知（Teams Webhook等）とNeonアラートは未設定であり、通知先の決定後に §3 を完了する。
+
+### 2026-08-10 実施済み
+
+| 項目 | 結果 |
+| --- | --- |
+| Cloudflare通知ポリシー | ✅ `CODIP Worker Error Alert`（`workers_observability_alert`、policy id `2731f30e7ec24927a460ebaf77515ce1`、宛先 `kensan1969@gmail.com`）を作成 |
+| 通知テスト | ✅ API `POST /alerting/v3/policies/{id}/test` が `success=true` を返却（メール受信確認は human kensan） |
+| GitHub Actions環境 | ✅ production environment Variables 19件・Secrets 6件を登録（`release-smoke` はAccess service token対応済み） |
+| 未実施 | GitHub Actions失敗のTeams/メール専用通知、Neonアラート、月次通知試験 |
 
 ---
 

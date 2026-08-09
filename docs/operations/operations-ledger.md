@@ -103,6 +103,12 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 | 2026-08-10 | 総合評価・改善計画・監視アラートRunbook作成 | ✅ | `docs/evaluation/`、`docs/runbooks/alerts-and-notifications.md` |
 | 2026-08-10 | 本番デプロイ（main `3ec5e8f`、PR #114） | ✅ | Version `d1528b5d-b5e6-47e9-aa4b-1070868161f6`。デプロイ後Production Smoke run 31325075110 success（/api/health 200 / /api/ready 200 db=ok） |
 | 2026-08-10 | /reports未コミット問題の修正 | ✅ | `.gitignore` の `reports/` パターンが `src/app/reports/` と `src/app/api/v1/reports/` を誤除外していたため `/reports/`（ルート限定）へ変更し、2ファイルをコミット |
+| 2026-08-10 | Cloudflareアラートポリシー作成＋テスト送信 | ✅ | `CODIP Worker Error Alert`（policy id `2731f30e7ec24927a460ebaf77515ce1`）を `workers_observability_alert` + メール `kensan1969@gmail.com` で作成。APIテスト送信 `success=true`（受信確認はhuman kensan） |
+| 2026-08-10 | GitHub Actions production環境の変数・シークレット整備 | ✅ | 環境Variables 19件登録。Secrets: `CODIP_DATABASE_URL` / `CODIP_MIGRATION_DATABASE_URL` / `CODIP_ADMIN_TOKEN` / `CODIP_TRUST_PROXY_SECRET` / `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` を登録（Access service token `codip-production-smoke-20260805` をローテーションして新シークレットを取得。repo＋環境の両方を更新） |
+| 2026-08-10 | Neon RTO実測ドリル | ✅ | PITR（15分前）→ branch `br-broad-meadow-af4eugg9` 作成→初回クエリまで **3.1秒**。検証: dataSource 56件・PostGIS 3.5。branch・endpoint削除済み |
+| 2026-08-10 | 本番DBに現場・閾値シード投入 | ✅ | constructionSite 6件（TYO-01〜06）・weatherThreshold 11件をidempotent upsert。投入前は両方0件（本番の気象海象・判定・レポートが空の状態を解消） |
+| 2026-08-10 | 気象海象データ収集の本番反映 | ✅ | run 31332165845 success後、weatherObservation 6件・marineObservation 5件を確認（10分毎の自動収集が継続） |
+| 2026-08-10 | release-smokeのCloudflare Access対応 | ✅ | `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` がある場合に `CF-Access-Client-Id` / `CF-Access-Client-Secret` ヘッダーを付与。ci.yml `production-target-env` へ環境Secretsを配線 |
 | 2026-08-05 02:30Z | production smoke初回成功 | ✅ | run 30969524446（health 200 / ready 200 db=ok） |
 | 2026-08-05 | Access service token設定 | ✅ | 本台帳 §4、`docs/runbooks/cloudflare-production.md` §1.0.1 |
 | 2026-08-05 | 運用台帳・incident runbook新設 | ✅ | 本ファイル、`docs/runbooks/incident-response.md` |

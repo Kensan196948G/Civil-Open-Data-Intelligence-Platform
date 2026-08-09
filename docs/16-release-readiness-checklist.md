@@ -11,8 +11,11 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | Production URL | ✅ | `https://odip.mirai-dx-platform.com`、Worker `codip-production` Version `d1528b5d-b5e6-47e9-aa4b-1070868161f6`（main `3ec5e8f`、PR #114） |
 | Application health / DB readiness | ✅ | Access service token付きprobeで `/api/health` `/api/ready` 200（デプロイ後 run 31325075110: health 200・788ms / ready 200 db=ok・1421ms） |
 | 統合機能のE2E回帰 | ✅ | `tests/e2e/integrated-screens.spec.ts`（地形/気象海象/判定/現場/レポート・16件）を新設し、CI `e2e` ジョブpass（run 31324701074） |
-| Monitoring / Alerts | ⚠️ 検知は稼働・通知未設定 | アラート通知先・通知テストは未設定。設定手順は `docs/runbooks/alerts-and-notifications.md`（P0） |
+| Monitoring / Alerts | 🟡 Cloudflare通知作成済み・他は設定待ち | Cloudflare `CODIP Worker Error Alert` 作成＋テスト送信済み。GitHub/Neon/Teamsは手順書どおり設定待ち |
 | Backup | ✅ | 日次AES256 pg_dump成功（直近 run 31271930146）。2026-08-07の1回はrunner未獲得で失敗→翌日復旧（運用台帳§5） |
+| RTO実測 | ✅ | 2026-08-10 PITR→初回クエリ 3.1秒（branch `br-broad-meadow-af4eugg9`、検証56ソース/PostGIS 3.5） |
+| production-target-env | 🟡 環境整備済み・再実行待ち | Variables 19件＋Secrets 6件を登録。`release-smoke` をAccess対応し、ci.ymlへ配線。次回workflow_dispatchで検証 |
+| 本番データ運用 | ✅ | constructionSite 6件・weatherThreshold 11件をシード。weatherObservation 6件・marineObservation 5件を確認（10分毎自動収集） |
 | 評価・改善文書 | ✅ | `docs/evaluation/`（改善前評価・競合分析・代替率・改善計画）作成済み |
 | /reports未コミット修正 | ✅ | `.gitignore` の `reports/` パターンを `/reports/` へ修正し、`src/app/reports/page.tsx` と `src/app/api/v1/reports/route.ts` をコミット（本番へ反映済み） |
 
