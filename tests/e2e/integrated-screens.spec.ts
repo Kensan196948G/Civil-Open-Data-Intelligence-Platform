@@ -10,6 +10,14 @@ import { expect, test } from "@playwright/test";
  * weather-extra-routes.test.ts) がカバーする。
  */
 
+test.beforeAll(async ({ request }) => {
+  // Next.js dev の初回ルートコンパイルは 404 を返す競合がCIで観測されたため、
+  // テスト前に全対象ルートを事前コンパイルしておく (失敗してもテスト本体が検証する)
+  for (const path of ["/terrain", "/weather", "/decisions", "/sites", "/reports"]) {
+    await request.get(path, { timeout: 120_000 }).catch(() => undefined);
+  }
+});
+
 test.describe("統合後画面: 地形分析", () => {
   test("地図・検索・レイヤー選択・解析タブが表示される", async ({ page }) => {
     await page.goto("/terrain");
@@ -41,11 +49,11 @@ test.describe("統合後画面: 地形分析", () => {
 
     await search.fill("");
     await page.getByRole("button", { name: "🔍 検索" }).click();
-    await expect(page.getByRole("alert")).toContainText("検索語を入力してください");
+    await expect(page.getByRole("alert").filter({ hasText: "検索語を入力してください" })).toBeVisible();
 
     await search.fill("存在しない地名XYZ");
     await page.getByRole("button", { name: "🔍 検索" }).click();
-    await expect(page.getByRole("alert")).toContainText("該当する地点が見つかりませんでした");
+    await expect(page.getByRole("alert").filter({ hasText: "該当する地点が見つかりませんでした" })).toBeVisible();
   });
 
   test("座標検索で地点指定でき、出力・共有タブに共有URLと出力リンクが表示される", async ({ page }) => {
@@ -67,8 +75,9 @@ test.describe("統合後画面: 地形分析", () => {
 
   test("レイヤー切替と断面タブの状態遷移が表示される", async ({ page }) => {
     await page.goto("/terrain");
-    await page.getByLabel("ベースレイヤー").selectOption("pale");
-    await expect(page.getByLabel("ベースレイヤー")).toHaveValue("pale");
+    const baseLayer = page.locator('select[aria-label="ベースレイヤー"]');
+    await baseLayer.selectOption("pale");
+    await expect(baseLayer).toHaveValue("pale");
 
     await page.getByRole("button", { name: /📈 断面分析/ }).click();
     await expect(page.getByRole("button", { name: /📐 地図で断面線を指定/ })).toBeVisible();
@@ -117,8 +126,8 @@ test.describe("統合後画面: 気象・海象", () => {
 test.describe("統合後画面: 施工可否判定", () => {
   test("判定フォームとfail-closed注記が表示される", async ({ page }) => {
     await page.goto("/decisions");
-    await expect(page.getByRole("heading", { name: /施工可否判定/ })).toBeVisible();
-    await expect(page.getByRole("heading", { name: /施工可否判定 \(go \/ caution \/ stop\)/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /施工可否判定/, level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /施工可否判定 \(go \/ caution \/ stop\)/, level: 2 })).toBeVisible();
     await expect(page.getByLabel("作業種別")).toContainText("コンクリート打設");
     await expect(page.getByRole("button", { name: /🧭 判定実行/ })).toBeEnabled();
     await expect(page.getByRole("button", { name: /🤖 AI参考解説/ })).toBeEnabled();
@@ -128,13 +137,14 @@ test.describe("統合後画面: 施工可否判定", () => {
   test("未認証で判定実行すると管理認証エラーが表示される (権限ガード)", async ({ page }) => {
     await page.goto("/decisions");
     await page.getByRole("button", { name: /🧭 判定実行/ }).click();
-    await expect(page.getByRole("status")).toContainText("管理操作の認証に失敗しました");
+    await expect(page.getByRole("status")).toContainText("管理認証が必要");
   });
 
-  test("未認証でAI参考解説を実行するとエラーになるがUIは維持される", async ({ page }) => {
+  test("AI参考解説は公開APIで根拠付き解説が表示される", async ({ page }) => {
     await page.goto("/decisions");
     await page.getByRole("button", { name: /🤖 AI参考解説/ }).click();
-    await expect(page.getByRole("status")).toContainText(/認証|取得に失敗/);
+    await expect(page.locator("pre").filter({ hasText: "参考解説を生成しました" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator("pre").filter({ hasText: "断定しません" })).toBeVisible();
   });
 });
 
@@ -143,7 +153,7 @@ test.describe("統合後画面: 現場管理", () => {
     await page.goto("/sites");
     await expect(page.getByRole("heading", { name: /現場管理/ })).toBeVisible();
     await expect(page.getByRole("heading", { name: /現場一覧/ })).toBeVisible();
-    await expect(page.getByText("TYO-01").first()).toBeVisible();
+    await expect(page.getByRole("listitem").filter({ hasText: "TYO-01" }).first()).toBeVisible();
     await expect(page.getByRole("heading", { name: /全国地図/ })).toBeVisible();
     await expect(page.getByRole("heading", { name: /現場登録 \(管理認証必須\)/ })).toBeVisible();
     await expect(page.getByLabel("現場名")).toBeVisible();
@@ -158,15 +168,15 @@ test.describe("統合後画面: 現場管理", () => {
     await page.getByLabel("緯度").fill("35.0");
     await page.getByLabel("経度").fill("139.0");
     await page.getByRole("button", { name: "登録", exact: true }).click();
-    await expect(page.getByRole("status")).toContainText("管理操作の認証に失敗しました");
+    await expect(page.getByRole("status")).toContainText("管理認証が必要");
   });
 });
 
 test.describe("統合後画面: レポート", () => {
   test("テンプレート・形式・期間フォームが表示される", async ({ page }) => {
     await page.goto("/reports");
-    await expect(page.getByRole("heading", { name: /レポート/ })).toBeVisible();
-    await expect(page.getByRole("heading", { name: /レポート出力/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /レポート/, level: 1 })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("heading", { name: /レポート出力/, level: 2 })).toBeVisible();
     await expect(page.getByLabel("テンプレート")).toContainText("日次 (daily)");
     await expect(page.getByLabel("形式")).toContainText("CSV");
     await expect(page.getByLabel("開始日")).toBeVisible();
@@ -179,7 +189,7 @@ test.describe("統合後画面: レポート", () => {
     await page.getByLabel("開始日").fill("2026-08-01");
     await page.getByLabel("終了日").fill("2026-08-08");
     await page.getByRole("button", { name: /⬇️ 生成・ダウンロード/ }).click();
-    await expect(page.getByRole("status")).toContainText("管理操作の認証に失敗しました");
+    await expect(page.getByRole("status")).toContainText("管理認証が必要");
   });
 });
 
