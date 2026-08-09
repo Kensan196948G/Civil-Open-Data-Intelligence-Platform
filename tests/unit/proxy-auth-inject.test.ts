@@ -8,7 +8,7 @@ import {
 
 const ENABLED_ENV = {
   CODIP_TRUST_PROXY_AUTH: "true",
-  CODIP_TRUST_PROXY_SECRET: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  CODIP_TRUST_PROXY_SECRET: "test-proxy-secret-value-0123456789-not-a-real-secret",
 };
 
 describe("proxy-auth-inject", () => {
