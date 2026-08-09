@@ -14,6 +14,10 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | Monitoring / Alerts | 🟡 Cloudflare通知作成済み・他は設定待ち | Cloudflare `CODIP Worker Error Alert` 作成＋テスト送信済み。GitHub/Neon/Teamsは手順書どおり設定待ち |
 | Backup | ✅ | 日次AES256 pg_dump成功（直近 run 31271930146）。2026-08-07の1回はrunner未獲得で失敗→翌日復旧（運用台帳§5） |
 | RTO実測 | ✅ | 2026-08-10 PITR→初回クエリ 3.1秒（branch `br-broad-meadow-af4eugg9`、検証56ソース/PostGIS 3.5） |
+| Worker切戻しRTO | ✅ | 2026-08-10 `wrangler rollback` **4秒**・復旧デプロイ **25秒**。切戻し後・復旧後の両方でProduction Smoke成功（run 31341608599 / 31341677558） |
+| Access proxy認証 | ✅ | PR #120のミドルウェア注入で有効化。ローカル検証 ユーザーヘッダーあり→200 / なし→401 |
+| PWA | ✅ タスク1〜2実装 | manifest（/manifest.webmanifest）＋Service Worker（/sw.js）＋登録。E2E `pwa.spec.ts` pass |
+| 気象庁XML収集 | ⚠️ エンジン対応・ジョブ無効 | Atom feed 441件パース成功も非空間のため標準レコード化せず。マッピング設計を次サイクル課題に |
 | production-target-env | ✅ 実ターゲット検証成功 | workflow_dispatch run 31333706566 success（Access付きread-only smoke含む全step完走） |
 | 本番データ運用 | ✅ | constructionSite 6件・weatherThreshold 11件をシード。weatherObservation 6件・marineObservation 5件を確認（10分毎自動収集） |
 | データソース拡充 | ✅ 5種追加 | 気象庁地震/津波JSON・GSI住所検索・Open-Meteo大気質/週間予報（参考）を本番62ソースへ追加し、5ジョブ success（run 31334100744） |

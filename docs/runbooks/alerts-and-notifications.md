@@ -24,7 +24,7 @@ CODIPの障害検知（Production Smoke 15分毎・Neonバックアップ日次�
 | 項目 | 結果 |
 | --- | --- |
 | Cloudflare通知ポリシー | ✅ `CODIP Worker Error Alert`（`workers_observability_alert`、policy id `2731f30e7ec24927a460ebaf77515ce1`、宛先 `kensan1969@gmail.com`）を作成 |
-| 通知テスト | ✅ API `POST /alerting/v3/policies/{id}/test` が `success=true` を返却（メール受信確認は human kensan） |
+| 通知テスト | ✅ API `POST /alerting/v3/policies/{id}/test` が `success=true` を返却（2026-08-10 再送含む。メール受信確認は human kensan） |
 | GitHub Actions環境 | ✅ production environment Variables 19件・Secrets 6件を登録（`release-smoke` はAccess service token対応済み） |
 | 未実施 | GitHub Actions失敗のTeams/メール専用通知、Neonアラート、月次通知試験 |
 

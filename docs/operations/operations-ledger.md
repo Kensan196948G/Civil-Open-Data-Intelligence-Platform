@@ -111,6 +111,11 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 | 2026-08-10 | release-smokeのCloudflare Access対応 | ✅ | `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` がある場合に `CF-Access-Client-Id` / `CF-Access-Client-Secret` ヘッダーを付与。ci.yml `production-target-env` へ環境Secretsを配線 |
 | 2026-08-10 | production-target-env 実ターゲット検証 | ✅ | workflow_dispatch run 31333706566 success（validate-env → production evidence → placeholders → cf:build → PostGIS DDL → migration drift → Access付きread-only smokeまで完走）。`CODIP_DISABLE_TOKEN_AUTH` のenv配線（PR #118）で解消 |
 | 2026-08-10 | 公式JSONコネクタ5種を本番展開 | ✅ | 気象庁地震情報JSON・津波情報JSON・GSI住所検索API・Open-Meteo大気質（参考）・週間予報（参考）をシード（本番62ソース）し、5ジョブを有効化。収集run 31334100744後、5件すべて `lastStatus=success`（有効ジョブ18件中15 success / 1 skipped / 9 dead_letterは既存） |
+| 2026-08-10 | Access proxy認証の有効化（ミドルウェア注入） | ✅ | PR #120で `src/middleware.ts` を実装。Accessユーザー識別ヘッダー付きAPIリクエストへ `x-codip-proxy-secret` を注入。ローカル統合検証: ユーザーヘッダーあり→`/api/admin/settings` 200 / なし→401。本番Worker `fc732a4a` へ反映済み |
+| 2026-08-10 | Worker切戻しRTO実測ドリル | ✅ | `wrangler rollback --env production` で d1528b5d へ切戻し **4秒** → スモーク成功（run 31341608599）→ 最新版（fc732a4a）へ復旧デプロイ **25秒** → スモーク成功（run 31341677558） |
+| 2026-08-10 | PWA実装（manifest + Service Worker） | ✅ | PR #120。`manifest.webmanifest`・`sw.js`・登録コンポーネントを本番へ反映。E2E `pwa.spec.ts` で配信確認 |
+| 2026-08-10 | 気象庁防災情報XMLの試行 | ⚠️ エンジン対応のみ | Atom feedパース（441件抽出）は成功したが、座標・住所を含まないため標準レコード登録は全件スキップ。誤解防止のためジョブは無効化し、非空間XMLのマッピング設計を次サイクル課題とする |
+| 2026-08-10 | Cloudflare通知テスト再送 | ✅ | `POST /alerting/v3/policies/2731f30e.../test` → `success=true`（受信確認はhuman kensan） |
 | 2026-08-05 02:30Z | production smoke初回成功 | ✅ | run 30969524446（health 200 / ready 200 db=ok） |
 | 2026-08-05 | Access service token設定 | ✅ | 本台帳 §4、`docs/runbooks/cloudflare-production.md` §1.0.1 |
 | 2026-08-05 | 運用台帳・incident runbook新設 | ✅ | 本ファイル、`docs/runbooks/incident-response.md` |
