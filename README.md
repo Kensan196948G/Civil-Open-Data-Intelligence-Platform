@@ -142,6 +142,9 @@ flowchart LR
 | 定期smoke | Access service token設定済み（2026-08-05）。15分間隔 strict read-only probe成功（初回 30969524446、scheduled 30972974222、P0デプロイ後 30976480258） | ✅ |
 | データ収集 | 本番62データソース・有効ジョブ18件（2026-08-10）。気象海象は現場6件＋観測収集稼働中、公式JSONコネクタ5種を追加 | ✅ |
 | アラート | Cloudflare `CODIP Worker Error Alert` 作成・テスト送信済み（2026-08-10）。GitHub/Neon通知は設定待ち | 🟡 |
+| PWA | manifest＋Service Worker実装済み（2026-08-10、PR #120）。オフライン戦略は設計書 `docs/design/pwa-mobile-design.md` | ✅ タスク1〜2 |
+| Access管理認証 | ミドルウェア注入でproxy認証を有効化（PR #120）。Access認証済みユーザーの管理操作が200応答 | ✅ |
+| Worker切戻し | 実測: rollback 4秒 / 復旧デプロイ 25秒（2026-08-10、両スモーク成功） | ✅ |
 
 定期検知は `.github/workflows/production-smoke.yml` が15分ごとにstrict read-only probeを実行します。odipはCloudflare Access配下のため、監視用Access service token（`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`）をGitHub Actions Secretへ設定済みです。Cloudflare/Neonアラート通知先と初回通知テストは運用台帳（`docs/operations/operations-ledger.md`）の残課題です。
 
