@@ -9,8 +9,16 @@ async function fetchWithTimeout(url, init = {}) {
   const timeoutMs = Number(process.env.CODIP_SMOKE_TIMEOUT_MS ?? "10000");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const headers = new Headers(init.headers);
+  const accessClientId = process.env.CF_ACCESS_CLIENT_ID?.trim();
+  const accessClientSecret = process.env.CF_ACCESS_CLIENT_SECRET?.trim();
+  if (accessClientId && accessClientSecret) {
+    // Cloudflare Access 配下の本番URLへ read-only smoke を通すための service token
+    headers.set("CF-Access-Client-Id", accessClientId);
+    headers.set("CF-Access-Client-Secret", accessClientSecret);
+  }
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    return await fetch(url, { ...init, headers, signal: controller.signal });
   } finally {
     clearTimeout(timeout);
   }
