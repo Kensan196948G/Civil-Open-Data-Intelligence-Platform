@@ -1,5 +1,22 @@
 # リリースノート
 
+## 2026-08-09: 統合リリース候補 (terrain + weather-marine)
+
+- ⛰️ 地形分析 (Civil-Terrain-Slope-Risk-Viewer 統合):
+  - GSI DEM 標高タイル (DEM1A/5A/5B/5C/10B) のサーバー側取得・PNG復号
+  - Horn法 3x3 傾斜・TPI 地形分類・断面分析・確認支援カード (Unknown is not Safe)
+  - `/api/v1/terrain/{elevation,analysis,section,confirm,export}`
+  - `/terrain` UI (MapLibre + 共有URL + レポート出力)
+- 🌦️ 気象・海象・施工判定 (wmcdss 統合):
+  - `ConstructionSite` / `WeatherThreshold` / `WeatherObservation` /
+    `MarineObservation` / `DecisionRecord` モデル + マイグレーション
+  - AMeDAS / Open-Meteo Marine 取り込みスクリプト + 10分毎ワークフロー
+  - fail-closed 判定エンジン (`src/lib/decision/engine.ts`)
+  - 50年確率波 (Gumbel/Weibull) / 履歴統計 / ETL状態 / レポート API
+  - `/weather`, `/decisions`, `/sites`, `/reports` UI
+- 🗄️ 統合元2リポジトリの Git bundle + GitHub メタデータ保全
+  (`docs/migration/preservation/`)
+
 ## 2026-08-05 P0 本番デプロイ・実データ収集開始
 
 | 区分 | 内容 |

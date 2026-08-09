@@ -14,6 +14,16 @@ const NAV_GROUPS: { label: string; items: { href: string; icon: string; label: s
     ],
   },
   {
+    label: "地形・気象判断",
+    items: [
+      { href: "/terrain", icon: "⛰️", label: "地形分析" },
+      { href: "/weather", icon: "🌦️", label: "気象・海象" },
+      { href: "/sites", icon: "🚧", label: "現場管理" },
+      { href: "/decisions", icon: "🧭", label: "施工可否判定" },
+      { href: "/reports", icon: "📊", label: "レポート" },
+    ],
+  },
+  {
     label: "記録・管理",
     items: [
       { href: "/logs", icon: "🧾", label: "取得ログ" },

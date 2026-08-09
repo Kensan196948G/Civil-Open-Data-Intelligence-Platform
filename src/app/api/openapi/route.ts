@@ -374,6 +374,203 @@ const openApiDocument = {
         },
       },
     },
+    "/api/v1/terrain/elevation": {
+      get: {
+        tags: ["downstream"],
+        summary: "地点標高取得 (GSI DEMタイル)",
+        parameters: [
+          { name: "lat", in: "query", required: true, schema: { type: "number", minimum: -90, maximum: 90 } },
+          { name: "lon", in: "query", required: true, schema: { type: "number", minimum: -180, maximum: 180 } },
+        ],
+        responses: {
+          "200": { description: "標高・出典・品質を返す" },
+          "400": v1ErrorResponse,
+          "404": { description: "対象地点に標高データがない (データなし≠安全)" },
+          "429": v1ErrorResponse,
+          "503": { description: "上流取得失敗 (判定不能)" },
+        },
+      },
+    },
+    "/api/v1/terrain/analysis": {
+      get: {
+        tags: ["downstream"],
+        summary: "周辺グリッドの傾斜統計・地形分類 (Horn法/TPI)",
+        parameters: [
+          { name: "lat", in: "query", required: true, schema: { type: "number", minimum: -90, maximum: 90 } },
+          { name: "lon", in: "query", required: true, schema: { type: "number", minimum: -180, maximum: 180 } },
+        ],
+        responses: {
+          "200": { description: "傾斜統計・地形分類・品質・出典を返す" },
+          "400": v1ErrorResponse,
+          "404": { description: "DEMデータなし" },
+          "429": v1ErrorResponse,
+          "503": { description: "上流取得失敗" },
+        },
+      },
+    },
+    "/api/v1/terrain/section": {
+      get: {
+        tags: ["downstream"],
+        summary: "任意線の断面分析 (縦断プロファイル・勾配統計)",
+        parameters: [
+          { name: "startLat", in: "query", required: true, schema: { type: "number", minimum: -90, maximum: 90 } },
+          { name: "startLon", in: "query", required: true, schema: { type: "number", minimum: -180, maximum: 180 } },
+          { name: "endLat", in: "query", required: true, schema: { type: "number", minimum: -90, maximum: 90 } },
+          { name: "endLon", in: "query", required: true, schema: { type: "number", minimum: -180, maximum: 180 } },
+        ],
+        responses: {
+          "200": { description: "断面サンプル・統計を返す" },
+          "400": v1ErrorResponse,
+          "404": { description: "DEMデータなし" },
+          "413": { description: "断面が長すぎる" },
+          "422": { description: "断面が短すぎる" },
+          "429": v1ErrorResponse,
+          "503": { description: "上流取得失敗" },
+        },
+      },
+    },
+    "/api/v1/terrain/confirm": {
+      get: {
+        tags: ["downstream"],
+        summary: "確認支援カード (根拠付き・総合危険度なし)",
+        parameters: [
+          { name: "lat", in: "query", required: true, schema: { type: "number", minimum: -90, maximum: 90 } },
+          { name: "lon", in: "query", required: true, schema: { type: "number", minimum: -180, maximum: 180 } },
+        ],
+        responses: {
+          "200": { description: "確認支援カード一覧を返す" },
+          "400": v1ErrorResponse,
+          "429": v1ErrorResponse,
+        },
+      },
+    },
+    "/api/v1/terrain/export": {
+      get: {
+        tags: ["downstream"],
+        summary: "地形分析レポート出力 (Markdown/CSV/JSON)",
+        parameters: [
+          { name: "lat", in: "query", required: true, schema: { type: "number", minimum: -90, maximum: 90 } },
+          { name: "lon", in: "query", required: true, schema: { type: "number", minimum: -180, maximum: 180 } },
+          { name: "format", in: "query", schema: { type: "string", enum: ["markdown", "csv", "json"] } },
+        ],
+        responses: {
+          "200": { description: "レポート本文 (添付ダウンロード)" },
+          "400": v1ErrorResponse,
+          "404": { description: "DEMデータなし" },
+          "429": v1ErrorResponse,
+          "503": { description: "上流取得失敗" },
+        },
+      },
+    },
+    "/api/v1/sites": {
+      get: {
+        tags: ["downstream"],
+        summary: "現場一覧取得",
+        responses: { "200": { description: "現場一覧" }, "429": v1ErrorResponse },
+      },
+      post: {
+        tags: ["downstream"],
+        summary: "現場登録 (管理認証必須)",
+        responses: { "201": { description: "登録結果" }, "400": v1ErrorResponse, "401": v1ErrorResponse, "409": v1ErrorResponse },
+      },
+    },
+    "/api/v1/thresholds": {
+      get: {
+        tags: ["downstream"],
+        summary: "閾値一覧 (siteId指定時はグローバルも含む)",
+        responses: { "200": { description: "閾値一覧" }, "429": v1ErrorResponse },
+      },
+      post: {
+        tags: ["downstream"],
+        summary: "閾値登録 (管理認証必須)",
+        responses: { "201": { description: "登録結果" }, "400": v1ErrorResponse, "401": v1ErrorResponse },
+      },
+    },
+    "/api/v1/thresholds/{id}": {
+      patch: {
+        tags: ["downstream"],
+        summary: "閾値更新 (管理認証必須)",
+        responses: { "200": { description: "更新結果" }, "400": v1ErrorResponse, "401": v1ErrorResponse, "404": v1ErrorResponse },
+      },
+      delete: {
+        tags: ["downstream"],
+        summary: "閾値削除 (管理認証必須)",
+        responses: { "204": { description: "削除成功" }, "401": v1ErrorResponse, "404": v1ErrorResponse },
+      },
+    },
+    "/api/v1/observations/weather": {
+      get: {
+        tags: ["downstream"],
+        summary: "気象観測一覧 (siteId/t0/t1/limit)",
+        responses: { "200": { description: "観測一覧" }, "400": v1ErrorResponse, "429": v1ErrorResponse },
+      },
+      post: {
+        tags: ["downstream"],
+        summary: "気象観測取り込み (管理認証必須・upsert)",
+        responses: { "201": { description: "取り込み結果" }, "400": v1ErrorResponse, "401": v1ErrorResponse },
+      },
+    },
+    "/api/v1/observations/weather/latest": {
+      get: {
+        tags: ["downstream"],
+        summary: "最新気象観測",
+        responses: { "200": { description: "最新値" }, "404": v1ErrorResponse },
+      },
+    },
+    "/api/v1/observations/marine": {
+      get: {
+        tags: ["downstream"],
+        summary: "海象観測一覧",
+        responses: { "200": { description: "観測一覧" }, "400": v1ErrorResponse, "429": v1ErrorResponse },
+      },
+      post: {
+        tags: ["downstream"],
+        summary: "海象観測取り込み (管理認証必須・upsert)",
+        responses: { "201": { description: "取り込み結果" }, "400": v1ErrorResponse, "401": v1ErrorResponse },
+      },
+    },
+    "/api/v1/observations/marine/latest": {
+      get: {
+        tags: ["downstream"],
+        summary: "最新海象観測",
+        responses: { "200": { description: "最新値" }, "404": v1ErrorResponse },
+      },
+    },
+    "/api/v1/decisions": {
+      post: {
+        tags: ["downstream"],
+        summary: "施工可否判定 (go/caution/stop, 管理認証必須)",
+        responses: { "200": { description: "判定結果 + 監査スナップショット" }, "400": v1ErrorResponse, "401": v1ErrorResponse, "404": v1ErrorResponse },
+      },
+    },
+    "/api/v1/analysis/historical": {
+      get: {
+        tags: ["downstream"],
+        summary: "月次履歴統計",
+        responses: { "200": { description: "月次集計" }, "400": v1ErrorResponse, "429": v1ErrorResponse },
+      },
+    },
+    "/api/v1/analysis/wave50": {
+      get: {
+        tags: ["downstream"],
+        summary: "50年確率波推算 (Gumbel/Weibull)",
+        responses: { "200": { description: "再現期間ごとの波高" }, "400": v1ErrorResponse, "422": v1ErrorResponse, "429": v1ErrorResponse },
+      },
+    },
+    "/api/v1/etl/status": {
+      get: {
+        tags: ["downstream"],
+        summary: "ETLジョブ状態",
+        responses: { "200": { description: "ジョブ状態" }, "429": v1ErrorResponse },
+      },
+    },
+    "/api/v1/reports": {
+      post: {
+        tags: ["downstream"],
+        summary: "レポート出力 (CSV/Markdown, 管理認証必須)",
+        responses: { "200": { description: "レポート本文" }, "400": v1ErrorResponse, "401": v1ErrorResponse, "422": v1ErrorResponse },
+      },
+    },
     "/api/v1/sources/{id}/freshness": {
       get: {
         tags: ["downstream"],

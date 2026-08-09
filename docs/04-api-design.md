@@ -327,6 +327,57 @@ PostGIS `standard_records` が存在する環境では、指定地点の半径�
 
 定期実行はGitHub Actions `data-ingestion.yml` が30分毎に `scripts/ingestion/run-due-jobs.js` を実行する。ジョブはETag/Last-Modifiedによる差分判定、上限サイズ/レコード数、リトライ（指数バックオフ）、SSRFガード（静的検証＋接続時DNSピン留め）、CSV/GeoJSON/JSON解析、標準レコードupsert、リネージュ記録に対応する。**提供元別レート制限**（`providers.ingestionRateLimitMinutes`）、**スキーマドリフト検出**（取得列のフィンガープリント比較）、**デッドレターキュー**（リトライ上限到達・parse失敗を `dead_letter` として保存）にも対応する。Workersランタイムでは外部URL取得が `unsupported_runtime` のため、本番の定期実行はGitHub Actionsが担う。
 
+### 4.10 地形分析API (統合: Civil-Terrain-Slope-Risk-Viewer) 実装済み
+
+地形分析は国土地理院 標高タイル (DEM1A/DEM5A/DEM5B/DEM5C/DEM10B) を
+`cyberjapandata.gsi.go.jp` の allowlist + https のみで取得し、サーバー側で
+Horn法 (3x3近傍勾配) と TPI (地形位置指数) による解析を行う。
+
+| API | メソッド | 概要 |
+| --- | --- | --- |
+| `/api/v1/terrain/elevation` | GET | `lat`/`lon` の標高・出典・品質 (Provenance付き) |
+| `/api/v1/terrain/analysis` | GET | 周辺約160m四方の傾斜統計・地形分類・品質 |
+| `/api/v1/terrain/section` | GET | 始点→終点 (30m〜20km) の縦断プロファイル・勾配統計 |
+| `/api/v1/terrain/confirm` | GET | 実測メトリクスのルール評価による確認支援カード |
+| `/api/v1/terrain/export` | GET | Markdown/CSV/JSON レポート出力 |
+
+共通仕様:
+
+- 応答は `data` / `meta` / `warnings` 形式。`warnings` には必ず
+  `decision_not_supported` (施工可否・安全性・法令適合を断定しない) を含める。
+- データ欠損・取得失敗は安全として扱わない。`no_coverage` (404) は
+  「データがない」、`upstream_unavailable` (503) は「不在を断定できない」を意味する。
+- 欠損セルは補間しない。欠損率・判定不能セル数を明示する。
+- 複数カードの単純加算による総合危険度は提供しない。
+- レート制限は地形系API共通で 60〜120 回/分、解析結果は5分間のTTLキャッシュを持つ。
+
+### 4.11 気象・海象・施工判定API (統合: wmcdss) 実装済み
+
+| API | メソッド | 概要 |
+| --- | --- | --- |
+| `/api/v1/sites` | GET/POST | 現場一覧・登録 (kind: land/marine/both) |
+| `/api/v1/thresholds` | GET/POST | 閾値一覧 (siteId指定時はグローバル含む)・登録 |
+| `/api/v1/thresholds/{id}` | PATCH/DELETE | 閾値更新・削除 |
+| `/api/v1/observations/weather` | GET/POST | 気象観測一覧・取り込み (siteId/observedAt/dataVersion でupsert) |
+| `/api/v1/observations/weather/latest` | GET | 最新気象観測 |
+| `/api/v1/observations/marine` | GET/POST | 海象観測一覧・取り込み |
+| `/api/v1/observations/marine/latest` | GET | 最新海象観測 |
+| `/api/v1/decisions` | POST | 施工可否判定 (go/caution/stop + 監査スナップショット) |
+| `/api/v1/analysis/historical` | GET | 月次履歴統計 (気象・海象) |
+| `/api/v1/analysis/wave50` | GET | 50年確率波推算 (Gumbel/Weibull) |
+| `/api/v1/etl/status` | GET | AMeDAS/Open-Meteo Marine 取り込み状態 |
+| `/api/v1/reports` | POST | 日次/週次/月次/判定/海象/年次レポート (CSV/Markdown) |
+
+判定仕様 (wmcdss の fail-closed 設計を踏襲):
+
+- 評価できなかったルールが1件でもあれば `go` にしない (欠測・設定不正は caution)
+- 判定結果とともに `matched_rules` / `unevaluated_rules` / `out_of_effect_rules` /
+  `evaluated_count` を監査スナップショットへ保存し、事後再構成を可能にする
+- しきい値の有効期間は判定対象の施工時間帯 (JST暦日) との重なりで判定
+- Open-Meteo Marine は `source=open_meteo_marine_info` として参考情報のみ保存し、
+  判定入力から除外する
+- 書き込み系は管理認証必須。`warnings` には `decision_not_supported` を含める
+
 ## 5. 標準レコード形式
 
 ```json
