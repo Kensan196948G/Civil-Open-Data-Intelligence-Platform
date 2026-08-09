@@ -35,6 +35,15 @@ jobs:
       - name: Generate PostgreSQL Prisma client
         run: npm run db:pg:generate
 
+      - name: Apply PostgreSQL migrations (Neon production)
+        shell: bash
+        run: |
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::Missing secrets.CODIP_INGESTION_DATABASE_URL"
+            exit 1
+          fi
+          npx prisma migrate deploy --schema prisma/postgresql/schema.prisma
+
       - name: Run AMeDAS + Open-Meteo Marine ingestion
         shell: bash
         run: |

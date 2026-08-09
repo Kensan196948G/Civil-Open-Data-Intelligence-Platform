@@ -66,6 +66,8 @@ export function TerrainWorkspace() {
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [copied, setCopied] = useState(false);
+  const [savedRuns, setSavedRuns] = useState<Array<{ id: string; lat: number; lon: number; tab: string; createdAt: string }>>([]);
+  const [saveMessage, setSaveMessage] = useState("");
 
   const shareUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -222,6 +224,45 @@ export function TerrainWorkspace() {
       },
       () => setMessage("共有URLのコピーに失敗しました"),
     );
+  }
+
+  async function loadSavedRuns() {
+    try {
+      const response = await fetch("/api/v1/terrain/runs?limit=20");
+      const body = await response.json();
+      setSavedRuns(body?.data?.runs ?? []);
+    } catch {
+      setSaveMessage("保存済み案件の取得に失敗しました");
+    }
+  }
+
+  useEffect(() => {
+    void loadSavedRuns();
+  }, []);
+
+  async function saveRun() {
+    if (selectedPoint === null) return;
+    setSaveMessage("");
+    const payload =
+      tab === "terrain" && terrain?.kind === "ok"
+        ? terrain
+        : tab === "section" && section?.kind === "ok"
+          ? section
+          : tab === "confirm" && confirm !== null
+            ? { confirm, point: selectedPoint }
+            : { point: selectedPoint };
+    const response = await fetch("/api/v1/terrain/runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lat: selectedPoint.lat, lon: selectedPoint.lon, tab, payload }),
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      setSaveMessage(body?.error?.message ?? "案件保存に失敗しました (管理認証が必要です)");
+      return;
+    }
+    setSaveMessage("✅ 案件を保存しました");
+    void loadSavedRuns();
   }
 
   const exportUrl = (format: "markdown" | "csv" | "json") =>
@@ -466,6 +507,29 @@ export function TerrainWorkspace() {
             <p className="m-0 text-[11px] text-[var(--muted)]">
               共有URLには視点・レイヤー・対象地点・タブのみを含みます。住所・履歴・自由記述は含まれません。
             </p>
+            <div className="flex flex-wrap items-center gap-2 border-t border-[var(--line)] pt-3">
+              <button type="button" className="dc-btn-accent" onClick={() => void saveRun()} disabled={selectedPoint === null}>
+                💾 案件を保存 (管理認証必須)
+              </button>
+              <span className="text-[11.5px] text-[var(--muted)]">{saveMessage}</span>
+            </div>
+            <div>
+              <h3 className="mb-2 mt-0 text-[13px] font-semibold">保存済み案件 (直近20件)</h3>
+              {savedRuns.length === 0 ? (
+                <p className="m-0 text-[11.5px] text-[var(--muted)]">保存済み案件はありません。</p>
+              ) : (
+                <ul className="m-0 max-h-52 list-none overflow-auto p-0">
+                  {savedRuns.map((run) => (
+                    <li key={run.id} className="border-b border-[var(--line)] py-1 text-[11.5px] last:border-0">
+                      <span className="font-mono">{new Date(run.createdAt).toLocaleString("ja-JP")}</span>
+                      <span className="ml-2">
+                        {run.lat.toFixed(5)}, {run.lon.toFixed(5)} / {run.tab}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         ) : null}
 

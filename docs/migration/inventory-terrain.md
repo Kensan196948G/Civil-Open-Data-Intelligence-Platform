@@ -28,7 +28,7 @@
 | T-12 | 品質・欠損表示 (グレード/欠損率/被覆) | 実装済み | 🟢 そのまま移植 | `QualityPanel` + API品質応答 |
 | T-13 | 共有URL (視点・レイヤー・地点・タブ) | 実装済み | 🔵 再設計統合 | `/terrain` 出力タブ (hash状態) |
 | T-14 | CSV/JSON/Markdown レポート出力 | 未完成 (準備中ボタン) | 🟠 未完成を完成統合 | `/api/v1/terrain/export` 実装済み |
-| T-15 | 案件保存 (analysis_runs / Neon) | 未実装 (Issue #42) | 🟠 未完成を完成統合 | 中核 `StandardRecord` + 監査ログで代替予定 |
+| T-15 | 案件保存 (analysis_runs / Neon) | 未実装 (Issue #42) | 🟠 未完成を完成統合 | ✅ `TerrainAnalysisRun` モデル + `/api/v1/terrain/runs` + 出力タブ「案件保存」 |
 | T-16 | Cloudflare Access JWT + RBAC | 未実装 (Issue #43) | 🟣 重複統合・置換 | 中核 `admin-auth` (proxy/token/session) が同等以上 |
 | T-17 | 公開データレイヤー追加 (土砂災害警戒等) | 未実装 (Issue #44) | 🟣 重複統合・置換 | 中核 データソース台帳・`/api/v1/layers` が既存 |
 | T-18 | OpenAPI x-status と ADR | 未実装 (Issue #45) | 🔵 再設計統合 | 中核 `docs/04-api-design.md` + OpenAPI route |
@@ -80,5 +80,5 @@
 ## 8️⃣ 統合結果サマリ
 
 - ✅ 地形解析コア (T-01〜T-14) は中核へ移植・単体テスト 114件成功
-- ⏳ 案件保存 (T-15) は StandardRecord/監査ログ統合を継続
+- ✅ 案件保存 (T-15) は `TerrainAnalysisRun` + 監査ログ統合で完了
 - 🔴 廃止候補: なし (全機能を中核へ集約)

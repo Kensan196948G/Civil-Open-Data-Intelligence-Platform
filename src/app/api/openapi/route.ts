@@ -462,6 +462,36 @@ const openApiDocument = {
         },
       },
     },
+    "/api/v1/terrain/runs": {
+      get: {
+        tags: ["downstream"],
+        summary: "保存済み地形案件一覧",
+        responses: { "200": { description: "案件一覧" }, "429": v1ErrorResponse },
+      },
+      post: {
+        tags: ["downstream"],
+        summary: "地形案件保存 (管理認証必須)",
+        responses: { "201": { description: "保存結果" }, "400": v1ErrorResponse, "401": v1ErrorResponse },
+      },
+    },
+    "/api/v1/weather/forecast": {
+      get: {
+        tags: ["downstream"],
+        summary: "週間予報 (Open-Meteo 参考情報)",
+        parameters: [
+          { name: "lat", in: "query", required: true, schema: { type: "number" } },
+          { name: "lon", in: "query", required: true, schema: { type: "number" } },
+        ],
+        responses: { "200": { description: "7日間予報" }, "400": v1ErrorResponse, "429": v1ErrorResponse, "503": v1ErrorResponse },
+      },
+    },
+    "/api/v1/weather/ai-analysis": {
+      get: {
+        tags: ["downstream"],
+        summary: "AI参考解説 (ルールベース・参考情報)",
+        responses: { "200": { description: "日本語解説" }, "400": v1ErrorResponse, "404": v1ErrorResponse, "429": v1ErrorResponse },
+      },
+    },
     "/api/v1/sites": {
       get: {
         tags: ["downstream"],
@@ -562,6 +592,13 @@ const openApiDocument = {
         tags: ["downstream"],
         summary: "ETLジョブ状態",
         responses: { "200": { description: "ジョブ状態" }, "429": v1ErrorResponse },
+      },
+    },
+    "/api/v1/etl/run/{id}": {
+      post: {
+        tags: ["downstream"],
+        summary: "ETL手動実行 (Node環境のみ。Workersではworkflow_dispatch)",
+        responses: { "200": { description: "実行結果" }, "401": v1ErrorResponse, "404": v1ErrorResponse, "501": v1ErrorResponse },
       },
     },
     "/api/v1/reports": {
