@@ -14,8 +14,9 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | Monitoring / Alerts | 🟡 Cloudflare通知作成済み・他は設定待ち | Cloudflare `CODIP Worker Error Alert` 作成＋テスト送信済み。GitHub/Neon/Teamsは手順書どおり設定待ち |
 | Backup | ✅ | 日次AES256 pg_dump成功（直近 run 31271930146）。2026-08-07の1回はrunner未獲得で失敗→翌日復旧（運用台帳§5） |
 | RTO実測 | ✅ | 2026-08-10 PITR→初回クエリ 3.1秒（branch `br-broad-meadow-af4eugg9`、検証56ソース/PostGIS 3.5） |
-| production-target-env | 🟡 環境整備済み・再実行待ち | Variables 19件＋Secrets 6件を登録。`release-smoke` をAccess対応し、ci.ymlへ配線。次回workflow_dispatchで検証 |
+| production-target-env | ✅ 実ターゲット検証成功 | workflow_dispatch run 31333706566 success（Access付きread-only smoke含む全step完走） |
 | 本番データ運用 | ✅ | constructionSite 6件・weatherThreshold 11件をシード。weatherObservation 6件・marineObservation 5件を確認（10分毎自動収集） |
+| データソース拡充 | ✅ 5種追加 | 気象庁地震/津波JSON・GSI住所検索・Open-Meteo大気質/週間予報（参考）を本番62ソースへ追加し、5ジョブ success（run 31334100744） |
 | 評価・改善文書 | ✅ | `docs/evaluation/`（改善前評価・競合分析・代替率・改善計画）作成済み |
 | /reports未コミット修正 | ✅ | `.gitignore` の `reports/` パターンを `/reports/` へ修正し、`src/app/reports/page.tsx` と `src/app/api/v1/reports/route.ts` をコミット（本番へ反映済み） |
 

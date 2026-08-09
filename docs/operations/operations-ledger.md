@@ -109,6 +109,8 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 | 2026-08-10 | 本番DBに現場・閾値シード投入 | ✅ | constructionSite 6件（TYO-01〜06）・weatherThreshold 11件をidempotent upsert。投入前は両方0件（本番の気象海象・判定・レポートが空の状態を解消） |
 | 2026-08-10 | 気象海象データ収集の本番反映 | ✅ | run 31332165845 success後、weatherObservation 6件・marineObservation 5件を確認（10分毎の自動収集が継続） |
 | 2026-08-10 | release-smokeのCloudflare Access対応 | ✅ | `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` がある場合に `CF-Access-Client-Id` / `CF-Access-Client-Secret` ヘッダーを付与。ci.yml `production-target-env` へ環境Secretsを配線 |
+| 2026-08-10 | production-target-env 実ターゲット検証 | ✅ | workflow_dispatch run 31333706566 success（validate-env → production evidence → placeholders → cf:build → PostGIS DDL → migration drift → Access付きread-only smokeまで完走）。`CODIP_DISABLE_TOKEN_AUTH` のenv配線（PR #118）で解消 |
+| 2026-08-10 | 公式JSONコネクタ5種を本番展開 | ✅ | 気象庁地震情報JSON・津波情報JSON・GSI住所検索API・Open-Meteo大気質（参考）・週間予報（参考）をシード（本番62ソース）し、5ジョブを有効化。収集run 31334100744後、5件すべて `lastStatus=success`（有効ジョブ18件中15 success / 1 skipped / 9 dead_letterは既存） |
 | 2026-08-05 02:30Z | production smoke初回成功 | ✅ | run 30969524446（health 200 / ready 200 db=ok） |
 | 2026-08-05 | Access service token設定 | ✅ | 本台帳 §4、`docs/runbooks/cloudflare-production.md` §1.0.1 |
 | 2026-08-05 | 運用台帳・incident runbook新設 | ✅ | 本ファイル、`docs/runbooks/incident-response.md` |

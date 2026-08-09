@@ -140,6 +140,8 @@ flowchart LR
 | Neon | PostgreSQL 17.10 / PostGIS 3.5、migration 2/2、整合性異常0 | ✅ DB rollback不要 |
 | Backup | pg_dump初回成功（2026-08-04T21:05Z workflow_dispatch run 30950851419、AES256暗号化artifact `codip-neon-pgdump-20260804T210642Z.dump.gpg`、14日保持）。scheduled初回は2026-08-06 03:17 JSTに検証予定 | ✅（手動初回） |
 | 定期smoke | Access service token設定済み（2026-08-05）。15分間隔 strict read-only probe成功（初回 30969524446、scheduled 30972974222、P0デプロイ後 30976480258） | ✅ |
+| データ収集 | 本番62データソース・有効ジョブ18件（2026-08-10）。気象海象は現場6件＋観測収集稼働中、公式JSONコネクタ5種を追加 | ✅ |
+| アラート | Cloudflare `CODIP Worker Error Alert` 作成・テスト送信済み（2026-08-10）。GitHub/Neon通知は設定待ち | 🟡 |
 
 定期検知は `.github/workflows/production-smoke.yml` が15分ごとにstrict read-only probeを実行します。odipはCloudflare Access配下のため、監視用Access service token（`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`）をGitHub Actions Secretへ設定済みです。Cloudflare/Neonアラート通知先と初回通知テストは運用台帳（`docs/operations/operations-ledger.md`）の残課題です。
 
@@ -284,7 +286,7 @@ flowchart LR
 - **AIの本格化**: ルールベース推薦（`/api/v1/recommendations`）は実装済み。LLM/RAG、AI品質監視、コネクタ自動生成、自然文検索は未導入（P1）
 - **GIS分析の深化**: レイヤー重ね合わせ・計測・出力・矩形検索・属性検索・時間フィルタは実装済み。ポリゴンUI・バッファUI・時系列スライダーUI・GeoPackage/PDF出力・3D/PLATEAUは未導入（P0/P2）
 
-🔒 **本番アプリはCloudflare Access配下で稼働中**。本番監視（15分間隔smoke）とNeon定期バックアップは確立済みです。残るブロッカーはCloudflare staging Hyperdrive（staging専用）と、アラート通知先・通知テスト等の運用仕上げです。手順は [`docs/runbooks/cloudflare-production.md`](docs/runbooks/cloudflare-production.md)、[`docs/runbooks/monitoring.md`](docs/runbooks/monitoring.md)、[`docs/operations/operations-ledger.md`](docs/operations/operations-ledger.md) を参照してください。
+🔒 **本番アプリはCloudflare Access配下で稼働中**。本番監視（15分間隔smoke）とNeon定期バックアップは確立済みです。Cloudflareアラートポリシーは作成・テスト送信済み（2026-08-10）。残るブロッカーはCloudflare staging Hyperdrive（staging専用）と、GitHub/Neon通知先の設定です。手順は [`docs/runbooks/alerts-and-notifications.md`](docs/runbooks/alerts-and-notifications.md)、[`docs/runbooks/cloudflare-production.md`](docs/runbooks/cloudflare-production.md)、[`docs/operations/operations-ledger.md`](docs/operations/operations-ledger.md) を参照してください。
 
 ---
 
