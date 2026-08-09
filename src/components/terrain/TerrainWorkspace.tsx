@@ -299,7 +299,10 @@ export function TerrainWorkspace() {
           ベース
           <select
             value={view.base}
-            onChange={(event) => setView((current) => ({ ...current, base: event.currentTarget.value as MapViewState["base"] }))}
+            onChange={(event) => {
+              const base = event.currentTarget.value as MapViewState["base"];
+              setView((current) => ({ ...current, base }));
+            }}
             className="dc-input text-xs"
             aria-label="ベースレイヤー"
           >
@@ -315,14 +318,15 @@ export function TerrainWorkspace() {
             <input
               type="checkbox"
               checked={view.overlays.includes(layer.id)}
-              onChange={(event) =>
+              onChange={(event) => {
+                const checked = event.currentTarget.checked;
                 setView((current) => ({
                   ...current,
-                  overlays: event.currentTarget.checked
+                  overlays: checked
                     ? [...current.overlays, layer.id]
                     : current.overlays.filter((id) => id !== layer.id),
-                }))
-              }
+                }));
+              }}
               aria-label={`${layer.label}を表示`}
             />
             {layer.label}
