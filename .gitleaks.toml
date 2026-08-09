@@ -7,6 +7,7 @@ useDefault = true
 description = "GitHub API repo metadata temp_clone_token (ephemeral, scoped, clone-only) と、proxy-auth-inject 単体テストの偽シークレット fixture (test-proxy-secret-* / 0123456789abcdef-*) のみを対象とする。実シークレットは含まれない。"
 regexes = [
   '"temp_clone_token"\s*:\s*"[^"]+"',
-  'CODIP_TRUST_PROXY_SECRET:\s*"(test-proxy-secret|0123456789abcdef)[^"]*"',
+  'test-proxy-secret-value-0123456789',
+  '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
 ]
 paths = ['docs/migration/preservation/.*/repo-meta\.json']
