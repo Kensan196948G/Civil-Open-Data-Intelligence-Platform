@@ -30,10 +30,13 @@ export function normalizeCoordinate(value: unknown, axis: "lng" | "lat"): number
 export function dedupeKey(input: Record<string, unknown>): string;
 export function computeSchemaFingerprint(candidates: Array<Record<string, unknown>>): string;
 export function parseCsv(text: string): Record<string, string>[];
+export function parseJmaAtomFeed(
+  bodyText: string,
+): Array<{ title: string; id: string; url: string | null; updated: string | null; summary: string | null }>;
 export function parsePayload(
   bodyText: string,
   contentType: string | null,
-  source: { name: string; category: string; providerName?: string | null },
+  source: { name: string; category: string; providerName?: string | null; dataFormat?: string | null },
 ): Array<Record<string, unknown>>;
 
 export function runDueIngestionJobs(

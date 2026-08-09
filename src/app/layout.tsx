@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AppHeader } from "@/components/AppHeader";
+import { PwaRegister } from "@/components/PwaRegister";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ja">
       <body className="flex h-screen w-full overflow-hidden">
+        <PwaRegister />
         {/* デザイン正本指定の IBM Plex フォント。next/font は本環境の WASM メモリ制限で
             ビルド不能のため、正本と同じ <link> 方式 (CSP は fonts.googleapis.com /
             fonts.gstatic.com のみ許可)。CDN 不達時は font stack の system-ui へフォールバック */}

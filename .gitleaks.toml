@@ -4,6 +4,10 @@ title = "CODIP gitleaks allowlist"
 useDefault = true
 
 [allowlist]
-description = "GitHub API repo metadata temp_clone_token (ephemeral, scoped, clone-only). Redacted from current files; allowlisted for the historical migration snapshot committed on 2026-08-09."
-regexes = ['"temp_clone_token"\s*:\s*"[^"]+"']
+description = "GitHub API repo metadata temp_clone_token (ephemeral, scoped, clone-only) と、proxy-auth-inject 単体テストの偽シークレット fixture (test-proxy-secret-* / 0123456789abcdef-*) のみを対象とする。実シークレットは含まれない。"
+regexes = [
+  '"temp_clone_token"\s*:\s*"[^"]+"',
+  'test-proxy-secret-value-0123456789',
+  '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+]
 paths = ['docs/migration/preservation/.*/repo-meta\.json']

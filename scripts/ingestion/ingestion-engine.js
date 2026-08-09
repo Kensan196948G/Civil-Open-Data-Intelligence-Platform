@@ -317,6 +317,45 @@ function parseJsonPayload(bodyText) {
   throw new Error("JSON はオブジェクト/配列ではありません");
 }
 
+function stripXmlMarkup(value) {
+  return value
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractXmlTag(block, tag) {
+  const pattern = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i");
+  const match = pattern.exec(block);
+  return match ? stripXmlMarkup(match[1]) : null;
+}
+
+/**
+ * 気象庁防災情報XML (Atom feed, docs/06 §3 参照) を標準レコード候補へ変換する。
+ * 対象は JMA が機械生成する well-formed な feed に限定し、entry 単位で
+ * title / id / updated / link href / content summary を抽出する。
+ */
+function parseJmaAtomFeed(bodyText) {
+  const entries = [];
+  const entryPattern = /<entry\b[^>]*>([\s\S]*?)<\/entry>/gi;
+  let match;
+  while ((match = entryPattern.exec(bodyText)) !== null) {
+    const block = match[1];
+    const title = extractXmlTag(block, "title") || "無題";
+    const id = extractXmlTag(block, "id") || "";
+    const updated = extractXmlTag(block, "updated") || null;
+    const href = /<link\b[^>]*href="([^"]+)"/i.exec(block)?.[1] ?? null;
+    const contentMatch = /<content\b[^>]*>([\s\S]*?)<\/content>/i.exec(block);
+    const summary = contentMatch ? stripXmlMarkup(contentMatch[1]) : null;
+    entries.push({ title, id, url: href, updated, summary });
+  }
+  if (entries.length === 0) {
+    throw new Error("Atom XML から entry を抽出できませんでした");
+  }
+  return entries;
+}
+
 function normalizeDate(value) {
   if (value == null || value === "") return null;
   if (typeof value === "number" && Number.isFinite(value) && value > 10_000_000_000) {
@@ -438,14 +477,17 @@ function parsePayload(bodyText, contentType, source) {
   const trimmed = bodyText.trimStart();
   let kind = "rows";
   let rows = [];
-  if (ct.includes("csv") || /^[^"{[\s][^\n]*,[^\n]*/.test(trimmed)) {
+  const isXml = ct.includes("xml") || String(source?.dataFormat ?? "").toUpperCase() === "XML";
+  if (isXml) {
+    rows = parseJmaAtomFeed(bodyText);
+  } else if (ct.includes("csv") || /^[^"{[\s][^\n]*,[^\n]*/.test(trimmed)) {
     rows = parseCsv(bodyText);
   } else if (ct.includes("json") || trimmed.startsWith("{") || trimmed.startsWith("[")) {
     const parsed = parseJsonPayload(bodyText);
     kind = parsed.kind;
     rows = parsed.rows;
   } else {
-    throw new Error("CSV / JSON / GeoJSON 以外の形式は現行パイプラインで非対応です");
+    throw new Error("CSV / JSON / GeoJSON / XML(気象庁Atom feed) 以外の形式は現行パイプラインで非対応です");
   }
   return rows.map((row, index) =>
     kind === "geojson" ? candidateFromFeature(row, source, index) : candidateFromCsvRow(row, source),
@@ -741,6 +783,7 @@ module.exports = {
   assertIngestionUrl,
   fetchIngestionPayload,
   parseCsv,
+  parseJmaAtomFeed,
   parsePayload,
   normalizeDate,
   normalizeNumber,

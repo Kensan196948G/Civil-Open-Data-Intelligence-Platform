@@ -4,7 +4,7 @@
 const { PrismaPg } = require("@prisma/adapter-pg");
 const { PrismaClient } = require("../../node_modules/.prisma/client-postgresql");
 
-const ELIGIBLE_FORMATS = new Set(["CSV", "GeoJSON", "JSON"]);
+const ELIGIBLE_FORMATS = new Set(["CSV", "GeoJSON", "JSON", "XML"]);
 
 async function main() {
   const connectionString = (process.env.DATABASE_URL || "").trim();
