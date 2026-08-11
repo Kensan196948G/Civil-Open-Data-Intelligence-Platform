@@ -1,78 +1,98 @@
-# 🏗️ 統合評価・改善報告書（Integrated Assessment & Improvement Report）
+# 統合評価・改善報告書（Integrated Assessment & Improvement Report）
 
-> 🗓️ 2026-08-10 ｜ 対象: Civil Open Data Intelligence Platform（CODIP）  
-> 🌐 本番: https://odip.mirai-dx-platform.com（Worker Version `d1528b5d-b5e6-47e9-aa4b-1070868161f6` / main `3ec5e8f`）  
-> 📚 関連文書: [改善前評価](pre-improvement-assessment.md) / [競合分析](competitive-analysis.md) / [代替率](replacement-rate.md) / [改善計画](improvement-plan.md) / [改善後再評価](post-improvement-assessment.md)
+> 2026-08-12 最終更新（第3サイクル） ｜ 対象: Civil Open Data Intelligence Platform（CODIP）
+> 本番: https://odip.mirai-dx-platform.com（Worker `codip-production` 継続稼働 / main `5f0cefb`）
+> 関連文書: [改善前評価](pre-improvement-assessment.md) / [競合分析](competitive-analysis.md) / [代替率](replacement-rate.md) / [改善計画](improvement-plan.md) / [改善後再評価](post-improvement-assessment.md)
 
 ---
 
 ## 1. 総括
 
-CODIPは**本番稼働中の公開データ統合・地形分析・気象海象判断支援基盤**であり、総合判定は **「条件付き利用可」**。18軸平均は **67.1 → 69.6点（+2.5）**、加重代替率は **47.25% → 48.1%** へ改善した。
+CODIPは**本番稼働中の公開データ統合・地形分析・気象海象判断支援基盤**であり、総合判定は **「条件付き利用可」**。18軸平均は **67.1 → 69.6 → 72.7 → 73.3点（累計 +6.2）**、加重代替率は **47.25% → 48.1% → 51.35% → 52.25%** へ改善した。
 
-本評価サイクルでは、評価だけで終わらず以下の重大問題を**実装・修正・本番反映**した。
+第3サイクル（2026-08-12）では、QA監査が検出した**「証跡ゲートの自己認証」系列の重大欠陥7件（#126〜#129・#132〜#134）とsmoke失敗通知（#90）**を実装・検証し、統合ブランチ `claudeos/backend` としてマージ承認待ちとした。
 
-- 🚨 **/reports機能（画面＋API）がgitignoreの `reports/` パターンにより未コミット**で、CI・本番で404になっていた問題を発見・修正（本番へ反映済み）
-- 🐛 **地形画面のレイヤー切替クラッシュ**（`event.currentTarget` をstate更新関数内で読む非安全パターン）を修正
-- 🧪 **統合後新画面のE2E回帰テスト16件**を追加しCI pass
-- 🔔 **監視アラート通知の設定手順書**を作成（実行は通知先承認待ちのP0）
-- 📄 **README・運用台帳・リリースチェックリストの最新化**（バックアップ失敗1回の記録を含む）
+- Neon PITR保持期間をNeon APIから実測し、自己申告値での通過を不可能化（#126）
+- 復旧訓練・pg_dumpの「success既定値」を削除し、未指定はfail-closed化（#127）
+- 本番証跡8変数に形式要件をピン留めし、`ok`2文字での通過を不可能化（#128）
+- 本番CSP検査を部分文字列一致からディレクティブ単位突合せへ（#129）
+- CodeQLを失敗可能なゲートへ復元（#132）、Actions SHA検査を6/6ファイルへ（#133）
+- 監査契約に実挙動テストを追加（#134）
+- production smoke失敗時のincident Issue自動起票・連続失敗P1昇格（#90）
 
 ---
 
 ## 2. 改善前後比較
 
-| 指標 | 改善前 | 改善後 | 変化 |
-| --- | --- | --- | --- |
-| 18軸平均 | 67.1 / 100 | 69.6 / 100 | +2.5 |
-| 総合判定 | 条件付き利用可 | 条件付き利用可（改善） | — |
-| 加重代替率 | 47.25% | 48.1% | +0.85pt |
-| 機能完成度 | 72 | 72 | —（機能追加はPhase 1〜2） |
-| テスト | 70 | 80 | +10（新画面E2E 16件） |
-| 文書 | 75 | 84 | +9（評価書・Runbook・台帳） |
-| コード品質 | 78 | 82 | +4（クラッシュ修正・未コミット発見） |
-| 本番稼働 | Worker `57b17ee1`（/reports欠落） | Worker `d1528b5d`（/reports・クラッシュ修正反映） | ✅ |
+| 指標 | 初期(8/10) | 1st(8/10) | 2nd(8/11) | 3rd(8/12) | 累計変化 |
+| --- | --- | --- | --- | --- | --- |
+| **18軸平均** | 67.1 / 100 | 69.6 / 100 | 72.7 / 100 | **73.3 / 100** | **+6.2** |
+| 総合判定 | 条件付き利用可 | 条件付き利用可（改善） | 条件付き利用可（大幅改善） | **条件付き利用可（証跡ゲート是正済み）** | -- |
+| **加重代替率** | 47.25% | 48.1% | 51.35% | **52.25%** | **+5.0pt** |
+| セキュリティ | 80 | 80 | 83 | 86 | +6 |
+| 監視・障害対応 | 55 | 60 | 67 | 72 | +17 |
+| テスト | 70 | 80 | 83 | 86 | +16 |
+| 文書 | 75 | 84 | 86 | 88 | +13 |
+| 運用保守性 | 62 | 65 | 70 | 73 | +11 |
 
 ### 本番導入可否
 
-**🟡 限定的本番利用（パイロット）は可。全社600名展開は条件付き。**
+**条件付き利用可（パイロット運用は可。全社600名展開は条件付き）**
 
-- ✅ 可能: データ調査・地形分析・気象海象判定支援をパイロット部門で利用
-- 🔴 不可のまま: 全社展開・協力会社展開（通知・RBAC・モバイル未実装、アラート通知未設定）
+- **可能**: データ調査・地形分析・気象海象判定支援・現場PWA利用・後続API連携
+- **条件**: 全社展開には通知先/当番設定（P0）・RBAC・PDF/Excel出力・実データ50種・ロードテストが必要
+- **第3サイクルの位置付け**: 監視・バックアップ・復旧の**証跡が検証可能になった**。実運用の受信テストと復旧訓練の実施は人間承認待ち
 
 ---
 
 ## 3. 最大の強み5件
 
-1. 🏗️ **土木建設向け公開データ基盤が本番稼働**（56台帳・定期収集・品質監視・リネージュ・後続API）
-2. ⛰️🌦️ **地形分析＋気象海象判定が同一UIで一体**（DEM/Horn/TPI/断面、AMeDAS/波浪/50年確率波/go・caution・stop）
-3. 🛡️ **「人による最終判断」前提の安全設計**（自動断定しない・監査スナップショット・fail-closed）
-4. 🚦 **多層CI/CDとテスト資産**（486単体＋E2E 30件＋PostGIS/Docker/CodeQL/Trivy/SBOM）
-5. 💰 **低コスト・少人数運用**（Cloudflare＋Neon＋GitHub Actions、Runbook・運用台帳整備）
+1. **土木建設向け公開データ基盤が本番稼働**（62台帳・定期収集・品質監視・リネージュ・後続API・PostGIS空間評価）
+2. **地形分析＋気象海象判定が同一UIで一体**（DEM/Horn/TPI/断面、AMeDAS/波浪/50年確率波/go・caution・stop）
+3. **「人による最終判断」前提の安全設計**（自動断定しない・監査スナップショット・fail-closed・proxy認証多層防御）
+4. **多層CI/CDとテスト資産**（単体715件＋E2E 30件＋PostGIS/Docker/CodeQL/Trivy/SBOM、証跡ゲートは変異検査付き）
+5. **低コスト・少人数運用＋実証済み復旧力**（Cloudflare＋Neon＋GitHub Actions、RTO切戻し4秒/復旧25秒、日次暗号化backup）
 
 ---
 
 ## 4. 重大な弱み5件
 
-1. 🔴 **監視アラート通知先未設定**（検知しても人が気づかない。手順書化済み・実行待ち）
-2. 🔴 **RBAC未実装**（600名展開時の権限分離・監査が不足）
-3. 🔴 **モバイル/PWA・オフライン未対応**（現場主力デバイスで利用不可）
-4. 🔴 **実データ収集20ジョブ規模**（目標50種に未達。データ価値が限定的）
-5. 🔴 **RTO未実測・production-target-env実行不可**（復旧の実証と実ターゲットCI検証が未確立）
+1. **監視アラート通知先・受信テスト未実施**（incident Issue自動起票は実装済み。メール/Teams/当番の設定と受信確認は人間作業）
+2. **RBAC未実装**（600名展開時の権限分離・監査が不足。Access proxy認証は稼働）
+3. **PDF/Excel出力未実装**（帳票提出・共有に必須の形式がない。CSV/Markdown出力のみ）
+4. **実データ収集20ジョブ規模**（目標50種に未達。コネクタ追加で拡張中）
+5. **ロードテスト未実施**（600名規模同時利用時のP95が不明。性能目標の根拠不足）
 
 ---
 
-## 5. 実装済み改善（本サイクル）
+## 5. 実装済み改善（全サイクル・24件）
 
 | # | 改善 | 検証 |
 | --- | --- | --- |
-| 1 | /reports未コミット修正（.gitignore `reports/`→`/reports/`、画面＋APIをコミット） | CI build/E2E pass、本番デプロイ済み |
+| 1 | /reports未コミット修正（`.gitignore` `reports/`→`/reports/`） | CI build/E2E pass、本番デプロイ済み |
 | 2 | 地形画面クラッシュ修正（event値の事前取得） | E2E pass（run 31324701074） |
-| 3 | 統合後新画面E2E 16件（/terrain /weather /decisions /sites /reports） | CI e2e pass |
-| 4 | 監視アラートRunbook（GitHub/Cloudflare/Neon手順・試験・エスカレーション） | 文書レビュー |
-| 5 | 改善前評価・競合分析・代替率・改善計画 | 文書レビュー |
-| 6 | README・docs/13・リリースチェックリスト・運用台帳の最新化 | リンク・記載整合 |
-| 7 | 本番デプロイ（main `3ec5e8f` → Version `d1528b5d`）＋Production Smoke success | run 31325075110（health 200 / ready 200 db=ok） |
+| 3 | 統合後新画面E2E 16件 | CI e2e pass |
+| 4 | 監視アラートRunbook（手順・試験・エスカレーション） | 文書レビュー |
+| 5 | 改善前評価・競合分析・代替率・改善計画 | 文書レビュー（`docs/evaluation/`） |
+| 6 | README・運用台帳・リリースチェックリスト最新化 | リンク・記載整合 |
+| 7 | PWA実装（manifest + Service Worker + 登録 + E2E） | `tests/e2e/pwa.spec.ts` pass、PR #120 |
+| 8 | Access proxy認証注入（ミドルウェア + unit test 4件） | `tests/unit/proxy-auth-inject.test.ts` pass |
+| 9 | JMA XML収集エンジン（Atom 441件 + 6種抽出） | `tests/unit/ingestion-xml.test.ts` pass |
+| 10 | 公式JSONコネクタ5種追加 | `tests/unit/seed-data.test.ts` pass |
+| 11 | production-target-env修正 | workflow_dispatch run 31333706566 success |
+| 12 | RTO実測（rollback 4秒 / 復旧デプロイ 25秒） | 両smoke success |
+| 13 | Alert policy作成＋テスト送信 | Cloudflare通知テスト受信確認 |
+| 14 | 本番デプロイ＋Production Smoke | run 31325075110（health 200 / ready 200 db=ok） |
+| 15 | **#126** Neon PITR実測ゲート | モックAPIテスト3件＋check実測値のみ判定 |
+| 16 | **#127** restore drill / pg_dump status fail-closed化 | 既定値なし→非ゼロ終了テスト |
+| 17 | **#128** 本番証跡8変数の形式検証 | 形式不正FAILテスト |
+| 18 | **#129** CSPディレクティブ単位契約 | 変異検査（削除・全除去・connect-src削除でFAIL） |
+| 19 | **#132** CodeQLゲート復元 | 不在側を契約で固定 |
+| 20 | **#133** Actions SHA検査 6/6ファイル | 実測6ファイル・35 refs |
+| 21 | **#134** 監査実挙動テスト | 失敗系2件＋砂場変異 |
+| 22 | **#90** smoke失敗→incident Issue自動起票 | workflow契約テスト9件 |
+| 23 | 証跡ゲート監査書（26ゲート棚卸し） | drift契約テスト |
+| 24 | restore drill記録様式・通知テスト記録様式 | 契約テスト |
 
 ---
 
@@ -80,46 +100,50 @@ CODIPは**本番稼働中の公開データ統合・地形分析・気象海象�
 
 | 優先 | 改善 | 時期 | 備考 |
 | --- | --- | --- | --- |
-| P0-1 | 🔔 監視アラート通知先設定＋通知テスト | 今すぐ | 人間承認が必要（通知先・Webhook） |
-| P0-2 | 🔐 GitHub Actions production環境へのSecrets登録 | 今すぐ | human kensan操作 |
-| P0-3 | 📏 RTO実測ドリル（Worker切戻し＋Neon復元） | 今すぐ | 実測値を台帳へ |
-| P1-1 | 📱 PWA/モバイル対応 | 3か月 | 現場利用の前提 |
-| P1-2 | 🔔 通知・ウォッチリスト | 3か月 | 更新遅延・スキーマ変更・閾値超過 |
-| P1-3 | 🔐 RBAC基本実装 | 3か月 | ロール別アクセス制御 |
-| P1-4 | 🧾 PDF/Excelレポート出力 | 3か月 | 帳票実務接続 |
-| P1-5 | 📊 実データ収集50種 | 3か月 | 利用規約確認と並行 |
-| P1-6 | ⚡ ロードテスト（P95実測） | 3か月 | 600名規模の性能根拠 |
-| P1-7 | ♿ アクセシビリティ自動スキャン（axe） | 3か月 | 公共工事要件への適合証跡 |
+| P0-1 | 統合セキュリティPR（`claudeos/backend`）のマージ承認 | 今すぐ | #126〜#129・#132〜#134・#90を包含 |
+| P0-2 | 通知先/当番設定＋incident Issue watcher＋受信テスト | 今すぐ | 人間操作 |
+| P0-3 | 復旧訓練の実施と記録（restore-drill-record.md） | 今すぐ | 本番Neon操作は人間承認 |
+| P0-4 | `CODIP_NEON_API_KEY`・production evidence 8変数の登録 | 今すぐ | Secret/Variablesは人間操作 |
+| P1-1 | RBAC基本実装（ロール別アクセス制御） | 3か月 | Access proxy認証は稼働済み |
+| P1-2 | PDF/Excelレポート出力 | 3か月 | 帳票実務接続 |
+| P1-3 | 実データ収集50種展開 | 3か月 | 利用規約確認と並行 |
+| P1-4 | ロードテスト（k6、P95実測） | 3か月 | 600名規模の性能根拠 |
+| P1-5 | アクセシビリティ自動スキャン（axe-core） | 3か月 | 公共工事要件への適合証跡 |
+| P1-6 | PWAオフライン戦略本格実装 | 3か月 | 設計書 `docs/design/pwa-mobile-design.md` 準拠 |
 
 ---
 
 ## 7. 追加推奨機能10件
 
-1. 📱 PWAインストール＋現場オフラインモード
-2. 🔔 プッシュ通知（警報・閾値超過・判定変更）
-3. 📄 判定根拠レポートPDF（署名欄・出典明記）
-4. 🗂️ 写真・資料管理（現場記録）
-5. 💬 現場掲示板・コメント（最小コミュニケーション）
-6. 🧭 DCAT-AP-JP/OGC API Features等の標準規格連携
-7. 🤖 根拠引用付き自然文検索（RAG）
-8. 🔍 データ品質異常のAI検知（更新停止・急変）
-9. 🔄 既存SaaS（ANDPAD/現場クラウドOne/SharePoint）連携
-10. 🏥 四半期DR訓練の定期化
+1. PWAインストール＋現場オフラインモード（設計済み・Phase 1で本格化）
+2. プッシュ通知（警報・閾値超過・判定変更）
+3. 判定根拠レポートPDF（署名欄・出典明記）
+4. 現場スナップ写真付き観測メモ
+5. 類似現場の条件比較画面
+6. 根拠引用付き自然文検索（RAG）
+7. DCAT-AP-JP/OGC API Features等の標準規格連携
+8. データ品質異常のAI検知（更新停止・急変・欠測パターン）
+9. 既存SaaS（ANDPAD/現場クラウドOne/SharePoint）連携
+10. 四半期DR訓練の定期化
 
 ---
 
 ## 8. commit・PR・CI・デプロイ状況
 
-| 項目 | 状況 |
+| 項目 | 状況（2026-08-12） |
 | --- | --- |
-| PR #114 | ✅ マージ済み（3コミット: 評価書+E2E+Runbook / 地形クラッシュ修正 / /reports未コミット修正） |
-| CI（PR #114） | ✅ verify・e2e・postgresql-compat・docker-preview・docker-image-security・node-preview・CodeQL全pass（run 31324701074） |
-| 単体テスト | ✅ 486件 / 56ファイル pass |
-| E2E | ✅ 全spec pass（統合後新画面16件含む） |
-| 本番デプロイ | ✅ Version `d1528b5d-b5e6-47e9-aa4b-1070868161f6`（main `3ec5e8f`） |
-| デプロイ後スモーク | ✅ run 31325075110（/api/health 200・788ms / /api/ready 200 db=ok・1421ms） |
-| production-target-env | ⚠️ 未実行（production環境のSecrets未設定） |
-| docker-supply-chain | ⏳ mainマージ後に実行（次回CIで確認） |
+| main head | `5f0cefb`（PR #124 merge） |
+| 統合セキュリティ改善 | ブランチ `claudeos/backend`（`f2837cb`）・PR作成待ち/提出済み・**マージ承認待ち** |
+| オープンPR | #130（dependabot）/ #131（#129）/ #135（#128）/ #136（#90）＋統合PR。後者3本は統合PRのサブセット |
+| 単体テスト | 統合ブランチ実測 64ファイル 715件 pass（main 557件） |
+| E2E | 30 spec pass（CI実績）＋CSP/console error契約追加 |
+| lint / typecheck | 0 errors / 0 errors（統合ブランチ） |
+| 契約ゲート | github-actions-contract: 6 workflow・35 action refs SHA固定 |
+| 本番Worker | `codip-production` 継続稼働（Version `71fdfb11`） |
+| 本番スモーク | 15分毎 success（直近run全緑） |
+| 日次バックアップ | AES256 pg_dump success（14日保持）＋PITR実測ゲート化（PR待ち） |
+| production-target-env | workflow_dispatch success（run 31333706566） |
+| 監視Alert policy | `CODIP Worker Error Alert` 作成＋テスト送信済み |
 
 ---
 
@@ -127,47 +151,51 @@ CODIPは**本番稼働中の公開データ統合・地形分析・気象海象�
 
 | 区分 | 内容 | 担当 |
 | --- | --- | --- |
-| 運用 | アラート通知先・通知テスト未設定 | human kensan＋DevOps |
-| 運用 | RTO未実測・DR訓練は2026-11予定 | DevOps |
-| CI | production-target-envのSecrets未設定 | human kensan |
-| 機能 | RBAC・PWA・通知・PDF/Excel未実装 | Phase 1〜2 |
+| 承認 | 統合セキュリティPRのレビュー・マージ（#131/#135/#136のクローズ判断含む） | human + Reviewer |
+| 運用 | アラート通知先・当番設定・受信テスト（incident Issue watcher含む） | human kensan＋DevOps |
+| 運用 | 復旧訓練の実施と記録 | human kensan＋DevOps |
+| Secret | `CODIP_NEON_API_KEY`・production evidence 8変数・production環境Secrets | human kensan |
+| 機能 | RBAC・PDF/Excel出力未実装 | Phase 1 |
 | データ | 実データ50種・台帳500件未達 | データ運用 |
 | 性能 | ロードテスト未実施（P95実測なし） | DevOps |
-| 環境 | 共有preview（192.168.0.185:3100）がタイムアウト中 | 要復旧または廃止判断 |
 | 品質 | axeアクセシビリティ自動スキャン未導入 | QA |
 | セキュリティ | 侵入テスト証跡なし・Secret有効期限未確認 | Security |
+| 環境 | Cloudflare staging Hyperdrive権限不足（code 10000） | human kensan |
 
 ---
 
 ## 10. 投資判断
 
-### ✅ 条件付き継続（Continue with conditions）
+### 条件付き継続（Continue with conditions）
 
-理由:
+**理由**:
+
 - 本番稼働・監視・バックアップ・CI/CD・主要機能が実証済みで、競合にない独自領域（公開データ×地形×気象海象）を持つ
 - 少人数（IT/DX 7名）で継続運用できる構成と文書が整っている
-- 一方、全社600名展開には通知・RBAC・モバイル・実データ拡充が必須であり、これらをPhase 0〜1で実施することを条件とする
-
-投資中止・方向転換の判断材料は現時点でない。
+- 第3サイクルで「証跡ゲートの自己認証」系列の重大欠陥を是正し、監査・復旧・CSPの検知能力が実証された
+- 一方、全社600名展開には通知先設定・RBAC・PDF/Excel出力・実データ拡充・ロードテストが必要
+- 投資中止・方向転換の判断材料は現時点でない
 
 ---
 
 ## 11. Phase 0〜4ロードマップ
 
-| Phase | 期間 | 内容 | 完了条件 |
-| --- | --- | --- | --- |
-| Phase 0: 重大問題・セキュリティ | 0〜2週間 | アラート通知設定＋通知テスト、production-target-env Secrets、RTO実測、Secret棚卸し | 通知受信確認・実測値記録・Secrets設定 |
-| Phase 1: 中核業務完成 | 3か月 | PWA/モバイル、通知・ウォッチリスト、RBAC、PDF/Excel、実データ50種、ロードテスト、axe | パイロット部門での実業務利用・CI維持 |
-| Phase 2: 競合製品80%代替 | 6〜12か月 | 現場コミュニケーション、写真・資料管理、標準規格連携、既存SaaS連携、APIキー管理 | 代替率65〜70%・パイロット評価 |
-| Phase 3: AI・モバイル・外部連携 | 12〜18か月 | RAG検索、AI異常検知、コネクタ自動生成、DR定期化 | 引用付きAI支援・精度評価・予算制御 |
-| Phase 4: 90%代替・本番最適化 | 18〜24か月 | 3D Tiles・時系列、マルチテナント、データ利用申請、経営ダッシュボード | 代替率80〜90%・全社展開 |
+| Phase | 状況 | 期間 | 内容 | 完了条件 |
+| --- | --- | --- | --- | --- |
+| **Phase 0**: 重大問題・セキュリティ | **実装・検証完了** | 2026-08-10〜12 | PWA・proxy-auth・RTO実測・Alert policy・証跡ゲート7件是正・incident Issue | マージ承認・Secrets設定・受信テスト・実訓練の4点 |
+| Phase 1: 中核業務完成 | 次 | 3か月 | RBAC・PDF/Excel・PWA本格化・実データ50種・ロードテスト・axe | パイロット部門での実業務利用 |
+| Phase 2: 競合製品80%代替 | -- | 6〜12か月 | 現場コミュニケーション・写真管理・標準規格連携・SaaS連携・APIキー管理 | 代替率65〜70% |
+| Phase 3: AI・モバイル・外部連携 | -- | 12〜18か月 | RAG検索・AI異常検知・コネクタ自動生成・DR定期化 | 引用付きAI支援・精度評価 |
+| Phase 4: 90%代替・本番最適化 | -- | 18〜24か月 | PLATEAU 3D Tiles・マルチテナント・経営ダッシュボード | 代替率80〜90%・全社展開 |
 
 ---
 
 ## 12. 次に着手すべき具体的作業
 
-1. 🔔 **アラート通知先の決定と設定**（メール＋Teams Webhook、通知テスト）— `docs/runbooks/alerts-and-notifications.md` に従う
-2. 🔐 **GitHub Actions production環境へSecrets/Variables登録**（`CODIP_DATABASE_URL` 等）→ `workflow_dispatch` で `production-target-env` を実行
-3. 📏 **RTO実測ドリル**（Neon branch復元＋Worker rollback手順のタイム計測）
-4. 📱 **PWA/モバイル対応の設計着手**（manifest・Service Worker・現場UI）
-5. 📊 **実データ50種のコネクタ追加**（利用規約確認→収集→品質監視）
+1. **統合セキュリティPR（`claudeos/backend`）のレビューとマージ承認**（#126〜#129・#132〜#134・#90）
+2. **アラート通知先・当番の決定と設定**（incident Issue watcher、受信テスト）-- `docs/runbooks/alerts-and-notifications.md` 準拠
+3. **復旧訓練の実施と記録**（`docs/runbooks/restore-drill-record.md` 様式）
+4. **RBAC基本設計の着手**（Access proxy認証稼働済みを前提としたロール定義）
+5. **PDF/Excel出力の技術選定とプロトタイプ**（判定根拠レポート・地形分析帳票）
+6. **PWAオフライン戦略の本格実装**（`docs/design/pwa-mobile-design.md` に従う）
+7. **実データ50種コネクタ追加の継続**（利用規約確認→収集→品質監視）
