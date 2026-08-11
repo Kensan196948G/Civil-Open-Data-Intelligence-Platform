@@ -109,7 +109,14 @@ jobs:
       - name: Validate preview env contract
         run: npm run release:validate-env:preview
 
-      - name: Validate production env contract
+      # (synthetic) — the values below are fixtures, not the production ones.
+      # This step proves the validator rejects a malformed shape; it says nothing
+      # about whether the real production environment is configured. The real
+      # values are checked by the production-target job (release:validate-env:production-target
+      # and release:production-evidence). release-gate.js:63 labels the same step
+      # "(synthetic)" for this reason; without the label here a green CI run reads
+      # as production evidence.
+      - name: Validate production env contract (synthetic values)
         env:
           DATABASE_URL: "postgresql://codip:codip@example.com:5432/codip?schema=public&sslmode=require"
           CODIP_ADMIN_TOKEN: "ci-production-admin-token-1234567890"
