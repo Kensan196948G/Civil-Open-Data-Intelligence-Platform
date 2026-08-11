@@ -191,18 +191,51 @@ describe("production evidence variables match the audited list", () => {
     expect(auditDoc).toContain(`Monitoring evidence ${monitoringKeys.length}項目`);
   });
 
-  it("keeps the leniency claim true while evidenceState only inspects strings", () => {
-    const evidenceState = productionEvidenceReport.match(
-      /function evidenceState\(value\)\s*\{([\s\S]*?)\n\}/,
-    )?.[1];
-    expect(evidenceState).toBeDefined();
+  /**
+   * Row #7's leniency claim must track what the monitoring rows actually go
+   * through, not what one named function contains.
+   *
+   * The earlier version of this test probed `evidenceState` for an external
+   * call and required the doc to keep the `ok` claim while none was found.
+   * That proxy is wrong in a way backend caught: e199e64 keeps `evidenceState`
+   * as a deliberate presence check and moves the rows onto a per-key format
+   * validator. No external call is ever added, so the proxy would have pinned
+   * the document to a claim that had become false. Measure the row path.
+   */
+  const monitoringRowChecker = () => {
+    const rowLine = productionEvidenceReport.match(/const monitoringRows = [\s\S]*?\n/)?.[0] ?? "";
+    const called = /\[key, (\w+)\(/.exec(rowLine)?.[1];
+    if (!called) return { tier: "unknown", called } as const;
 
-    const performsExternalCheck = /fetch\(|spawnSync|execSync|https?:\/\//.test(evidenceState ?? "");
+    const body =
+      productionEvidenceReport.match(new RegExp(`function ${called}\\([^)]*\\)\\s*\\{([\\s\\S]*?)\\n\\}`))?.[1] ?? "";
+    if (/fetch\(|spawnSync|execSync|https?:\/\//.test(body)) return { tier: "probed", called } as const;
+    // A per-key expectation table means "ok" no longer satisfies every key
+    if (/EVIDENCE_FORMATS|\bspec\b|\.pattern\b|RegExp/.test(body)) return { tier: "format-validated", called } as const;
+    return { tier: "presence-only", called } as const;
+  };
+
+  it("resolves how the monitoring rows are actually built", () => {
+    // If this stops resolving, the tier below silently degrades to one value
+    // and the claim check turns into a constant. Fail loudly instead.
+    const { tier, called } = monitoringRowChecker();
+    expect(called, "monitoringRows の構築行から判定関数を解決できない").toBeDefined();
+    expect(tier).not.toBe("unknown");
+  });
+
+  it("carries the `ok` leniency claim only while the rows are presence-only", () => {
+    const { tier } = monitoringRowChecker();
     const docSaysStringOnly = auditDoc.includes(
       "GitHub Variables に `ok` の2文字を入れれば7項目すべてが ✅ になる",
     );
 
-    expect(performsExternalCheck).toBe(!docSaysStringOnly);
+    expect(
+      docSaysStringOnly,
+      tier === "presence-only"
+        ? "行は今も存在確認だけなので、この主張を消してはならない"
+        : `行は ${tier} へ強化されている。docs/security/evidence-gate-audit.md 行#7 の ` +
+          "「`ok` の2文字で7項目すべてが ✅」は既に偽なので、実際の判定内容へ書き換えること",
+    ).toBe(tier === "presence-only");
   });
 });
 
