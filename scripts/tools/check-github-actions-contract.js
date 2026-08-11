@@ -121,7 +121,12 @@ requireText("node-preview job", nodePreviewJob, "npm run release:smoke -- --base
 requireText("CodeQL workflow", codeql, "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1");
 requireText("CodeQL workflow", codeql, "github/codeql-action/init@1ad29ea4a422cce9a242a9fae469541dcd08addc");
 requireText("CodeQL workflow", codeql, "github/codeql-action/analyze@1ad29ea4a422cce9a242a9fae469541dcd08addc");
-requireText("CodeQL workflow", codeql, "continue-on-error: true");
+// analyze は最終 step なので、落ちても実行すべき後続が無い。continue-on-error を付けると
+// security scan が必ず success になり、「CI必須チェックが全て success (security scan含む)」を
+// 満たしたと主張できなくなる (Issue #132)。復活を検知するため、不在側を契約にする。
+if (codeql.includes("continue-on-error")) {
+  errors.push("CodeQL workflow must not use continue-on-error: a security scan that cannot fail is not a gate");
+}
 requireText("package.json", packageJson, "\"typecheck\": \"npm run db:generate && tsc --noEmit\"");
 
 const forbiddenPatterns = [
