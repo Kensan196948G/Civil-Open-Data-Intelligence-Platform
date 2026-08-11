@@ -18,14 +18,28 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 | 可用性 | 月間 99.9% | production-smoke 成功割合（15分毎） |
 | `/api/ready` | 監視時刻 100% `status=ready` / `db=ok` | `release:post-release-status --strict-production` |
 | 応答時間 | P95 5秒以内 | probe responseTimeMs |
-| 検知〜初動 | P1: 15分 / P2: 30分 / P3: 1営業日 | アラート（未設定） |
+| 検知〜初動 | P1: 15分 / P2: 30分 / P3: 1営業日 | **計測不能**（2026-08-11 Issue #90 検証。下記注記を参照） |
 | 復旧 | P1: 60分 / P2: 4時間 / P3: 次回改善サイクル | rollback / forward-fix |
+
+> ⚠️ **「検知〜初動」が計測不能である理由（2026-08-11 read-only 検証、Issue #90）**
+>
+> 従来この計測欄はアラート未設定とだけ記載していたが、実態は「通知先が未設定」ではなく**通知経路そのものが実装されていない**。
+>
+> 1. `.github/workflows/production-smoke.yml` に失敗時の通知step・Issue起票step・webhookのいずれも存在しない。失敗は `exit 1` によって**表明**されるが、どこへも**伝達**されない。実際に届くのは各GitHubユーザー個人の既定通知設定に依存する範囲のみで、運用上の検知経路として計測できない。
+> 2. §1 の「連続2回以上」といった*連続性*の条件を評価する自動化が存在しない。`scripts/tools/post-release-status.js` は1回の実行内で判定して終了し、workflowはrun間の状態を保持しない。
+> 3. 通知テストの受信記録が存在しない（送信APIの成功のみが記録されている）。
+>
+> したがって P1: 15分 という目標値は**現時点では達成/未達を判定できない**。目標値そのものは維持し、計測可能になるまで「未達」ではなく「計測不能」として扱う。
+>
+> - 検証の詳細と権限不足で確認できなかった項目: `docs/runbooks/monitoring.md` §0.1
+> - 必要な実装（backend担当・未実装）: `docs/runbooks/monitoring.md` §1.1.4
+> - 通知テストの記録様式と現在の判定: [`docs/runbooks/notification-test-record.md`](../runbooks/notification-test-record.md) §3（3経路すべて `NOT RUN` または `BLOCKED`）
 
 ## 2. バックアップ・復旧基準
 
 | 項目 | 値 |
 | --- | --- |
-| Neon PITR | 24時間（PITR履歴ウィンドウ。変更は週次確認） |
+| Neon PITR | 24時間（`history_retention_seconds=86400`。2026-08-11 実測。現行Launchプランでは0〜7日で可変であり、24時間は下限固定ではない。詳細と引き上げ判断材料は `docs/runbooks/monitoring.md` §1.2.1） |
 | 定期pg_dump | 毎日 03:17 JST（`.github/workflows/neon-backup.yml`） |
 | 暗号化 | GPG AES256（`CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE`） |
 | 保持 | 暗号化dump 14日 / 証跡JSON 30日 |
@@ -47,7 +61,7 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 
 | 項目 | 実行方法 | 判定基準 | 担当 | 証跡 | 次回予定 |
 | --- | --- | --- | --- | --- | --- |
-| PITR window | Neon API `describe_project` | 24h維持 | CTO代行 | `CODIP_NEON_MONITORING_EVIDENCE` | 2026-08-12 |
+| PITR window | Neon API `describe_project` の `history_retention_seconds` を**目視**（`release:check-neon-backup-evidence` は実測せず定数比較のため代替にならない。`monitoring.md` §1.2.1(4)） | `86400` 以上を維持 | CTO代行 | `CODIP_NEON_MONITORING_EVIDENCE` | 2026-08-12 |
 | pg_dump鮮度 | `release:check-neon-backup-evidence` | 24h以内・status success | CTO代行 | `CODIP_NEON_BACKUP_EVIDENCE_JSON` | 2026-08-12 |
 | restore drill 鮮度 | 同上 | 30日以内 | CTO代行 | 同上 | 2026-08-12 |
 | 監査ログ抽出 | `/api/admin/audit-events` | 記録欠落なし | QA | Issue/証跡 | 2026-08-12 |
@@ -92,6 +106,10 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 
 | 日時 | 項目 | 結果 | 証跡 |
 | --- | --- | --- | --- |
+| 2026-08-11 | 監視・通知実態の read-only 再検証（Issue #90） | ⚠️ 一部BLOCKED | `docs/runbooks/monitoring.md` §0.1。確認できた事実（zone active / DNS解決 / Access境界302 / production smoke直近20件success / Neon PITR 86400秒 / ローカル品質ゲートPASS）と、Cloudflare read権限不足で検証できなかった項目（Access設定・通知ポリシー・Workers Observability等）を分離して記録。**AC#7「/api/ready継続失敗がP1として通知される」は不成立**のためIssue #90はクローズせず |
+| 2026-08-11 | 通知テスト記録様式の新設 | ✅ | [`docs/runbooks/notification-test-record.md`](../runbooks/notification-test-record.md)。送信API成功ではなく**人間の受信**を合否条件とする様式。現在の台帳は `cloudflare-alert-policy`=`NOT RUN`（受信記録なし）/ `github-actions-failure`=`BLOCKED` / `neon-alert`=`BLOCKED` |
+| 2026-08-11 | 監視Runbookの契約テスト追加 | ✅ | `tests/unit/monitoring-runbook-contract.test.ts`。runbookの記述とworkflow・probe scriptの実装が乖離したらCIで落ちる。特に「通知stepは存在しない」という記述は、実装されると同時にテストが失敗して文書更新を強制する |
+| 2026-08-11 | Neon PITR retention とゲート閾値の調査（read-only） | ⚠️ 欠陥検出 | `docs/runbooks/monitoring.md` §1.2.1。実測 `history_retention_seconds=86400`、org plan=`launch`（上限7日）。`check-neon-backup-evidence` の `historyWindowHours >= 24` は**Neon APIを読まない定数同士の比較**であり、retentionが実際に短縮されても検知しない（偽陰性）。閾値の引き下げではなく実測値取得が是正策。設定変更・プラン変更はいずれも未実施 |
 | 2026-08-04 | Neon restore drill | ✅ | `restore-drill-20260804`（`br-wild-shape-aff21r0u`） |
 | 2026-08-04T21:05Z | Neon pg_dump初回（workflow_dispatch） | ✅ | run 30950851419、`codip-neon-pgdump-20260804T210642Z.dump.gpg` |
 | 2026-08-07 03:44 JST | Neon pg_dump scheduled初回 | ❌ 失敗 | run 31126295159。原因: GitHub hosted runnerが獲得できずjob未実行（アプリ/DB起因ではない）。翌日以降は成功 |
