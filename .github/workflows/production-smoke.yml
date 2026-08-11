@@ -16,6 +16,14 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # 失敗通知に必要な最小権限。permissions を明示すると未列挙の権限は none に
+    # なるため、run履歴を読む actions:read を落とすと連続失敗判定が403で失敗する。
+    # 外部通知先やそのSecretは追加しない
+    # (通知先の追加・変更は人間承認事項 / CLAUDE.md §17 Approval PR 対象)。
+    permissions:
+      contents: read
+      actions: read
+      issues: write
     env:
       CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
       CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
@@ -58,3 +66,108 @@ jobs:
         if: steps.production-status.outcome == 'failure'
         shell: bash
         run: exit 1
+
+      # 失敗を「表明」するだけでなく「伝達」する経路。exit 1 だけではGitHub既定通知
+      # (各ユーザーの個人設定依存) にしか届かず、リポジトリ設定として固定されない。
+      - name: Report production smoke failure as an incident issue
+        if: failure()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: |
+            const WORKFLOW_FILE = "production-smoke.yml";
+            const DEDUPE_LABEL = "production-smoke";
+            const HISTORY_DEPTH = 10;
+            const { owner, repo } = context.repo;
+
+            // 連続失敗の判定はGitHubのrun履歴を単一の真実とする (案B)。
+            // workflow側に状態を持たせる案Aは、run がキャンセル/タイムアウトすると
+            // 書き込まれないまま次のrunが読むため、状態が静かに腐敗する。
+            //
+            // この履歴参照は補助情報にすぎない。通知そのものが安全網なので、
+            // 履歴が取れなくてもIssue起票は必ず行う (fail-open)。
+            let consecutiveFailures = null;
+            try {
+              const { data: history } = await github.rest.actions.listWorkflowRuns({
+                owner,
+                repo,
+                workflow_id: WORKFLOW_FILE,
+                status: "completed",
+                per_page: HISTORY_DEPTH,
+              });
+              // このstepは failure() でのみ動くので、現runは失敗として1から数える。
+              consecutiveFailures = 1;
+              for (const run of history.workflow_runs.filter((r) => r.id !== context.runId)) {
+                if (run.conclusion !== "failure") break;
+                consecutiveFailures += 1;
+              }
+            } catch (error) {
+              core.warning(`Could not read run history; reporting without a streak count: ${error.message}`);
+            }
+
+            // runbook §1 の異常判定「連続2回以上」に対応させる。
+            // 回数不明時はP1へ倒さない (誤ったP1は当番の信頼を損なう)。
+            const severity = consecutiveFailures !== null && consecutiveFailures >= 2 ? "P1" : "P2";
+            const streakLabel =
+              consecutiveFailures === null ? "不明 (run履歴取得に失敗)" : `${consecutiveFailures} (直近${HISTORY_DEPTH}run参照)`;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+
+            // 本文にはrunへの参照だけを書く。probe出力は redacted artifact 側に置き、
+            // Secret / 認証情報 / PII をIssueへ持ち込まない。
+            const body = [
+              `production smoke (\`${WORKFLOW_FILE}\`) が失敗しました。`,
+              "",
+              `| 項目 | 値 |`,
+              `| --- | --- |`,
+              `| 重大度 | ${severity} |`,
+              `| 連続失敗回数 | ${streakLabel} |`,
+              `| 失敗run | ${runUrl} |`,
+              `| 検知時刻 (UTC) | ${new Date().toISOString()} |`,
+              "",
+              severity === "P1"
+                ? "連続2回以上の失敗のため **P1**。`docs/runbooks/monitoring.md` §1.1 の初動 (15分以内) に従ってください。"
+                : consecutiveFailures === null
+                  ? "連続失敗回数を判定できなかったため P2 として起票しています。run履歴を目視で確認してください。"
+                  : "初回失敗のため P2。次runも失敗した場合は自動でP1へ昇格します。",
+              "",
+              "詳細は run の Summary と `production-status` artifact (14日保持) を参照してください。",
+            ].join("\n");
+
+            // 15分間隔のprobeが継続失敗するとrun毎にIssueが増えるため、
+            // 未クローズのincidentがあればコメント追記に寄せる。
+            const { data: openIncidents } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: "open",
+              labels: DEDUPE_LABEL,
+              per_page: 1,
+            });
+
+            if (openIncidents.length > 0) {
+              const incident = openIncidents[0];
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: incident.number,
+                body,
+              });
+              const labels = incident.labels.map((l) => (typeof l === "string" ? l : l.name));
+              if (severity === "P1" && !labels.includes("P1")) {
+                await github.rest.issues.addLabels({
+                  owner,
+                  repo,
+                  issue_number: incident.number,
+                  labels: ["P1"],
+                });
+              }
+              core.notice(`Appended to incident #${incident.number} (${severity}, streak=${consecutiveFailures ?? "unknown"})`);
+              return;
+            }
+
+            const { data: created } = await github.rest.issues.create({
+              owner,
+              repo,
+              title: `[${severity}] production smoke failure (${consecutiveFailures ?? "?"} consecutive)`,
+              labels: ["incident", severity, DEDUPE_LABEL],
+              body,
+            });
+            core.notice(`Opened incident #${created.number} (${severity}, streak=${consecutiveFailures ?? "unknown"})`);

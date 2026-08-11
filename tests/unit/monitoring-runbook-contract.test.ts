@@ -97,6 +97,53 @@ describe("production smoke workflow contract", () => {
     // this test fails until the runbook stops describing it as 未整備.
     expect(hasNotificationStep).toBe(!runbookClaimsUnimplemented);
   });
+
+  it("escalates to P1 only on a repeated failure, as runbook section 1 defines", () => {
+    // A notification that always shouts P1 trains on-call to ignore it.
+    expect(smokeWorkflow).toMatch(/consecutiveFailures\s*>=\s*2\s*\?\s*"P1"\s*:\s*"P2"/);
+    expect(monitoringRunbook).toContain("連続2回以上");
+  });
+
+  it("derives the streak from run history rather than persisted state", () => {
+    // Option B (see runbook 1.1.4): GitHub's run history is the single source of
+    // truth. State written by the workflow would be skipped whenever a run is
+    // cancelled or times out, and the rot would only surface during an incident.
+    expect(smokeWorkflow).toContain("listWorkflowRuns");
+    expect(smokeWorkflow).not.toMatch(/actions\.(createRepositoryVariable|updateRepositoryVariable)/);
+  });
+
+  it("still files the incident when the run history cannot be read", () => {
+    // The notification is the safety net; losing it because a secondary API call
+    // failed is worse than reporting an unknown streak.
+    expect(smokeWorkflow).toMatch(/let consecutiveFailures = null;[\s\S]*?try \{[\s\S]*?\} catch/);
+  });
+
+  it("pins the notification action to a full commit SHA", () => {
+    const pinned = smokeWorkflow.match(/uses:\s*actions\/github-script@(\S+)/)?.[1];
+    expect(pinned).toMatch(/^[0-9a-f]{40}$/);
+  });
+
+  it("grants the job only the permissions the notification needs", () => {
+    // An explicit permissions block sets every unlisted scope to none, so
+    // actions:read must be present or the streak lookup 403s.
+    const jobPermissions = smokeWorkflow.match(/^    permissions:\n((?:^ {6}\S.*\n)+)/m)?.[1] ?? "";
+    const scopes = jobPermissions.trim().split("\n").map((line) => line.trim());
+    expect(new Set(scopes)).toEqual(new Set(["contents: read", "actions: read", "issues: write"]));
+  });
+
+  it("introduces no notification secret beyond the existing Access token", () => {
+    // Adding a webhook destination secret is an Approval PR matter (CLAUDE.md
+    // §17), not something the notification step may grow into silently.
+    const referenced = new Set([...smokeWorkflow.matchAll(/secrets\.([A-Z0-9_]+)/g)].map((m) => m[1]));
+    expect(referenced).toEqual(new Set(["CF_ACCESS_CLIENT_ID", "CF_ACCESS_CLIENT_SECRET"]));
+  });
+
+  it("keeps probe output out of the issue body", () => {
+    // production-status.md may contain response bodies and headers; it belongs in
+    // the redacted artifact, not in a world-readable issue.
+    const notificationStep = smokeWorkflow.slice(smokeWorkflow.indexOf("github-script@"));
+    expect(notificationStep).not.toContain("production-status.md");
+  });
 });
 
 describe("probe script contract", () => {
@@ -106,11 +153,14 @@ describe("probe script contract", () => {
     expect(productionPaths).toContain("/api/ready");
   });
 
-  it("has no cross-run state, matching the documented implementation gap", () => {
-    // Runbook section 1 states that "連続2回以上" is not machine-evaluated.
-    // That claim holds only while the probe exits per run without persisting history.
+  it("stays per-run, leaving streak judgement to the workflow", () => {
+    // The probe deliberately holds no cross-run state: runbook section 1 places
+    // the "連続2回以上" judgement in the workflow, which reads GitHub's own run
+    // history. If the probe ever starts persisting streaks, the two would
+    // disagree about which one is authoritative.
     expect(postReleaseStatus).toMatch(/process\.exit\(1\)/);
-    expect(monitoringRunbook).toContain("run間の連続失敗回数を保持しない");
+    expect(postReleaseStatus).not.toMatch(/listWorkflowRuns/);
+    expect(monitoringRunbook).toContain("GitHubのrun履歴から連続失敗回数を判定する");
   });
 });
 
