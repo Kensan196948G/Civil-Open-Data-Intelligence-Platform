@@ -56,7 +56,7 @@ Secret 登録は §17「production secret の追加」に該当し、人間の�
 | # | 事項 | 等級 | 根拠 |
 | --- | --- | --- | --- |
 | 1 | Neon PITR 復旧訓練の実行（一時 branch 作成 → 検証 → endpoint 2 本と branch の削除） | ⚠️ **記録による主張のみ** | `266692a` が `docs/runbooks/restore-drill-record.md` と `docs/operations/operations-ledger.md` へ各 1 行追記。**diff は 2 行の追記のみで、実行の証跡ではない**。このマシン上のどのセッション記録にも Neon の branch 作成・削除の呼び出しは存在しない |
-| 2 | repository variables **14 件**の書き込み | ✅ **実測** | GitHub API の `updated_at` が `2026-08-11T22:28:59Z`〜`22:29:12Z`。1 秒間隔でスクリプト実行と判断できる |
+| 2 | repository variables への **14 回の書き込み（新規 2 件＋既存 12 件の上書き）** | ✅ **実測** | GitHub API の `updated_at` が `2026-08-11T22:28:59Z`〜`22:29:12Z`。1 秒間隔でスクリプト実行と判断できる。内訳は `created_at` で分かれる（§3.2）|
 | 3 | PR #137 の draft 解除とマージ | ✅ **実測** | timeline: `22:21:08Z convert_to_draft` → `22:33:59Z ready_for_review` → `22:34:09Z merged`（squash, merge commit `7f72626`） |
 | 4 | T-B4（`845a8ec` 他）の main 着地 | ✅ **実測** | `main` の `neon-backup.yml` に API key の fail-closed 検査が存在 |
 | 5 | 実施者 | ❌ **特定不能** | 全役割セッションが同一 git / gh 認証を使うため `merged_by` では人間・エージェントを区別できない。backend セッション（本セッション）の関与は transcript の `tool_use` 走査で否定済み（Neon write 0 / variables write 0 / `gh pr merge` 0） |
@@ -65,13 +65,53 @@ Secret 登録は §17「production secret の追加」に該当し、人間の�
 
 **値は記載しない。** 名前と時刻のみ。
 
+⚠️ **本節は 2026-08-12 に訂正した。** 初版は「変更前 7 件 → 変更後 21 件」と書いていたが、これは誤りである。
+件数の差（21 − 19 = 2）と書き込み回数（14）は一致しない。**14 件が新しく書かれたのではなく、
+2 件が作られ、12 件は既存変数の上書きである。** 影響範囲の記述が変わるため訂正する。
+
 | 状態 | 内容 |
 | --- | --- |
-| 変更前 | variables 7 件（2026-08-04 登録分） |
-| 変更後 | variables **21 件**（08-04 の 7 件 + 08-11T22:28:59Z〜22:29:12Z の **14 件**） |
+| 変更前 | variables **19 件**（すべて 2026-08-04 登録） |
+| 変更後 | variables **21 件** |
+| 差分 | **新規作成 2 件**（`CODIP_LAST_RESTORE_DRILL_STATUS` `22:29:00Z` / `CODIP_LAST_RESTORE_DRILL_RECORD` `22:29:01Z`）、**既存の上書き 12 件**、**無変更 7 件** |
 
-22:28:59Z〜22:29:12Z に追加された 14 件のうち、`CODIP_LAST_RESTORE_DRILL_STATUS` と
-`CODIP_LAST_RESTORE_DRILL_RECORD` は、利用者が「私からは登録しません」と名指しした項目である。
+区別は GitHub API の `created_at` と `updated_at` の比較で機械的に付く（実測。`total_count` = 21、取得 21 件で
+表示打ち切りなし）。`created_at` が 08-11 の 2 件が新規作成、`created_at` が 08-04 で `updated_at` が
+08-11 の 12 件が上書き、両者が一致する 7 件が無変更である。
+
+**上書きされた 12 件の従前値は復元できない。** GitHub Variables API は版履歴を持たず、値の取得は現在値のみ、
+監査ログにも旧値は残らない。新しい値が旧値と同一だったかどうかも判定できない。したがって A-2 の影響は
+「14 件が書かれた」ではなく、**「2 件が作られ、12 件の従前値が失われた」**である。上書きされた 12 件は
+`CODIP_NEON_PROJECT_ID` / `CODIP_NEON_HISTORY_WINDOW_HOURS` / `CODIP_LAST_RESTORE_DRILL_AT` /
+`CODIP_NEON_PGDUMP_HOST` / `CODIP_CLOUDFLARE_ACCESS_EVIDENCE` / `CODIP_BACKUP_RESTORE_EVIDENCE` /
+`CODIP_CLOUDFLARE_ALERT_POLICY` / `CODIP_MONITORING_CONTACTS` / `CODIP_NEON_MONITORING_EVIDENCE` /
+`CODIP_CLOUDFLARE_LOGS_EVIDENCE` / `CODIP_SMOKE_MONITORING_SCHEDULE` / `CODIP_ROLLBACK_OWNER` である
+（いずれもバックアップ・監視の証跡変数。値は記載しない）。
+
+新規作成された 2 件（`CODIP_LAST_RESTORE_DRILL_STATUS` / `CODIP_LAST_RESTORE_DRILL_RECORD`）は、
+利用者が「私からは登録しません」と名指しした項目である。
+
+### 3.2.1 触られていない変数 — 認可境界は動いていない
+
+⚠️ 上と対になる事実として明記する。**認証・認可に関わる 5 件は、この時間帯に一切書き込まれていない。**
+
+| 変数 | 作成 | 最終更新 |
+| --- | --- | --- |
+| `CODIP_DISABLE_TOKEN_AUTH` | 2026-08-04T14:27:18Z | 同左（無変更）|
+| `CODIP_TRUST_PROXY_AUTH` | 2026-08-04T14:27:19Z | 同左（無変更）|
+| `CODIP_TRUST_PROXY_HEADERS` | 2026-08-04T14:27:19Z | 同左（無変更）|
+| `CODIP_ADMIN_EMAILS` | 2026-08-04T14:27:20Z | 同左（無変更）|
+| `CODIP_ADMIN_EMAIL_DOMAINS` | 2026-08-04T14:27:20Z | 同左（無変更）|
+
+`created_at` と `updated_at` が一致するため、08-04 の登録以降**一度も書き込まれていない**（実測）。
+残る無変更 2 件は `CODIP_NEON_BRANCH` と `CODIP_BACKUP_OWNER` で、いずれも認可には関与しない。
+
+書き込まれた 14 件はすべて**バックアップ・監視の証跡変数**であり、認証方式、管理者の範囲、
+proxy 信頼の設定はどれも変わっていない。§3.3 のとおり Secret の書き込みも同時間帯に無い。
+**つまり、この事象で権限境界が動いた形跡は無い。** 影響はバックアップ証跡の信頼性に限られる。
+
+この一文を明示的に置くのは、「変数が 14 件書き換えられた」とだけ読むと読み手が最悪
+（認可設定の改変）を想定するためである。想定を訂正する事実があるなら、それも同じ精度で書く。
 
 ### 3.3 Secret の現状
 
@@ -94,7 +134,7 @@ Secret 登録は §17「production secret の追加」に該当し、人間の�
 | 22:15:01 | PITR 起点として指定された時刻（記録による） | ⚠️ 主張 |
 | 〜22:28 | Neon 一時 branch の作成、検証クエリ（`version()` / `PostGIS_Version()` / `data_sources` 件数 / `_prisma_migrations` 件数）、endpoint 2 本と branch の削除 | ⚠️ 主張 |
 | 22:28:44 | `266692a` を `claudeos/backend` worktree で作成 | ✅ 実測（reflog） |
-| 22:28:59–22:29:12 | repository variables 14 件を書き込み | ✅ 実測（API `updated_at`） |
+| 22:28:59–22:29:12 | repository variables へ 14 回書き込み（新規 2 件＋上書き 12 件。認証・認可の 5 件は対象外）| ✅ 実測（API `created_at` / `updated_at`）|
 | 22:33:59 | PR #137 の draft 保留を解除 | ✅ 実測（timeline） |
 | 22:34:09 | PR #137 を squash merge（`7f72626`） | ✅ 実測（timeline） |
 
@@ -150,7 +190,9 @@ RPO は最後の成功（08-11T18:34Z）から経過時間ぶん劣化し続け�
 | API key の権限過大 | 中 → 低 | B は project scoped / read-only に限定する。書き込み権限を持つ key を登録しない |
 | API key の露出 | 低 | GitHub Secrets に格納し、ログへ出力しない。ワークフローは存在検査のみで値を echo しない |
 | **承認境界の毀損** | **高** | 決裁前に §17 対象操作が実行され、保留が外されてマージされた。技術的損害より統制上の問題が大きい。§9 に再発防止を記す |
-| 監査記録の不正確化 | 中 → 低 | 本文書が事実と等級を分けて記録することで是正する |
+| **証跡変数 12 件の従前値の喪失** | **中（不可逆）** | 上書きにより旧値が失われ、復元手段が無い（§3.2）。「変更前の設定が何だったか」を後から検証できないため、**この 12 件については現在値の妥当性を旧値との差分では判断できず、実物と突き合わせて確かめ直すしかない**。対象はバックアップ・監視の証跡変数に限られ、認可設定は含まない（§3.2.1）。実害の主因は値そのものより、証跡の出所が検証不能になったことである |
+| 認証・認可設定の改変 | **なし（実測）** | 認可に関わる 5 件は `created_at` = `updated_at` で、08-04 以降一度も書き込まれていない（§3.2.1）。同時間帯の Secret 書き込みも 0 件 |
+| 監査記録の不正確化 | 中 → 低 | 本文書が事実と等級を分けて記録することで是正する。⚠️ 本文書自身も初版で変数の件数を誤っており（§3.2）、訂正した |
 
 ---
 
@@ -171,7 +213,7 @@ B は Secret の**追加**であり、既存データを上書きしない。退
 | 事項 | rollback |
 | --- | --- |
 | A-1 訓練 | **不可**（実行済み・一時資源は削除済みと記録）。取り消す対象が無い |
-| A-2 変数 14 件 | 技術的には削除可能だが、**実施しない**。削除すると `neon-backup.yml` の必須検査が別の理由で落ち、障害が増える。また利用者の判断前に状態を動かすべきでない |
+| A-2 変数への 14 回の書き込み | **rollback 不能。** 新規 2 件は削除できるが、**上書きされた 12 件の従前値は復元できない**（API に版履歴が無い。§3.2）。削除は「元に戻す」ではなく別の状態への変更であり、実施しない。削除すると `neon-backup.yml` の必須検査が別の理由で落ち、障害が増える。また利用者の判断前に状態を動かすべきでない |
 | A-3 PR #137 | revert 可能だが**推奨しない**。T-B4 以外の是正（#128/#132/#133/#134/ADR 0003）も同一 squash に含まれ、巻き戻すと解決済みの欠陥が復活する |
 | B API key | `gh secret delete CODIP_NEON_API_KEY`。実行すると `neon-backup.yml` は登録前の状態（fail-closed で失敗）へ戻るだけで、データ影響は無い |
 
@@ -187,6 +229,8 @@ B は Secret の**追加**であり、既存データを上書きしない。退
 - [ ] `Y` の場合、人間が project scoped / read-only の API key を Secret として登録する
 - [ ] 登録後、`neon-backup.yml` を手動実行し、`Validate backup inputs` を通過して `pg_dump` が完走する
 - [ ] 次回 cron（以降）が success となり、日次バックアップが復旧する
+- [ ] 上書きされた 12 件（§3.2）の**現在値**が実態と一致することを、旧値との差分ではなく実物との突合で確認する。旧値は失われており、比較による検証はできない
+- [ ] `CODIP_LAST_RESTORE_DRILL_RECORD` の値から、台帳に存在しないアンカー（`#` 以降）を落とす。⚠️ **T-B13 で証跡ゲートが参照解決を行うようになったため、現在の値のままでは次回実行が不合格になる。** ゲートを緩めて通すことは是正ではない。変数の書き込み権限を持つ担当者が行う
 
 ---
 
@@ -247,7 +291,7 @@ B は Secret の**追加**であり、既存データを上書きしない。退
 ## 判定依頼
 
 ```text
-A. 事後追認（訓練実行・変数 14 件・#137 マージ）: 追認する / 是正を指示する
+A. 事後追認（訓練実行・変数への 14 回の書き込み〔新規 2 ＋上書き 12〕・#137 マージ）: 追認する / 是正を指示する
 B. CODIP_NEON_API_KEY の登録:                    Y / N
 ```
 
