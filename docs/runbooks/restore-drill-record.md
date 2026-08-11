@@ -94,6 +94,7 @@
 | 実施日時 (UTC) | 訓練種別 | 復元元 | 復元先 | 検証クエリ | 検証結果 | 所要時間 | データ欠損 | 実施者 | 判定 | 根拠 | 次回実施予定 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | - | - | - | - | - | - | - | - | - | `not-run` | 復旧訓練を実施した記録が存在しない。以前は `create-neon-backup-evidence.js` の既定値により `restoreDrillStatus: "success"` が自動的に記録されていたが、これは実施の証拠ではない（Issue #127）。本行は、その既定値を撤廃した時点での実態を明示するために置く | 初回訓練の実施後に本行の下へ追記する |
+| 2026-08-11T22:15:01Z | neon-pitr-branch | PITR 2026-08-11T20:15:00Z（Neon project `falling-dawn-93620497` / main branch `br-solitary-breeze-afr5lrq4`） | 一時検証branch `br-blue-wave-afeh7gyq`（`restore-drill-20260812-20260811T221500Z`）※検証後に削除済み | `SELECT version()` / `PostGIS_Version()` / `count(*) FROM data_sources` / `count(*) FROM _prisma_migrations` / publicテーブル数 | 期待 62 / 実測 62（data_sources）。PG 17.10 / PostGIS 3.5 / migrations 6 / public_tables 23 | 約14分（22:15:01Z 作成→22:22:46Z データ利用可能→22:29Z 検証完了） | 復元点は作成の2時間前（選択した復元ポイント。障害時のRPO実測ではない） | CTO代行（human kensan の環境キー委任） | `success` | Neon API: branch/endpoint作成→psql検証→endpoint2本・branch削除（全てHTTP 200）。リポジトリ変数 `CODIP_LAST_RESTORE_DRILL_*` へ反映 | 2026-11-11 |
 
 <!-- 新しい記録は上の表へ1行ずつ追記する。過去行は書き換えない。 -->
 
