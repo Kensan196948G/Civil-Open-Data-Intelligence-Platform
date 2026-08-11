@@ -117,6 +117,18 @@ function runGate(evidenceJson: string, extraArgs: string[] = ["--now", "2026-07-
   );
 }
 
+/**
+ * The drill outcome has no default, so every caller has to say it out loud --
+ * including these tests. That verbosity is the feature: the flags used to be
+ * absent everywhere and the tool answered "success" on their behalf.
+ */
+const DRILL_ARGS = [
+  "--restore-drill-status",
+  "success",
+  "--restore-drill-record",
+  "docs/runbooks/restore-drill-record.md#2026-07-19",
+];
+
 function baseArgs(extra: string[]) {
   return [
     "--project-id",
@@ -127,6 +139,7 @@ function baseArgs(extra: string[]) {
     "ep-main.example.neon.tech",
     "--restore-drill-at",
     "2026-07-19T06:30:00Z",
+    ...DRILL_ARGS,
     "--owner",
     "release-manager",
     "--neon-api-base-url",
@@ -172,6 +185,7 @@ describe("create-neon-backup-evidence", () => {
         dumpPath,
         "--restore-drill-at",
         hoursAgo(24).toISOString(),
+        ...DRILL_ARGS,
       ],
       { NEON_API_KEY: STUB_CREDENTIAL },
     );
@@ -229,8 +243,11 @@ describe("create-neon-backup-evidence", () => {
         "secure-artifact://codip/neon/latest.dump",
         "--pg-dump-at",
         hoursAgo(1).toISOString(),
+        "--pg-dump-status",
+        "success",
         "--restore-drill-at",
         hoursAgo(24).toISOString(),
+        ...DRILL_ARGS,
       ],
       { NEON_API_KEY: STUB_CREDENTIAL },
     );
@@ -262,6 +279,8 @@ describe("create-neon-backup-evidence", () => {
         "secure-artifact://codip/neon/20260720T063000Z.dump",
         "--pg-dump-at",
         "2026-07-20T06:30:00Z",
+        "--pg-dump-status",
+        "success",
       ]),
       { NEON_API_KEY: STUB_CREDENTIAL },
     );
@@ -270,6 +289,8 @@ describe("create-neon-backup-evidence", () => {
     const evidence = JSON.parse(result.stdout);
     expect(evidence.lastPgDumpArtifact).toBe("secure-artifact://codip/neon/20260720T063000Z.dump");
     expect(evidence).not.toHaveProperty("pgDumpSizeBytes");
+    // Nothing was stat-ed, so the status is a claim and is labelled as one.
+    expect(evidence.lastPgDumpStatusSource).toBe("declared:--pg-dump-status");
   });
 
   it("rejects secret-looking artifact identifiers without printing the secret", async () => {
@@ -301,6 +322,8 @@ describe("create-neon-backup-evidence PITR measurement", () => {
     "secure-artifact://codip/neon/20260720T063000Z.dump",
     "--pg-dump-at",
     "2026-07-20T06:30:00Z",
+    "--pg-dump-status",
+    "success",
   ];
 
   it("writes no evidence when the Neon API key is absent", async () => {
@@ -372,6 +395,7 @@ describe("create-neon-backup-evidence PITR measurement", () => {
         "ep-main.example.neon.tech",
         "--restore-drill-at",
         "2026-07-19T06:30:00Z",
+        ...DRILL_ARGS,
         "--owner",
         "release-manager",
         "--neon-api-base-url",
@@ -383,5 +407,170 @@ describe("create-neon-backup-evidence PITR measurement", () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("must use https");
+  });
+});
+
+/**
+ * Issue #127. Both statuses used to be initialised to "success" in parseArgs and
+ * no workflow ever passed the corresponding flag, so `restoreDrillStatus is
+ * success` in the gate was comparing a literal with itself -- an assertion with
+ * no reachable failure that nonetheless wrote "the restore drill succeeded" into
+ * the audit trail. These cases pin the two halves of the fix: the drill outcome
+ * must be stated, and the dump outcome must be observed.
+ */
+describe("create-neon-backup-evidence restore drill and pg_dump status", () => {
+  async function stubbedRun(extra: string[], env: Record<string, string> = { NEON_API_KEY: STUB_CREDENTIAL }) {
+    stub = await startNeonStub((_req, res) =>
+      respondWithProject(res, { id: "falling-dawn-93620497", history_retention_seconds: 86400 }),
+    );
+
+    const dumpPath = path.join(tempDir, "codip.dump");
+    fs.writeFileSync(dumpPath, "fake pg_dump artifact metadata only\n");
+    const dumpAt = hoursAgo(1);
+    fs.utimesSync(dumpPath, dumpAt, dumpAt);
+
+    return runCreate(
+      [
+        "--project-id",
+        "falling-dawn-93620497",
+        "--branch",
+        "main",
+        "--endpoint-host",
+        "ep-main.example.neon.tech",
+        "--owner",
+        "release-manager",
+        "--neon-api-base-url",
+        stub.baseUrl,
+        "--pg-dump-file",
+        dumpPath,
+        "--restore-drill-at",
+        hoursAgo(24).toISOString(),
+        ...extra,
+      ],
+      env,
+    );
+  }
+
+  it("writes no evidence when the restore drill outcome is not supplied", async () => {
+    const result = await stubbedRun(["--restore-drill-record", "docs/runbooks/restore-drill-record.md"]);
+
+    // Fail-closed. A drill nobody ran must leave the run red rather than be
+    // answered on the operator's behalf.
+    expect(result.status).toBe(1);
+    expect(result.stdout.trim()).toBe("");
+    expect(result.stderr).toContain("there is no default outcome");
+  });
+
+  it("writes no evidence when the drill outcome has no committed record behind it", async () => {
+    const result = await stubbedRun(["--restore-drill-status", "success"]);
+
+    // The outcome is unavoidably a claim; requiring the reference is what keeps
+    // it checkable by a human reading the audit trail later.
+    expect(result.status).toBe(1);
+    expect(result.stdout.trim()).toBe("");
+    expect(result.stderr).toContain("restoreDrillRecord is required");
+  });
+
+  it("records an explicitly declared successful drill and passes the gate", async () => {
+    const result = await stubbedRun([
+      "--restore-drill-status",
+      "success",
+      "--restore-drill-record",
+      "docs/runbooks/restore-drill-record.md#2026-07-19",
+    ]);
+
+    expect(result.status).toBe(0);
+    const evidence = JSON.parse(result.stdout);
+    expect(evidence.restoreDrillStatus).toBe("success");
+    expect(evidence.restoreDrillRecord).toBe("docs/runbooks/restore-drill-record.md#2026-07-19");
+
+    const gate = runGate(result.stdout, []);
+    expect(gate.status).toBe(0);
+    expect(gate.stdout).toContain("restoreDrillStatus is success | ✅");
+  });
+
+  it("records a failed drill and the gate rejects it", async () => {
+    const result = await stubbedRun([
+      "--restore-drill-status",
+      "failed",
+      "--restore-drill-record",
+      "docs/runbooks/restore-drill-record.md#2026-07-19",
+    ]);
+
+    expect(result.status).toBe(0);
+    const evidence = JSON.parse(result.stdout);
+    expect(evidence.restoreDrillStatus).toBe("failed");
+
+    // The reachable failure that the hardcoded default used to make impossible.
+    const gate = runGate(result.stdout, []);
+    expect(gate.status).toBe(1);
+    expect(gate.stdout).toContain("restoreDrillStatus is success | ⚠️");
+  });
+
+  it("rejects an outcome outside the recorded vocabulary", async () => {
+    const result = await stubbedRun([
+      "--restore-drill-status",
+      "probably fine",
+      "--restore-drill-record",
+      "docs/runbooks/restore-drill-record.md",
+    ]);
+
+    // Free-form text would let a typo be filed as an outcome nobody can grade.
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("--restore-drill-status must be one of");
+  });
+
+  it("measures the pg_dump status from the artifact rather than accepting a flag", async () => {
+    const result = await stubbedRun([
+      "--restore-drill-status",
+      "success",
+      "--restore-drill-record",
+      "docs/runbooks/restore-drill-record.md#2026-07-19",
+    ]);
+
+    expect(result.status).toBe(0);
+    const evidence = JSON.parse(result.stdout);
+    expect(evidence.lastPgDumpStatus).toBe("success");
+    // Restating "success" in the workflow YAML would have relocated the constant
+    // instead of removing it. The stat of a regular, non-empty file is the fact
+    // the status was previously asserting on trust.
+    expect(evidence.lastPgDumpStatusSource).toBe("artifact-stat:regular-file,size>0");
+  });
+
+  it("refuses a --pg-dump-status that contradicts the artifact it can see", async () => {
+    const result = await stubbedRun([
+      "--pg-dump-status",
+      "failed",
+      "--restore-drill-status",
+      "success",
+      "--restore-drill-record",
+      "docs/runbooks/restore-drill-record.md#2026-07-19",
+    ]);
+
+    // Neither value is recorded: one of them is wrong and the tool cannot tell
+    // which, so writing either would put an unverified claim in the trail.
+    expect(result.status).toBe(1);
+    expect(result.stdout.trim()).toBe("");
+    expect(result.stderr).toContain("contradicts the artifact measurement");
+  });
+
+  it("writes no evidence when there is neither a dump file to stat nor a stated status", async () => {
+    stub = await startNeonStub((_req, res) =>
+      respondWithProject(res, { id: "falling-dawn-93620497", history_retention_seconds: 86400 }),
+    );
+
+    const result = await runCreate(
+      baseArgs([
+        "--pg-dump-artifact",
+        "secure-artifact://codip/neon/20260720T063000Z.dump",
+        "--pg-dump-at",
+        "2026-07-20T06:30:00Z",
+      ]),
+      { NEON_API_KEY: STUB_CREDENTIAL },
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stdout.trim()).toBe("");
+    expect(result.stderr).toContain("pgDumpStatus is required");
   });
 });

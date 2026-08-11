@@ -19,9 +19,12 @@ const freshEvidence = {
   historyRetentionSource: "neon-api:GET /projects/{project_id}#history_retention_seconds",
   lastPgDumpAt: "2026-07-20T06:30:00Z",
   lastPgDumpStatus: "success",
+  // Derived from a stat of the artifact, not from a flag: see Issue #127.
+  lastPgDumpStatusSource: "artifact-stat:regular-file,size>0",
   lastPgDumpArtifact: "secure-artifact://codip/neon/20260720T063000Z.dump",
   lastRestoreDrillAt: "2026-07-19T06:30:00Z",
   restoreDrillStatus: "success",
+  restoreDrillRecord: "docs/runbooks/restore-drill-record.md#2026-07-19",
   owner: "release-manager",
 };
 
@@ -78,6 +81,17 @@ describe("check-neon-backup-evidence", () => {
 
     expect(result.status).toBe(1);
     expect(result.stdout).toContain("lastRestoreDrillAt is fresh | ⚠️");
+  });
+
+  it("fails when the restore drill ran recently but did not succeed", () => {
+    // Before Issue #127 this state was unreachable: the generator hardcoded
+    // "success" and no caller could say otherwise, so a failed drill had no way
+    // of reaching the gate at all.
+    const result = runGate({ ...freshEvidence, restoreDrillStatus: "failed" });
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("restoreDrillStatus is success | ⚠️");
+    expect(result.stdout).toContain("lastRestoreDrillAt is fresh | ✅");
   });
 
   it("redacts secret-looking values from stdout and stderr", () => {
@@ -181,6 +195,28 @@ describe("check-neon-backup-evidence PITR retention gate", () => {
     // nobody is backing up.
     expect(result.status).toBe(1);
     expect(result.stdout).toContain("historyRetentionProjectId matches projectId | ⚠️");
+  });
+
+  it("distinguishes a measured pg_dump status from a declared one without gating on it", () => {
+    // Non-gating by design: the generator already refuses to emit evidence with
+    // an unstated status, so failing here would only catch hand-forged JSON.
+    // The row exists so a reader of the report can tell the two apart.
+    const result = runGate({
+      ...freshEvidence,
+      lastPgDumpStatusSource: "declared:--pg-dump-status",
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("lastPgDumpStatus was measured, not declared | ℹ️");
+    expect(result.stdout).toContain("declared:--pg-dump-status");
+  });
+
+  it("surfaces a missing restore drill record without changing the verdict", () => {
+    const result = runGate({ ...freshEvidence, restoreDrillRecord: undefined });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("restoreDrillRecord referenced | ℹ️");
+    expect(result.stdout).toContain("(not recorded)");
   });
 
   it("fails when the measurement source is not recorded", () => {

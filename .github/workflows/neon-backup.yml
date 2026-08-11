@@ -16,6 +16,17 @@ on:
         description: "Latest restore drill timestamp (ISO 8601)"
         required: false
         type: string
+      restore_drill_status:
+        # Intentionally has no default. A default here would recreate the
+        # constant that made the restore drill gate unfailable, just one file
+        # further out. An unrun drill must leave the run red, not green.
+        description: "Outcome of that restore drill: success / failed / partial / not-run / blocked"
+        required: false
+        type: string
+      restore_drill_record:
+        description: "Non-secret reference to the committed drill record, e.g. docs/runbooks/restore-drill-record.md#2026-08-11"
+        required: false
+        type: string
       owner:
         description: "Backup evidence owner or role"
         required: false
@@ -46,6 +57,8 @@ jobs:
       CODIP_NEON_PGDUMP_HOST: ${{ vars.CODIP_NEON_PGDUMP_HOST }}
       CODIP_NEON_HISTORY_WINDOW_HOURS: ${{ github.event.inputs.history_window_hours || vars.CODIP_NEON_HISTORY_WINDOW_HOURS }}
       CODIP_LAST_RESTORE_DRILL_AT: ${{ github.event.inputs.restore_drill_at || vars.CODIP_LAST_RESTORE_DRILL_AT }}
+      CODIP_LAST_RESTORE_DRILL_STATUS: ${{ github.event.inputs.restore_drill_status || vars.CODIP_LAST_RESTORE_DRILL_STATUS }}
+      CODIP_LAST_RESTORE_DRILL_RECORD: ${{ github.event.inputs.restore_drill_record || vars.CODIP_LAST_RESTORE_DRILL_RECORD }}
       CODIP_BACKUP_OWNER: ${{ github.event.inputs.owner || vars.CODIP_BACKUP_OWNER }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -83,6 +96,14 @@ jobs:
           [ -n "${CODIP_BACKUP_ENCRYPTION_PASSPHRASE:-}" ] || missing+=("secrets.CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE")
           [ -n "${CODIP_NEON_PGDUMP_HOST:-}" ] || missing+=("vars.CODIP_NEON_PGDUMP_HOST")
           [ -n "${CODIP_LAST_RESTORE_DRILL_AT:-}" ] || missing+=("inputs.restore_drill_at or vars.CODIP_LAST_RESTORE_DRILL_AT")
+          # The three below were previously absent from this list, and each one
+          # had a default further downstream that quietly supplied the answer the
+          # gate wanted to hear. Requiring them here is what makes the defaults
+          # removable: an unset value now stops the run instead of being
+          # synthesised into a passing value.
+          [ -n "${CODIP_NEON_HISTORY_WINDOW_HOURS:-}" ] || missing+=("inputs.history_window_hours or vars.CODIP_NEON_HISTORY_WINDOW_HOURS")
+          [ -n "${CODIP_LAST_RESTORE_DRILL_STATUS:-}" ] || missing+=("inputs.restore_drill_status or vars.CODIP_LAST_RESTORE_DRILL_STATUS")
+          [ -n "${CODIP_LAST_RESTORE_DRILL_RECORD:-}" ] || missing+=("inputs.restore_drill_record or vars.CODIP_LAST_RESTORE_DRILL_RECORD")
           if [ "${#missing[@]}" -gt 0 ]; then
             printf '::error::Missing required Neon backup configuration: %s\n' "${missing[*]}"
             exit 1
@@ -147,7 +168,10 @@ jobs:
           # Declared expectation only. The tool measures the real PITR window
           # from the Neon API and records this alongside it so that a stale
           # repository variable shows up as drift instead of passing the gate.
-          history_window_hours="${CODIP_NEON_HISTORY_WINDOW_HOURS:-24}"
+          # No :-24 fallback: that default used to synthesise exactly the
+          # threshold value, so an unconfigured repository looked identical to a
+          # correctly configured one. Validate backup inputs now requires it.
+          history_window_hours="$CODIP_NEON_HISTORY_WINDOW_HOURS"
           owner="${CODIP_BACKUP_OWNER:-release-manager}"
           evidence_path="$RUNNER_TEMP/neon-backup-evidence.json"
           npm run --silent release:create-neon-backup-evidence -- \
@@ -159,6 +183,8 @@ jobs:
             --pg-dump-file "${{ steps.dump.outputs.artifact_path }}" \
             --pg-dump-artifact "github-actions-artifact://${{ steps.dump.outputs.artifact_name }}" \
             --restore-drill-at "$CODIP_LAST_RESTORE_DRILL_AT" \
+            --restore-drill-status "$CODIP_LAST_RESTORE_DRILL_STATUS" \
+            --restore-drill-record "$CODIP_LAST_RESTORE_DRILL_RECORD" \
             --owner "$owner" \
             --pretty > "$evidence_path"
           npm run --silent release:check-neon-backup-evidence -- --evidence-file "$evidence_path"

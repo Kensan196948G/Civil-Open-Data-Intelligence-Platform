@@ -220,6 +220,12 @@ function checkEvidence(evidence, options) {
     );
   }
 
+  // These two assertions are unchanged, but what reaches them is not. Both
+  // statuses used to originate from a hardcoded "success" in the generator
+  // that no caller overrode, so the checker was comparing a literal with
+  // itself. The generator now measures the dump status from the artifact and
+  // refuses to emit evidence when the drill outcome is not supplied, which is
+  // what gives these lines a path to failure.
   add(
     "lastPgDumpStatus is success",
     String(evidence.lastPgDumpStatus ?? "").trim().toLowerCase() === "success",
@@ -229,6 +235,21 @@ function checkEvidence(evidence, options) {
     "restoreDrillStatus is success",
     String(evidence.restoreDrillStatus ?? "").trim().toLowerCase() === "success",
     safeValue(evidence.restoreDrillStatus),
+  );
+
+  // Non-gating on purpose: the generator already refuses to write evidence
+  // without these, so failing here would only catch hand-forged documents.
+  // They are surfaced so a reader of the report can tell a measured status
+  // from a declared one without opening the JSON.
+  note(
+    "lastPgDumpStatus was measured, not declared",
+    String(evidence.lastPgDumpStatusSource ?? "").startsWith("artifact-stat:"),
+    safeValue(evidence.lastPgDumpStatusSource ?? "(not recorded)"),
+  );
+  note(
+    "restoreDrillRecord referenced",
+    String(evidence.restoreDrillRecord ?? "").trim().length > 0,
+    safeValue(evidence.restoreDrillRecord ?? "(not recorded)"),
   );
 
   return { ok: failures.length === 0, rows, failures };

@@ -14,11 +14,20 @@ const DEFAULT_NEON_API_KEY_ENV = "NEON_API_KEY";
 const DEFAULT_NEON_API_TIMEOUT_MS = 15000;
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
 
+// Deliberately mirrors the PASS/FAIL/BLOCKED/NOT RUN vocabulary of
+// docs/runbooks/notification-test-record.md. A free-form status would let a
+// typo be recorded as an outcome; a closed set forces the writer to pick one.
+const KNOWN_STATUSES = new Set(["success", "failed", "partial", "not-run", "blocked"]);
+
 function parseArgs(argv) {
+  // pgDumpStatus and restoreDrillStatus deliberately have no defaults.
+  //
+  // They used to default to "success", and no caller ever overrode them, so
+  // the generator wrote "success" and the gate read back the same literal --
+  // an assertion with no path to failure that nonetheless recorded "the
+  // restore drill succeeded" in the audit trail. Absent is now an error.
   const options = {
     checkedAt: new Date(),
-    pgDumpStatus: "success",
-    restoreDrillStatus: "success",
     pretty: false,
     neonApiBaseUrl: DEFAULT_NEON_API_BASE_URL,
     neonApiKeyEnv: DEFAULT_NEON_API_KEY_ENV,
@@ -40,9 +49,10 @@ function parseArgs(argv) {
     else if (arg === "--pg-dump-file") options.pgDumpFile = next();
     else if (arg === "--pg-dump-artifact") options.pgDumpArtifact = next();
     else if (arg === "--pg-dump-at") options.pgDumpAt = parseDate(next(), arg);
-    else if (arg === "--pg-dump-status") options.pgDumpStatus = next();
+    else if (arg === "--pg-dump-status") options.pgDumpStatus = parseStatus(next(), arg);
     else if (arg === "--restore-drill-at") options.restoreDrillAt = parseDate(next(), arg);
-    else if (arg === "--restore-drill-status") options.restoreDrillStatus = next();
+    else if (arg === "--restore-drill-status") options.restoreDrillStatus = parseStatus(next(), arg);
+    else if (arg === "--restore-drill-record") options.restoreDrillRecord = next();
     else if (arg === "--owner") options.owner = next();
     else if (arg === "--checked-at") options.checkedAt = parseDate(next(), arg);
     else if (arg === "--neon-api-base-url") options.neonApiBaseUrl = next();
@@ -66,6 +76,14 @@ function parseDate(value, label) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) throw new Error(`${label} must be an ISO date`);
   return date;
+}
+
+function parseStatus(value, label) {
+  const status = String(value ?? "").trim().toLowerCase();
+  if (!KNOWN_STATUSES.has(status)) {
+    throw new Error(`${label} must be one of: ${[...KNOWN_STATUSES].join(", ")}`);
+  }
+  return status;
 }
 
 function redact(value) {
@@ -226,6 +244,38 @@ function buildEvidence(options, measurement) {
   if (!(lastPgDumpAt instanceof Date)) throw new Error("pgDumpAt is required unless --pg-dump-file is provided");
   if (!(options.restoreDrillAt instanceof Date)) throw new Error("restoreDrillAt is required");
 
+  // Measured where a measurement exists: reaching this point with
+  // --pg-dump-file means artifactFromFile() found a regular, non-empty file,
+  // which is exactly the fact the status was previously asserting on trust.
+  // Restating it as a literal in the workflow would move the constant without
+  // removing it, so the file path stays the source of truth.
+  let pgDumpStatus;
+  let pgDumpStatusSource;
+  if (pgDumpSizeBytes !== undefined) {
+    pgDumpStatus = "success";
+    pgDumpStatusSource = "artifact-stat:regular-file,size>0";
+    if (options.pgDumpStatus && options.pgDumpStatus !== pgDumpStatus) {
+      throw new Error("--pg-dump-status contradicts the artifact measurement; refusing to record either");
+    }
+  } else {
+    // No artifact to stat (external storage). The caller must state the
+    // outcome, and the evidence records that it was stated rather than seen.
+    if (!options.pgDumpStatus) {
+      throw new Error("pgDumpStatus is required via --pg-dump-status unless --pg-dump-file is provided");
+    }
+    pgDumpStatus = options.pgDumpStatus;
+    pgDumpStatusSource = "declared:--pg-dump-status";
+  }
+
+  // A restore drill is a human procedure: nothing in this workflow can observe
+  // whether it happened. So the outcome stays declared -- but it must be
+  // declared, and it must point at the committed record that backs it up.
+  // Absence is now visible instead of being silently answered with "success".
+  if (!options.restoreDrillStatus) {
+    throw new Error("restoreDrillStatus is required via --restore-drill-status; there is no default outcome");
+  }
+  const restoreDrillRecord = requireText(options, "restoreDrillRecord");
+
   const evidence = {
     checkedAt: iso(options.checkedAt),
     projectId,
@@ -237,10 +287,12 @@ function buildEvidence(options, measurement) {
     historyRetentionProjectId: measurement.historyRetentionProjectId,
     historyRetentionSource: measurement.historyRetentionSource,
     lastPgDumpAt: iso(lastPgDumpAt),
-    lastPgDumpStatus: requireText(options, "pgDumpStatus"),
+    lastPgDumpStatus: pgDumpStatus,
+    lastPgDumpStatusSource: pgDumpStatusSource,
     lastPgDumpArtifact: pgDumpArtifact.trim(),
     lastRestoreDrillAt: iso(options.restoreDrillAt),
-    restoreDrillStatus: requireText(options, "restoreDrillStatus"),
+    restoreDrillStatus: options.restoreDrillStatus,
+    restoreDrillRecord,
     owner,
   };
 
@@ -259,18 +311,23 @@ function buildEvidence(options, measurement) {
 function usage() {
   return [
     "Usage:",
-    "  node scripts/tools/create-neon-backup-evidence.js --project-id <id> --branch <branch> --endpoint-host <host> --pg-dump-file <dump> --restore-drill-at <iso> --owner <role>",
-    "  node scripts/tools/create-neon-backup-evidence.js --project-id <id> --branch <branch> --endpoint-host <host> --pg-dump-artifact <artifact-id> --pg-dump-at <iso> --restore-drill-at <iso> --owner <role>",
+    "  node scripts/tools/create-neon-backup-evidence.js --project-id <id> --branch <branch> --endpoint-host <host> --pg-dump-file <dump> --restore-drill-at <iso> --restore-drill-status <status> --restore-drill-record <ref> --owner <role>",
+    "  node scripts/tools/create-neon-backup-evidence.js --project-id <id> --branch <branch> --endpoint-host <host> --pg-dump-artifact <artifact-id> --pg-dump-at <iso> --pg-dump-status <status> --restore-drill-at <iso> --restore-drill-status <status> --restore-drill-record <ref> --owner <role>",
     "",
     "Options:",
-    `  --neon-api-key-env <name>   env var holding the Neon API key (default ${DEFAULT_NEON_API_KEY_ENV})`,
-    `  --neon-api-base-url <url>   Neon control-plane base URL (default ${DEFAULT_NEON_API_BASE_URL})`,
-    `  --neon-api-timeout-ms <ms>  request timeout (default ${DEFAULT_NEON_API_TIMEOUT_MS})`,
-    "  --history-window-hours <h>  optional declaration, recorded for drift detection only",
+    `  --neon-api-key-env <name>      env var holding the Neon API key (default ${DEFAULT_NEON_API_KEY_ENV})`,
+    `  --neon-api-base-url <url>      Neon control-plane base URL (default ${DEFAULT_NEON_API_BASE_URL})`,
+    `  --neon-api-timeout-ms <ms>     request timeout (default ${DEFAULT_NEON_API_TIMEOUT_MS})`,
+    "  --history-window-hours <h>     optional declaration, recorded for drift detection only",
+    `  --restore-drill-status <s>     required, one of: ${[...KNOWN_STATUSES].join(", ")}`,
+    "  --restore-drill-record <ref>   required, non-secret reference to the committed drill record",
+    "  --pg-dump-status <s>           required only without --pg-dump-file; otherwise measured",
     "",
     "Notes:",
     "  The PITR history window is measured from Neon's control plane, not taken from the caller.",
     "  If the measurement fails the tool exits non-zero and writes no evidence: there is no estimated fallback.",
+    "  The pg_dump status is derived from the artifact stat when --pg-dump-file is given.",
+    "  The restore drill outcome has no default: a drill nobody ran must not be recorded as a success.",
     "  It never reads dump contents and emits non-secret JSON for release:check-neon-backup-evidence.",
   ].join("\n");
 }
