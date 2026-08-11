@@ -177,7 +177,7 @@ npm run release:production-evidence -- --strict
 | --- | --- | --- | --- | --- |
 | 1 | `.github/workflows/production-smoke.yml` | `Enforce production readiness` step の後に `if: failure()` の通知stepを追加する。最小構成は `actions/github-script`（SHA固定）による重複防止付きIssue起票（`label: incident,P1`、同一labelのopen issueがあればコメント追記のみ） | 失敗がGitHub既定通知（個人設定依存）以外の、リポジトリとして固定された経路へ届く | **実装済み**（backend）。webhook宛先は採用せず、`GITHUB_TOKEN` の `issues: write` のみで完結させた。外部通知先Secretの追加はCLAUDE.md §17 のApproval PR対象のため、本実装では扱わない |
 | 2 | `.github/workflows/production-smoke.yml` または `scripts/tools/` | 連続失敗回数の永続化。案A: 失敗時にrun成果をrepository variable / Issue本文へ記録し、直前runの結果と突き合わせて連続2回目でP1昇格。案B: `gh run list --workflow "Production Smoke" --status failure` 相当で直近N runを参照し連続性を判定 | §1の異常判定「連続2回以上」を機械評価可能にする | **実装済み（案B採用）**（backend）。採用理由は下記 |
-| 3 | `.gitignore` | `.worktrees/` を追加 | worktree登録解除時に `.worktrees/**` がuntrackedとして現れ、`git add -A` で誤commitされる事故を予防する（CI側は `actions/checkout` が追跡ファイルのみ展開するため影響なし＝検証済み） | **実装済み**（CTO, `c0ccf94`） |
+| 3 | `.gitignore` | `.worktrees/` を追加 | worktree登録解除時に `.worktrees/**` がuntrackedとして現れ、`git add -A` で誤commitされる事故を予防する（CI側は `actions/checkout` が追跡ファイルのみ展開するため影響なし＝検証済み） | **実装済み**（CTO, PR #122 の squash commit `64d816e`）。作業ブランチ側の commit hash は squash merge で main の履歴に残らないため、証跡には main 上の hash を書く |
 
 **案B（run履歴参照）を採用した理由**
 
