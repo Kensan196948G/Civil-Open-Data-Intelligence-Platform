@@ -52,3 +52,11 @@ state.json
 
 # claudeos internal reports (ルート直下のみ。src/app/reports/ 等のアプリ画面は除外しない)
 /reports/
+
+# ClaudeOS agent team worktrees. git は「登録済み」の linked worktree のパスを
+# status から隠すため、登録中は無視指定が無くても表に出てこない。しかし worktree
+# 登録を解除 / prune した瞬間に全ファイルが untracked として現れ、`git add -A` で
+# リポジトリ全体を二重commitしうる。登録状態に依存しない形で明示的に無視する。
+# (lint / typecheck 側の除外は eslint.config.mjs と tsconfig.json)
+.worktrees/
+_worktrees/
