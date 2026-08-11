@@ -70,8 +70,17 @@ jobs:
       # 失敗を「表明」するだけでなく「伝達」する経路。exit 1 だけではGitHub既定通知
       # (各ユーザーの個人設定依存) にしか届かず、リポジトリ設定として固定されない。
       - name: Report production smoke failure as an incident issue
-        if: failure()
+        # 素の failure() だと、probe成功後のartifact upload障害でも「production
+        # smokeが失敗」というincidentを起票する。運用記録に偽の事実が残る。
+        #
+        # 逆に outcome == 'failure' へ絞ると、checkout/setup-node が落ちて probe が
+        # 一度も走らなかったrun (outcome は空文字) で無通知になる。監視が静かに
+        # 実行されない状態はIssue #90そのものなので、そちらを落としてはならない。
+        # != 'success' は「失敗」と「未実行」を拾い、「成功後の後続step障害」だけを除く。
+        if: failure() && steps.production-status.outcome != 'success'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          PROBE_OUTCOME: ${{ steps.production-status.outcome }}
         with:
           script: |
             const WORKFLOW_FILE = "production-smoke.yml";
@@ -92,7 +101,11 @@ jobs:
                 repo,
                 workflow_id: WORKFLOW_FILE,
                 status: "completed",
-                per_page: HISTORY_DEPTH,
+                // status:"completed" は実行中の現runを含まない。現runを1として数える
+                // ので過去分は HISTORY_DEPTH-1 件で、合計がちょうど HISTORY_DEPTH run。
+                // per_page: HISTORY_DEPTH にすると上限が11になり、本文の
+                // 「直近N run参照」という自己申告と実際の参照範囲がずれる。
+                per_page: HISTORY_DEPTH - 1,
               });
               // このstepは failure() でのみ動くので、現runは失敗として1から数える。
               consecutiveFailures = 1;
@@ -111,10 +124,19 @@ jobs:
               consecutiveFailures === null ? "不明 (run履歴取得に失敗)" : `${consecutiveFailures} (直近${HISTORY_DEPTH}run参照)`;
             const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
 
+            // probeが落ちたのか、probeまで到達しなかったのかを区別する。前者は本番の
+            // 異常、後者は監視自体が動かなかったという別の事象で、初動が異なる。
+            const probeFailed = process.env.PROBE_OUTCOME === "failure";
+            const headline = probeFailed
+              ? `production smoke (\`${WORKFLOW_FILE}\`) が失敗しました。`
+              : `production smoke (\`${WORKFLOW_FILE}\`) が **probeへ到達せずに終了** しました`
+                + `(\`production-status\` outcome=\`${process.env.PROBE_OUTCOME || "未実行"}\`)。`
+                + `本番の状態は**判定できていません**。`;
+
             // 本文にはrunへの参照だけを書く。probe出力は redacted artifact 側に置き、
             // Secret / 認証情報 / PII をIssueへ持ち込まない。
             const body = [
-              `production smoke (\`${WORKFLOW_FILE}\`) が失敗しました。`,
+              headline,
               "",
               `| 項目 | 値 |`,
               `| --- | --- |`,
@@ -148,13 +170,19 @@ jobs:
 
             // 15分間隔のprobeが継続失敗するとrun毎にIssueが増えるため、
             // 未クローズのincidentがあればコメント追記に寄せる。
-            const { data: openIncidents } = await github.rest.issues.listForRepo({
+            //
+            // issues.listForRepo はPull Requestも返す。DEDUPE_LABEL の付いたPRが
+            // 先頭に来ると、そのPRへコメントして return し、incidentが起票されない。
+            // 通知が静かに消えるので、pull_request を持つ要素は必ず除外する。
+            // per_page を1に絞ると除外後に候補が残らないため、余裕を持って取得する。
+            const { data: openItems } = await github.rest.issues.listForRepo({
               owner,
               repo,
               state: "open",
               labels: DEDUPE_LABEL,
-              per_page: 1,
+              per_page: 30,
             });
+            const openIncidents = openItems.filter((item) => !item.pull_request);
 
             if (openIncidents.length > 0) {
               const incident = openIncidents[0];
@@ -180,7 +208,9 @@ jobs:
             const { data: created } = await github.rest.issues.create({
               owner,
               repo,
-              title: `[${severity}] production smoke failure (${consecutiveFailures ?? "?"} consecutive)`,
+              title: probeFailed
+                ? `[${severity}] production smoke failure (${consecutiveFailures ?? "?"} consecutive)`
+                : `[${severity}] production smoke did not reach the probe (${consecutiveFailures ?? "?"} consecutive)`,
               labels: ["incident", severity, DEDUPE_LABEL],
               body,
             });

@@ -113,9 +113,10 @@ odipはCloudflare Access配下のため、workflowはGitHub Actions Secret `CF_A
 
 | 項目 | 挙動 |
 | --- | --- |
-| 発火条件 | job内のいずれかのstep失敗（`if: failure()`）。probe自体の異常終了も含む |
-| 実装 | `actions/github-script`（commit SHA固定）。job権限は `contents: read` + `issues: write` のみ |
-| 重複防止 | `production-smoke` label のopen Issueが在れば新規作成せずコメント追記。15分間隔のprobeがIssueを量産しない |
+| 発火条件 | probeが**失敗した**か、**一度も実行されなかった**場合（`failure() && steps.production-status.outcome != 'success'`）。probe成功後にartifact upload等の後続stepだけが落ちたrunでは起票しない（本番は正常なので、incidentは事実に反する） |
+| probe未実行の扱い | checkout / setup-node が落ちてprobeへ到達しなかったrunも起票する。**「本番が異常」ではなく「本番の状態を判定できていない」**としてIssue題名・本文で区別する。監視が静かに実行されない状態こそIssue #90の対象であり、無通知にしてはならない |
+| 実装 | `actions/github-script`（commit SHA固定）。job権限は `contents: read` + `actions: read` + `issues: write` の3つ。`permissions` を明示すると未列挙の権限はnoneになるため、run履歴を読む `actions: read` を落とすと連続失敗判定が403で失敗する |
+| 重複防止 | `production-smoke` label のopen **Issue** が在れば新規作成せずコメント追記。15分間隔のprobeがIssueを量産しない。`issues.listForRepo` はPull Requestも返すため、同labelのPRが混じっても除外する（除外しないと、そのPRへコメントしてincidentが起票されない＝通知が静かに消える） |
 | 重大度 | 連続1回=P2、連続2回以上=P1（既存Issueへは `P1` labelを追加して昇格） |
 | 本文 | 重大度・連続失敗回数・失敗runのURL・検知時刻のみ。probe出力は14日保持artifact側に置き、Secret/認証情報/PIIをIssueへ持ち込まない |
 | label | `incident` / `production-smoke` / `P1`\|`P2`。2026-08-11時点でリポジトリ未登録のため、workflowが起票前に冪等作成する（既存は422を無視）。label の事前手動登録を前提にすると、忘れた時に気づくのが障害発生時になる |
@@ -167,7 +168,17 @@ npm run release:production-evidence -- --strict
 - 通知先の追加・変更・ローテーションは人間承認事項（Approval PR 対象）であり、本runbookの手順には含めない。
 - 2026-08-11時点の台帳は `cloudflare-alert-policy = NOT RUN（受信記録なし）`、`github-actions-failure = BLOCKED（通知先未確定）`、`neon-alert = BLOCKED（未設定）`。
 - 同日の incident Issue 実装により、`github-actions-failure` のBLOCKED理由は「通知先未確定」から**「受信テスト未実施」**へ変わった。台帳の更新は実受信の確認をもって行う（実装だけでは判定を進めない）。
-- **意図的な失敗runの発火はこのrunbookの手順に含めない。** 本番probeを故意に落とす行為は運用ノイズと誤検知を生む。受信テストは `workflow_dispatch` で通知経路のみを試す方法か、次回の実失敗を利用する方法を人間が選択する。
+- **意図的な失敗runの発火はこのrunbookの手順に含めない。** 本番probeを故意に落とす行為は運用ノイズと誤検知を生む。
+
+**`github-actions-failure` の受信テストを能動的に行う手順は、現時点で存在しない。**
+通知stepは `failure() && steps.production-status.outcome != 'success'` でのみ発火するため、
+`workflow_dispatch` で成功実行しても通知経路は動かない。発火させるにはprobeを失敗させる必要があり、
+それは上記のとおり手順から除外している。したがって受信確認は**次回の実失敗を待つ**しかなく、
+台帳の `github-actions-failure` は実失敗が起きるまで `BLOCKED（受信テスト未実施）` のまま据え置く。
+
+能動テスト手段の整備（例: probe対象URLを差し替えた検証用runを本番へ影響させずに実行する）は
+未着手の残課題であり、運用台帳へ記録する。**手順として書けるのは実行を確認できたものだけ**で、
+書けるが実行できない手順を残すと、障害時にそれを試して時間を失う。
 
 ### 1.1.4 backend への変更仕様（実装済み。QAが仕様を起票し backend が実装）
 
@@ -175,7 +186,7 @@ npm run release:production-evidence -- --strict
 
 | # | 対象 | 変更仕様 | 目的 | 状態 |
 | --- | --- | --- | --- | --- |
-| 1 | `.github/workflows/production-smoke.yml` | `Enforce production readiness` step の後に `if: failure()` の通知stepを追加する。最小構成は `actions/github-script`（SHA固定）による重複防止付きIssue起票（`label: incident,P1`、同一labelのopen issueがあればコメント追記のみ） | 失敗がGitHub既定通知（個人設定依存）以外の、リポジトリとして固定された経路へ届く | **実装済み**（backend）。webhook宛先は採用せず、`GITHUB_TOKEN` の `issues: write` のみで完結させた。外部通知先Secretの追加はCLAUDE.md §17 のApproval PR対象のため、本実装では扱わない |
+| 1 | `.github/workflows/production-smoke.yml` | `Enforce production readiness` step の後に通知stepを追加する。最小構成は `actions/github-script`（SHA固定）による重複防止付きIssue起票（`label: incident,P1`、同一labelのopen issueがあればコメント追記のみ） | 失敗がGitHub既定通知（個人設定依存）以外の、リポジトリとして固定された経路へ届く | **実装済み**（backend）。発火条件は当初仕様の `if: failure()` ではなく `failure() && steps.production-status.outcome != 'success'` とした。素の `failure()` はprobe成功後の後続step障害でも起票し、運用記録に事実と異なるincidentを残すため。逆に `outcome == 'failure'` へ絞るとprobe未実行runが無通知になるため採らない（§1.1.1 の発火条件表）。webhook宛先は採用せず、`GITHUB_TOKEN` の `issues: write` のみで完結させた。外部通知先Secretの追加はCLAUDE.md §17 のApproval PR対象のため、本実装では扱わない |
 | 2 | `.github/workflows/production-smoke.yml` または `scripts/tools/` | 連続失敗回数の永続化。案A: 失敗時にrun成果をrepository variable / Issue本文へ記録し、直前runの結果と突き合わせて連続2回目でP1昇格。案B: `gh run list --workflow "Production Smoke" --status failure` 相当で直近N runを参照し連続性を判定 | §1の異常判定「連続2回以上」を機械評価可能にする | **実装済み（案B採用）**（backend）。採用理由は下記 |
 | 3 | `.gitignore` | `.worktrees/` を追加 | worktree登録解除時に `.worktrees/**` がuntrackedとして現れ、`git add -A` で誤commitされる事故を予防する（CI側は `actions/checkout` が追跡ファイルのみ展開するため影響なし＝検証済み） | **実装済み**（CTO, PR #122 の squash commit `64d816e`）。作業ブランチ側の commit hash は squash merge で main の履歴に残らないため、証跡には main 上の hash を書く |
 
@@ -186,7 +197,7 @@ npm run release:production-evidence -- --strict
 | 状態の正しさ | run がキャンセル・タイムアウト・権限失敗で終わると書き込みが飛び、次のrunが**古い値を読む**。しかもその腐敗は障害発生時にしか表面化しない | GitHubのrun履歴が単一の真実。workflow側は状態を持たない純関数で、腐敗する状態が存在しない |
 | 障害時の信頼性 | 状態の書き込み自体が障害の影響を受ける（最も信頼したい瞬間に最も壊れやすい） | 読み取りのみ。判定はGitHub API側の記録に依存する |
 | 追加権限 | repository variable の書き込み権限（`GITHUB_TOKEN` 既定では不足）またはIssue本文の状態管理が必要 | `actions: read` 相当。`GITHUB_TOKEN` の既定権限内 |
-| 限界 | 上限なし | 参照する直近run数（現状10）で頭打ち。P1判定（2回以上）には影響しない |
+| 限界 | 上限なし | 参照する直近run数（現状10 = 実行中の現run 1件 + `status:"completed"` で取得する過去9件）で頭打ち。`status:"completed"` は現runを含まないため、API側の `per_page` は10ではなく**9**である。P1判定（2回以上）には影響しない |
 
 「障害時に最も信頼したい仕組みが、障害の影響を受けて壊れる」構造を避けることを最優先し、案Bを採用した。
 

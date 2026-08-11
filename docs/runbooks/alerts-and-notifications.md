@@ -10,7 +10,7 @@ CODIPの障害検知（Production Smoke 15分毎・Neonバックアップ日次�
 
 | 監視対象 | 頻度 | 検知 | 通知 |
 | --- | --- | --- | --- |
-| 本番health/ready | 15分 | ✅ Production Smoke（`post-release-status --strict-production`） | 🟡 GitHub既定通知のみ（専用Webhook未設定） |
+| 本番health/ready | 15分 | ✅ Production Smoke（`post-release-status --strict-production`） | 🟡 `incident` label 付きIssueを自動起票（2026-08-11実装）＋GitHub既定通知。**Issue watcherと当番が未設定のため「誰へ届くか」は未確定**、専用Webhookも未設定 |
 | Neonバックアップ | 日次 03:17 JST | ✅ `neon-backup.yml` | 🟡 GitHub既定通知のみ |
 | データ収集 | 10/30分 | ✅ `data-ingestion.yml` / `data-ingestion-weather.yml` | 🟡 GitHub既定通知のみ |
 | CI/ビルド | PR/merge毎 | ✅ `ci.yml` | 🟡 GitHub既定通知のみ |
@@ -18,6 +18,17 @@ CODIPの障害検知（Production Smoke 15分毎・Neonバックアップ日次�
 | Neon容量・接続 | 月次確認 | ❌ 手動予定 | ❌ 未設定 |
 
 **結論**: Cloudflare側のWorkerエラー通知ポリシーは作成・テスト送信済み。GitHub Actions失敗の専用通知（Teams Webhook等）とNeonアラートは未設定であり、通知先の決定後に §3 を完了する。
+
+**2026-08-11 追記（Issue #90 / production-smoke）**: production smoke の失敗については、
+`incident` / `production-smoke` label 付きIssueの自動起票を実装した（連続2回以上でP1昇格、
+probe未実行runは「本番状態を判定できていない」として区別して起票）。実装の詳細は
+[`monitoring.md` §1.1.1](./monitoring.md) を正本とする。
+
+ただし**これは「検知の記録」までで、「人への到達」は未完了**である。起票されたIssueの
+watcher と当番が未設定のため、誰が何分以内に気づくかは決まっていない。本表の 🟡 は
+その意味で据え置いており、外部通知先Secretの追加は人間承認事項（CLAUDE.md §17 Approval PR）
+として §3 に残す。受信テストは実失敗の発生を待つ状態にある
+（[`monitoring.md` §1.1.3](./monitoring.md)）。
 
 ### 2026-08-10 実施済み
 

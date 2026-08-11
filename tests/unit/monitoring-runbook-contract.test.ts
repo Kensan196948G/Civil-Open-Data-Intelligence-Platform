@@ -144,6 +144,39 @@ describe("production smoke workflow contract", () => {
     expect(new Set(scopes)).toEqual(new Set(["contents: read", "actions: read", "issues: write"]));
   });
 
+  it("documents every permission the job actually holds", () => {
+    // 権限表から actions:read が抜けていると、読んだ人が「不要な権限」と判断して
+    // 削れる。削れば連続失敗判定が403で落ちるが、落ちるのは障害発生時である。
+    const jobPermissions = smokeWorkflow.match(/^    permissions:\n((?:^ {6}\S.*\n)+)/m)?.[1] ?? "";
+    const scopes = jobPermissions.trim().split("\n").map((line) => line.trim());
+    // 照合先は列挙部分（「job権限は … の N つ」）に限定する。行全体を
+    // toContain で見ると、同じ行の解説文に scope 名が出てくるだけで通ってしまい、
+    // 列挙から抜けていても緑になる。文言の部分一致で網羅を主張しない。
+    const enumerated = monitoringRunbook.match(/job権限は(.+?)の\d+つ/)?.[1] ?? "";
+    const documented = [...enumerated.matchAll(/`([a-z-]+: [a-z]+)`/g)].map((match) => match[1]);
+    expect(scopes.length).toBeGreaterThan(0);
+    // 集合比較にして、抜けだけでなく実在しない権限の記載も落とす。
+    expect(new Set(documented)).toEqual(new Set(scopes));
+  });
+
+  it("keeps the alerts runbook in step with the notification actually implemented", () => {
+    // 通知経路の記述が2つのrunbookで食い違うと、片方だけを読んだ人が
+    // 「通知は無い」または「通知は届く」と誤って判断する。どちらも危険。
+    const implemented = smokeWorkflow.includes("github-script@");
+    expect(alertsRunbook.includes("incident")).toBe(implemented);
+    // 実装済みでも「人へ届く」ことは別問題。到達側が未確定である事実を落とさない。
+    expect(alertsRunbook).toContain("watcher");
+  });
+
+  it("does not describe a notification test the workflow cannot perform", () => {
+    // 通知stepは probe 非成功でのみ発火する。workflow_dispatch の成功実行では
+    // 発火しないので、「dispatchで通知経路だけ試す」手順は実行できない。
+    // 書けるが実行できない手順は、障害時に試して時間を失う原因になる。
+    const activeTestClaim = /`workflow_dispatch` で通知経路のみを試す/.test(monitoringRunbook);
+    expect(activeTestClaim).toBe(false);
+    expect(monitoringRunbook).toContain("能動的に行う手順は、現時点で存在しない");
+  });
+
   it("introduces no notification secret beyond the existing Access token", () => {
     // Adding a webhook destination secret is an Approval PR matter (CLAUDE.md
     // §17), not something the notification step may grow into silently.
@@ -156,6 +189,199 @@ describe("production smoke workflow contract", () => {
     // the redacted artifact, not in a world-readable issue.
     const notificationStep = smokeWorkflow.slice(smokeWorkflow.indexOf("github-script@"));
     expect(notificationStep).not.toContain("production-status.md");
+  });
+});
+
+/**
+ * `script: |` の中身をインデント規則だけで取り出す。
+ *
+ * YAMLパーサを使わないのは、`yaml` がこのリポジトリの宣言依存ではなく、
+ * 今は推移的に解決できているだけだからである。依存ツリーが変わった時に
+ * このテストが静かに落ちる（あるいは消える）経路を作らない。
+ */
+const extractNotificationScript = (workflow: string): string => {
+  const lines = workflow.split("\n");
+  const start = lines.findIndex((line) => /^\s*script: \|\s*$/.test(line));
+  if (start < 0) throw new Error("notification step has no `script: |` block");
+  const bodyIndent = (lines[start + 1].match(/^ */)?.[0] ?? "").length;
+  const body: string[] = [];
+  for (const line of lines.slice(start + 1)) {
+    if (line.trim() === "") {
+      body.push("");
+      continue;
+    }
+    if ((line.match(/^ */)?.[0] ?? "").length < bodyIndent) break;
+    body.push(line.slice(bodyIndent));
+  }
+  return body.join("\n");
+};
+
+type FakeItem = {
+  number: number;
+  labels?: Array<string | { name: string }>;
+  pull_request?: Record<string, unknown>;
+};
+
+type Params = Record<string, unknown>;
+
+const runNotification = async (options: {
+  probeOutcome: string;
+  openItems?: FakeItem[];
+  history?: Array<{ id: number; conclusion: string }>;
+  historyFails?: boolean;
+}) => {
+  const created: Params[] = [];
+  const comments: Params[] = [];
+  const addedLabels: Params[] = [];
+  const historyRequests: Params[] = [];
+  const listRequests: Params[] = [];
+  const warnings: string[] = [];
+
+  const github = {
+    rest: {
+      actions: {
+        listWorkflowRuns: (params: Params) => {
+          historyRequests.push(params);
+          if (options.historyFails) throw new Error("403 Resource not accessible");
+          return Promise.resolve({ data: { workflow_runs: options.history ?? [] } });
+        },
+      },
+      issues: {
+        createLabel: () => Promise.resolve({}),
+        listForRepo: (params: Params) => {
+          listRequests.push(params);
+          return Promise.resolve({ data: options.openItems ?? [] });
+        },
+        createComment: (params: Params) => {
+          comments.push(params);
+          return Promise.resolve({});
+        },
+        addLabels: (params: Params) => {
+          addedLabels.push(params);
+          return Promise.resolve({});
+        },
+        create: (params: Params) => {
+          created.push(params);
+          return Promise.resolve({ data: { number: 999 } });
+        },
+      },
+    },
+  };
+  const context = { repo: { owner: "o", repo: "r" }, runId: 1, serverUrl: "https://github.com" };
+  const core = { warning: (message: string) => warnings.push(message), notice: () => undefined };
+
+  // new Function に流し込むのは、このリポジトリ自身の workflow ファイルから
+  // 読んだ検査対象コードである (外部入力ではない)。github-script の埋め込み
+  // scriptを実行する手段は他になく、実行しなければ分岐は検証できない。
+  //
+  // process はグローバルを触らず引数で差し替える。テスト間で実環境の
+  // 環境変数が漏れると、順序依存で結果が変わる。
+  const invoke = new Function(
+    "github",
+    "context",
+    "core",
+    "process",
+    `return (async () => {\n${extractNotificationScript(smokeWorkflow)}\n})();`,
+  ) as (g: unknown, c: unknown, co: unknown, p: unknown) => Promise<void>;
+
+  await invoke(github, context, core, { env: { PROBE_OUTCOME: options.probeOutcome } });
+  return { created, comments, addedLabels, historyRequests, listRequests, warnings };
+};
+
+describe("incident notification behaviour", () => {
+  // ここは workflow の script を grep せず「実行」して確かめる。
+  // 文字列照合は、到達しない分岐に書いてあるだけでも通ってしまうため、
+  // 「検査経路が閉塞していても緑になる」という Issue #127 と同じ形を
+  // テスト側に再現してしまう。
+
+  it("notifies on probe failure and on the probe never running, but not on a post-probe glitch", () => {
+    // if 条件はYAML側なので、ここだけは記述を読む。
+    const condition = smokeWorkflow
+      .slice(smokeWorkflow.indexOf("Report production smoke failure"))
+      .match(/^\s*if:\s*(.+)$/m)?.[1];
+
+    // outcome は step が走らなかった時に空文字になる。== 'failure' に絞ると
+    // 「checkout が落ちて監視が一度も実行されなかった」run が無通知になり、
+    // Issue #90 が防ごうとしている状態そのものを見逃す。
+    expect(condition).toBe("failure() && steps.production-status.outcome != 'success'");
+    expect(condition).not.toMatch(/outcome\s*==\s*'failure'/);
+  });
+
+  it("says the production state is unknown when the probe never ran", async () => {
+    const failed = await runNotification({ probeOutcome: "failure" });
+    const skipped = await runNotification({ probeOutcome: "" });
+
+    // 本番が落ちたのか、監視が動かなかったのか。初動が違うので本文で区別する。
+    expect(String(failed.created[0].title)).toContain("production smoke failure");
+    expect(String(skipped.created[0].title)).toContain("did not reach the probe");
+    expect(String(skipped.created[0].body)).toContain("判定できていません");
+    expect(String(failed.created[0].body)).not.toContain("判定できていません");
+  });
+
+  it("counts the current run inside the advertised history depth, not on top of it", async () => {
+    const { historyRequests, created } = await runNotification({
+      probeOutcome: "failure",
+      history: [
+        { id: 2, conclusion: "failure" },
+        { id: 3, conclusion: "failure" },
+        { id: 4, conclusion: "success" },
+      ],
+    });
+
+    // status:"completed" は実行中の現runを返さない。per_page を depth ちょうどに
+    // すると実際の参照範囲が depth+1 になり、本文の「直近10run参照」が嘘になる。
+    const depth = Number(smokeWorkflow.match(/const HISTORY_DEPTH = (\d+);/)?.[1]);
+    expect(historyRequests[0].per_page).toBe(depth - 1);
+    expect(String(created[0].body)).toContain(`3 (直近${depth}run参照)`);
+    expect(String(created[0].title)).toContain("(3 consecutive)");
+  });
+
+  it("files the incident anyway when the history lookup is denied", async () => {
+    const { created, warnings } = await runNotification({
+      probeOutcome: "failure",
+      historyFails: true,
+    });
+
+    // 補助情報の欠落で安全網を落とさない (fail-open)。ただし回数不明で P1 へ
+    // 倒すと、当番が通知を信じなくなる。
+    expect(created).toHaveLength(1);
+    expect(String(created[0].labels)).toContain("P2");
+    expect(warnings).toHaveLength(1);
+  });
+
+  it("does not let a same-labelled pull request swallow the incident", async () => {
+    const { created, comments } = await runNotification({
+      probeOutcome: "failure",
+      openItems: [{ number: 700, pull_request: { url: "…" } }],
+    });
+
+    // issues.listForRepo は Pull Request も返す。除外しないと、そのPRへ
+    // コメントして return し、incidentが起票されないまま通知が消える。
+    expect(comments).toHaveLength(0);
+    expect(created).toHaveLength(1);
+  });
+
+  it("appends to the open incident even when a pull request is listed ahead of it", async () => {
+    const { created, comments, listRequests } = await runNotification({
+      probeOutcome: "failure",
+      openItems: [{ number: 700, pull_request: { url: "…" } }, { number: 42, labels: ["P2"] }],
+      history: [{ id: 2, conclusion: "failure" }],
+    });
+
+    expect(created).toHaveLength(0);
+    expect(comments[0].issue_number).toBe(42);
+    // per_page:1 だと除外後に候補が残らず、既存incidentがあっても重複起票になる。
+    expect(Number(listRequests[0].per_page)).toBeGreaterThan(1);
+  });
+
+  it("escalates an existing P2 incident once the failure repeats", async () => {
+    const { addedLabels } = await runNotification({
+      probeOutcome: "failure",
+      openItems: [{ number: 42, labels: [{ name: "P2" }] }],
+      history: [{ id: 2, conclusion: "failure" }],
+    });
+
+    expect(addedLabels[0]).toMatchObject({ issue_number: 42, labels: ["P1"] });
   });
 });
 
