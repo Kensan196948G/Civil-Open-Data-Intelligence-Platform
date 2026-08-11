@@ -14,27 +14,11 @@
 const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 
+// Issue #108 の2件 (GHSA-5p4m-2wfm-xmqj / js-yaml, GHSA-2v37-7h3g-55p8 / nanoid)
+// は allowlist ではなく実アップグレードで解消済みのため、エントリを保持しない。
+// 再燃した場合は `unallowlisted` として即 FAIL させたいので、退役エントリを
+// 「念のため」残さない。経緯は docs/security/dependency-advisory-status.md 参照。
 const ALLOWLIST = [
-  {
-    ghsa: "GHSA-5p4m-2wfm-xmqj",
-    severity: "high",
-    scope: "devDependencies (eslint / @eslint/eslintrc via js-yaml)",
-    reason:
-      "js-yaml !!omapのQuadratic CPU消費。修正がsemver-majorにしか存在せず現pinでは解消不可。eslint設定解析用途で本番Workerバンドルへ同梱されない",
-    tracking: "Issue #108",
-    owner: "Kensan196948G",
-    expires: "2026-09-30T00:00:00Z",
-  },
-  {
-    ghsa: "GHSA-2v37-7h3g-55p8",
-    severity: "high",
-    scope: "devDependencies (postcss via nanoid)",
-    reason:
-      "nanoid size=0の特殊呼び出しでのみ影響。postcssはhash生成(size>0)に使用し、本番Workerバンドルへ同梱されない",
-    tracking: "Issue #108",
-    owner: "Kensan196948G",
-    expires: "2026-09-30T00:00:00Z",
-  },
   {
     ghsa: "GHSA-mh99-v99m-4gvg",
     severity: "high",
