@@ -221,6 +221,13 @@ requireText("node-preview job", nodePreviewJob, "npm run release:smoke -- --base
 requireText("CodeQL workflow", codeql, "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1");
 requireText("CodeQL workflow", codeql, "github/codeql-action/init@1ad29ea4a422cce9a242a9fae469541dcd08addc");
 requireText("CodeQL workflow", codeql, "github/codeql-action/analyze@1ad29ea4a422cce9a242a9fae469541dcd08addc");
+// このリポジトリは personal account の private repo のため GitHub Advanced Security
+// (SARIFアップロード) が使えない。upload: never で解析自体をローカル実行し、解析失敗時は
+// ジョブを落とす。SARIFはartifactとして保持する (ADR 0003 / Issue #139)。
+requireText("CodeQL workflow", codeql, "upload: never");
+requireText("CodeQL workflow", codeql, "output: sarif-results");
+requireText("CodeQL workflow", codeql, "name: codeql-sarif");
+requireText("CodeQL workflow", codeql, "retention-days: 14");
 // analyze は最終 step なので、落ちても実行すべき後続が無い。continue-on-error を付けると
 // security scan が必ず success になり、「CI必須チェックが全て success (security scan含む)」を
 // 満たしたと主張できなくなる (Issue #132)。復活を検知するため、不在側を契約にする。

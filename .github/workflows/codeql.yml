@@ -23,4 +23,24 @@ jobs:
         with:
           languages: javascript-typescript
 
+      # This repository is private on a personal account, so GitHub Advanced
+      # Security (and therefore the code-scanning SARIF upload) is not
+      # available: the upload endpoint answers HTTP 403 "Code scanning is not
+      # enabled" no matter what the workflow requests (measured 2026-08-12,
+      # Issue #139). `upload: never` still runs the full analysis locally and
+      # fails the job when the analysis itself fails, which is the strongest
+      # gate this plan allows. The SARIF is retained as a CI artifact instead
+      # of a code-scanning feed. See docs/adr/0003-codeql-upload-platform-limitation.md.
       - uses: github/codeql-action/analyze@1ad29ea4a422cce9a242a9fae469541dcd08addc
+        with:
+          upload: never
+          output: sarif-results
+
+      - name: Retain CodeQL SARIF as a CI artifact
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: codeql-sarif
+          path: sarif-results
+          if-no-files-found: error
+          retention-days: 14
