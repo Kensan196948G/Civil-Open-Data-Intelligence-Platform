@@ -47,11 +47,13 @@ Cloudflare zone APIが返した現行tokenの権限は `#dns_records:read` / `#a
 
 ### 0.1.3 未整備（権限ではなく設定そのものが存在しない）
 
+以下は 2026-08-11 のQA read-only 検証時点の記録である。**検証記録は書き換えず**、その後に解消した項目は「解消」注記を追記して追跡する（解消の実装内容は §1.1.4 参照）。
+
 | 項目 | 実態 | 根拠 |
 | --- | --- | --- |
-| production smoke 失敗時の通知 | **未整備**。`.github/workflows/production-smoke.yml` に `if: failure()` の通知step、Issue起票step、webhook呼び出しのいずれも存在しない。失敗表現は最終stepの `exit 1` によるrun失敗のみ | workflow定義の全文確認。リポジトリ内workflow全体でも失敗時通知は `ci.yml` のtrace artifact upload 1件のみ |
-| 失敗通知の受信経路 | **未整備かつリポジトリ内から検証不能**。現状はGitHubの既定通知（ユーザー個人のNotification設定）に暗黙依存しており、リポジトリ設定として担当・宛先を固定していない | workflow定義にnotification先の記述なし |
-| 連続失敗（`/api/ready` 継続失敗）の自動判定 | **未整備**。§1の異常判定は「連続2回以上」だが、production smokeは各runが独立で、run間の失敗連続数を保持・評価する仕組みが存在しない。P1相当の「継続失敗」を機械判定する主体はどこにも無い | `scripts/tools/post-release-status.js` は単一実行内で判定し `process.exit(1)` するのみ |
+| production smoke 失敗時の通知 | 検証時点では**未整備**。`.github/workflows/production-smoke.yml` に `if: failure()` の通知step、Issue起票step、webhook呼び出しのいずれも存在しない。失敗表現は最終stepの `exit 1` によるrun失敗のみ →  **解消（2026-08-11, backend）**: `Report production smoke failure as an incident issue` step を追加し、incident Issue の自動起票・追記経路を実装 | workflow定義の全文確認。リポジトリ内workflow全体でも失敗時通知は `ci.yml` のtrace artifact upload 1件のみ |
+| 失敗通知の受信経路 | 検証時点では**未整備かつリポジトリ内から検証不能**。現状はGitHubの既定通知（ユーザー個人のNotification設定）に暗黙依存しており、リポジトリ設定として担当・宛先を固定していない → **部分解消（2026-08-11, backend）**: incident Issue という**リポジトリ側に固定された経路**が成立。ただし「誰へ届くか」はIssue watcher設定に依存するため、当番の設定は引き続き人間作業（§1.1.3） | workflow定義にnotification先の記述なし |
+| 連続失敗（`/api/ready` 継続失敗）の自動判定 | 検証時点では**未整備**。§1の異常判定は「連続2回以上」だが、production smokeは各runが独立で、run間の失敗連続数を保持・評価する仕組みが存在しない。P1相当の「継続失敗」を機械判定する主体はどこにも無い → **解消（2026-08-11, backend）**: 通知stepが `listWorkflowRuns` で直近runの conclusion を遡り、連続2回以上を P1 として起票する | `scripts/tools/post-release-status.js` は単一実行内で判定し `process.exit(1)` するのみ |
 | Neon アラート（容量・接続数） | **未整備** | `docs/runbooks/alerts-and-notifications.md` §1 と一致 |
 | 通知テストの受信記録 | **未整備**。受信時刻・担当者を記録する様式が存在しなかったため、§1.1.3 にテンプレートを新設した | — |
 
@@ -72,7 +74,9 @@ Cloudflare zone APIが返した現行tokenの権限は `#dns_records:read` / `#a
 | 管理保護 | 未認証 `GET /api/fetch-logs` | 401 以外 |
 | ブラウザ | ダッシュボード表示、console error/warn | 主要画面の描画失敗、console error |
 
-> ⚠️ **異常判定の実装ギャップ（2026-08-11 確認）**: 上表の「連続2回以上」「503継続」という*連続性*の条件を評価している自動化は現時点で存在しない。`scripts/tools/post-release-status.js` は1回の実行内でのみ判定して `process.exit(1)` し、`production-smoke.yml` はrun間の連続失敗回数を保持しない。したがって「連続」の判定は現状**人間がrun履歴を目視する運用**でしか成立しない。機械判定を成立させる場合は §1.1.4 の変更仕様を実装する。
+> 📌 **「連続」の判定主体（2026-08-11 実装）**: `scripts/tools/post-release-status.js` は1回の実行内でのみ判定して `process.exit(1)` するため、probe自身は連続性を知らない。連続性は `production-smoke.yml` の通知stepが担い、**GitHubのrun履歴から連続失敗回数を判定する**（`listWorkflowRuns` で直近10runの `conclusion` を新しい順に走査し、`failure` が途切れるまで数える）。連続2回以上でP1、初回はP2として起票する。
+>
+> この方式は workflow 側に永続状態を持たない。状態をrepository variable等へ書く方式は、runがキャンセル/タイムアウトすると書き込みが飛び、次のrunが古い値を読む「静かな腐敗」を起こすため採用しない（GitHubのrun履歴を単一の真実とする）。ただし直近10runより長い連続失敗は10で頭打ちになる（P1判定には影響しない）。
 
 ## 1.1 アラート運用
 
@@ -89,7 +93,7 @@ Cloudflare zone APIが返した現行tokenの権限は `#dns_records:read` / `#a
 | Cloudflare Workers Logs / Traces | **BLOCKED（権限不足）** — 現行tokenにWorkers Observability readが無く、`cloudflare-observability` MCPも未認証（OAuth要） | error rate、例外sample、対象deploy idをEvidenceへ記録 |
 | Cloudflare alert / Web Analytics | **要再確認** — `alerts-and-notifications.md` は policy `CODIP Worker Error Alert` を2026-08-10に作成・テスト送信済みと記録するが、QAはNotifications read権限が無く**独立検証できていない**。監査ログにも該当作成イベントは現れなかった（alerting変更が監査ログ対象外の可能性あり） | Notifications read付与後に `GET /alerting/v3/policies` で実在・閾値・宛先を確認し、通知テスト受信時刻を §1.1.3 テンプレートへ記録 |
 | Neon monitoring | 監視データはread可（project/branch/compute/PITR/容量を2026-08-11に取得）。**アラートは未設定** | 容量80%・接続数80%のアラートを設定し、通知テスト受信を記録 |
-| GitHub Actions | **通知は未整備**。`production-smoke.yml` に失敗時の通知step・Issue起票step・webhookのいずれも存在せず、失敗表現は `exit 1` によるrun失敗のみ。実際の受信はGitHub既定通知（各ユーザー個人設定）に依存し、リポジトリ設定としては固定されていない | §1.1.4 の変更仕様をbackendが実装し、通知テスト受信を §1.1.3 テンプレートへ記録 |
+| GitHub Actions | 🟡 **通知経路は実装済み（2026-08-11）だが、受信状態は未完了**。`production-smoke.yml` の `Report production smoke failure as an incident issue` step が、run失敗時に `incident` label 付きIssueを起票する（既存openがあればコメント追記、連続2回以上でP1昇格）。外部webhookやそのSecretは使用しない。Issue起票は「検知が記録された」証拠であり、「人間へ通知が届いた」証拠ではない。**未完了は「誰へ届くか」**で、Issue watcher / 当番の設定は人間作業として残る | 通知テストの受信時刻・受信者を §1.1.3 テンプレートへ記録し、当番を運用台帳へ登録 |
 
 > 📌 **正本の整合について**: 通知設定の詳細手順は `docs/runbooks/alerts-and-notifications.md` を正本とする。本表は「QAが read-only で独立検証できた範囲」を記録するものであり、両者が食い違う場合は**検証手段が明記されている側**を採用する。2026-08-11時点で、Cloudflare alert policyについては両文書の記述が一致していない（上表参照）。
 
@@ -101,10 +105,24 @@ Cloudflare zone APIが返した現行tokenの権限は `#dns_records:read` / `#a
 - 共有preview停止は本番判定へ混ぜない (`--allow-preview-down`)
 - 結果をGitHub Actions Summaryと14日保持artifactへ保存
 - readiness失敗時はworkflowを失敗させ、GitHub Actions通知対象にする
+- run失敗時は `incident` label 付きIssueを起票し、連続失敗回数に応じてP1/P2を判定する（下記）
 
 odipはCloudflare Access配下のため、workflowはGitHub Actions Secret `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`（Access service token）をprobeへ付与する。**2026-08-05にservice token・Service Auth policy・Secrets登録を完了し、workflow_dispatchで初回成功（run 30969524446）を確認済み**。以降は15分間隔のscheduled runがstrict判定を行う。token未設定時は302を検知し「Cloudflare Access boundary」の診断と設定手順を出力して失敗する（フォールバック）。Cloudflare/Neon API tokenやDB接続文字列は使用しない。
 
-実通知を成立させるには、リポジトリのActions失敗通知先と当番を人間が設定し、テスト通知の受信時刻を `CODIP_SMOKE_MONITORING_SCHEDULE` / `CODIP_MONITORING_CONTACTS` の証跡へ記録する。**通知先・通知テストは未設定の残課題**として運用台帳（`docs/operations/operations-ledger.md`）に記録する。
+**失敗時のincident Issue（2026-08-11 実装）**
+
+| 項目 | 挙動 |
+| --- | --- |
+| 発火条件 | job内のいずれかのstep失敗（`if: failure()`）。probe自体の異常終了も含む |
+| 実装 | `actions/github-script`（commit SHA固定）。job権限は `contents: read` + `actions: read` + `issues: write`（run履歴の連続失敗判定に `actions: read` が必要） |
+| 重複防止 | `production-smoke` label のopen Issueが在れば新規作成せずコメント追記。15分間隔のprobeがIssueを量産しない |
+| 重大度 | 連続1回=P2、連続2回以上=P1（既存Issueへは `P1` labelを追加して昇格） |
+| 本文 | 重大度・連続失敗回数・失敗runのURL・検知時刻のみ。probe出力は14日保持artifact側に置き、Secret/認証情報/PIIをIssueへ持ち込まない |
+| label | `incident` / `production-smoke` / `P1`\|`P2`。2026-08-11時点でリポジトリ未登録のため、workflowが起票前に冪等作成する（既存は422を無視）。label の事前手動登録を前提にすると、忘れた時に気づくのが障害発生時になる |
+
+外部webhookやチャット連携は**採用しない**。通知先Secretの追加は人間承認事項（Approval PR / CLAUDE.md §17）であり、`GITHUB_TOKEN` の既定権限で完結するIssue起票に限定している。
+
+Issue起票までは自動化されたが、**その Issue を誰が見るか**（watcher・当番）はリポジトリ側の人間設定である。当番とテスト通知の受信時刻を `CODIP_SMOKE_MONITORING_SCHEDULE` / `CODIP_MONITORING_CONTACTS` の証跡へ記録し、**受信確認は未実施の残課題**として運用台帳（`docs/operations/operations-ledger.md`）に記録する。
 
 ### 1.1.2 SLO目標（暫定）
 
@@ -117,7 +135,9 @@ odipはCloudflare Access配下のため、workflowはGitHub Actions Secret `CF_A
 
 エスカレーションは§1.1のP1/P2/P3表を正とし、復旧目標はP1=60分、P2=4時間、P3=次回改善サイクルとする。通知先・通知テストは未設定のため、2026-08-05時点では「監視は成立、通知はGitHub Actionsデフォルトに依存」と記録する。
 
-**2026-08-11 再確認（Issue #90）**: 上記の状態は解消していない。「検知 P1: 15分以内に検知・初動」の計測方法欄にある「production-smoke失敗 + 通知」のうち、**通知が未整備**（§0.1.3）であり、かつ「連続失敗」を評価する主体が存在しない（§1 注記）ため、本SLOの「検知」行は**現時点では計測不能**とする。達成度を数値報告する場合は、この制約を併記する。
+**2026-08-11 再確認（Issue #90）**: 「検知 P1: 15分以内に検知・初動」の計測方法欄にある「production-smoke失敗 + 通知」のうち、**通知（incident Issue起票）と連続失敗判定は実装済み**（§1.1.1 / §1 注記）。したがって**「検知」までは機械的に計測可能**になった（失敗run時刻とIssue作成時刻の差＝probe間隔15分以内）。
+
+ただし**「初動」は依然として計測不能**である。Issueに気付いて一次対応を開始した時刻を記録する主体が居らず、watcher・当番が未設定のためである（§1.1.3）。達成度を数値報告する場合は「検知＝計測可能／初動＝未計測」を併記する。
 
 実ターゲットの監視証跡は、Secrets値や個人情報を出さずに次の環境変数で `production-evidence` へ渡す。値はレポートに表示されず、`set (recorded)` のみ出力される。
 
@@ -146,16 +166,29 @@ npm run release:production-evidence -- --strict
 - 実通知テストの発火（意図的失敗run、Dashboardのテスト送信）と受信確認は**人間操作を要する**ため、QAは手順と記録様式の整備までを担当する。
 - 通知先の追加・変更・ローテーションは人間承認事項（Approval PR 対象）であり、本runbookの手順には含めない。
 - 2026-08-11時点の台帳は `cloudflare-alert-policy = NOT RUN（受信記録なし）`、`github-actions-failure = BLOCKED（通知先未確定）`、`neon-alert = BLOCKED（未設定）`。
+- 同日の incident Issue 実装により、`github-actions-failure` のBLOCKED理由は「通知先未確定」から**「受信テスト未実施」**へ変わった。台帳の更新は実受信の確認をもって行う（実装だけでは判定を進めない）。
+- **意図的な失敗runの発火はこのrunbookの手順に含めない。** 本番probeを故意に落とす行為は運用ノイズと誤検知を生む。受信テストは `workflow_dispatch` で通知経路のみを試す方法か、次回の実失敗を利用する方法を人間が選択する。
 
-### 1.1.4 backend への変更仕様（未実装。QAは実装しない）
+### 1.1.4 backend への変更仕様（実装済み。QAが仕様を起票し backend が実装）
 
-`/api/ready` の継続失敗をP1として通知するには、次の3点が必要となる。いずれも `.github/workflows/**` および `scripts/**` の変更であり、**QAの所有範囲外のため未実装**。実装可否と時期はCTOが判断する。
+`/api/ready` の継続失敗をP1として通知するために、QAが次の3点を仕様として起票した。いずれも `.github/workflows/**` / `scripts/**` / `.gitignore` の変更でQAの所有範囲外であったため、backend・CTOが実装した。**3点とも 2026-08-11 に実装完了**。
 
-| # | 対象 | 変更仕様 | 目的 |
-| --- | --- | --- | --- |
-| 1 | `.github/workflows/production-smoke.yml` | `Enforce production readiness` step の後に `if: failure()` の通知jobを追加する。最小構成は `actions/github-script`（SHA固定）による重複防止付きIssue起票（`label: incident,P1`、同一labelのopen issueがあればコメント追記のみ）。webhook宛先はSecret参照とし、workflow本文へ書かない | 失敗がGitHub既定通知（個人設定依存）以外の、リポジトリとして固定された経路へ届く |
-| 2 | `.github/workflows/production-smoke.yml` または `scripts/tools/` | 連続失敗回数の永続化。案A: 失敗時にrun成果をrepository variable / Issue本文へ記録し、直前runの結果と突き合わせて連続2回目でP1昇格。案B: `gh run list --workflow "Production Smoke" --status failure` で直近N runを参照し連続性を判定 | §1の異常判定「連続2回以上」を機械評価可能にする（現状は評価主体が存在しない） |
-| 3 | `.gitignore` | `.worktrees/` を追加 | worktree登録解除時に `.worktrees/**` がuntrackedとして現れ、`git add -A` で誤commitされる事故を予防する（CI側は `actions/checkout` が追跡ファイルのみ展開するため影響なし＝検証済み） |
+| # | 対象 | 変更仕様 | 目的 | 状態 |
+| --- | --- | --- | --- | --- |
+| 1 | `.github/workflows/production-smoke.yml` | `Enforce production readiness` step の後に `if: failure()` の通知stepを追加する。最小構成は `actions/github-script`（SHA固定）による重複防止付きIssue起票（`label: incident,P1`、同一labelのopen issueがあればコメント追記のみ） | 失敗がGitHub既定通知（個人設定依存）以外の、リポジトリとして固定された経路へ届く | **実装済み**（backend）。webhook宛先は採用せず、`GITHUB_TOKEN` の `issues: write` のみで完結させた。外部通知先Secretの追加はCLAUDE.md §17 のApproval PR対象のため、本実装では扱わない |
+| 2 | `.github/workflows/production-smoke.yml` または `scripts/tools/` | 連続失敗回数の永続化。案A: 失敗時にrun成果をrepository variable / Issue本文へ記録し、直前runの結果と突き合わせて連続2回目でP1昇格。案B: `gh run list --workflow "Production Smoke" --status failure` 相当で直近N runを参照し連続性を判定 | §1の異常判定「連続2回以上」を機械評価可能にする | **実装済み（案B採用）**（backend）。採用理由は下記 |
+| 3 | `.gitignore` | `.worktrees/` を追加 | worktree登録解除時に `.worktrees/**` がuntrackedとして現れ、`git add -A` で誤commitされる事故を予防する（CI側は `actions/checkout` が追跡ファイルのみ展開するため影響なし＝検証済み） | **実装済み**（CTO, `c0ccf94`） |
+
+**案B（run履歴参照）を採用した理由**
+
+| 観点 | 案A（永続状態） | 案B（run履歴） |
+| --- | --- | --- |
+| 状態の正しさ | run がキャンセル・タイムアウト・権限失敗で終わると書き込みが飛び、次のrunが**古い値を読む**。しかもその腐敗は障害発生時にしか表面化しない | GitHubのrun履歴が単一の真実。workflow側は状態を持たない純関数で、腐敗する状態が存在しない |
+| 障害時の信頼性 | 状態の書き込み自体が障害の影響を受ける（最も信頼したい瞬間に最も壊れやすい） | 読み取りのみ。判定はGitHub API側の記録に依存する |
+| 追加権限 | repository variable の書き込み権限（`GITHUB_TOKEN` 既定では不足）またはIssue本文の状態管理が必要 | `actions: read` 相当。`GITHUB_TOKEN` の既定権限内 |
+| 限界 | 上限なし | 参照する直近run数（現状10）で頭打ち。P1判定（2回以上）には影響しない |
+
+「障害時に最も信頼したい仕組みが、障害の影響を受けて壊れる」構造を避けることを最優先し、案Bを採用した。
 
 ### 1.2 Neon backup鮮度ゲート
 
@@ -169,9 +202,13 @@ npm run release:create-neon-backup-evidence -- \
   --branch main \
   --endpoint-host '<main-endpoint>.neon.tech' \
   --history-window-hours 24 \
+  --neon-api-key-env NEON_API_KEY \
   --pg-dump-artifact secure-artifact://codip/neon/20260720T063000Z.dump \
   --pg-dump-at 2026-07-20T06:30:00Z \
+  --pg-dump-status success \
   --restore-drill-at 2026-07-19T06:30:00Z \
+  --restore-drill-status success \
+  --restore-drill-record docs/runbooks/restore-drill-record.md \
   --owner release-manager \
   --pretty
 ```
@@ -184,11 +221,15 @@ export CODIP_NEON_BACKUP_EVIDENCE_JSON='{
   "projectId": "falling-dawn-93620497",
   "branch": "main",
   "historyWindowHours": 24,
+  "historyRetentionSecondsMeasured": 86400,
+  "historyRetentionMeasuredAt": "2026-07-20T07:00:00Z",
+  "historyRetentionSource": "neon-api:GET /projects/{project_id}#history_retention_seconds",
   "lastPgDumpAt": "2026-07-20T06:30:00Z",
   "lastPgDumpStatus": "success",
   "lastPgDumpArtifact": "secure-artifact://codip/neon/20260720T063000Z.dump",
   "lastRestoreDrillAt": "2026-07-19T06:30:00Z",
   "restoreDrillStatus": "success",
+  "restoreDrillRecord": "docs/runbooks/restore-drill-record.md",
   "owner": "release-manager"
 }'
 npm run release:check-neon-backup-evidence
@@ -196,9 +237,9 @@ npm run release:check-neon-backup-evidence
 
 既定では `historyWindowHours >= 24`、`lastPgDumpAt` が24時間以内、`lastRestoreDrillAt` が30日以内、各statusが `success` の場合だけ成功する。接続文字列、Neon API token、DB passwordはこのJSONへ入れない。誤って混入したSecret風文字列は出力時にredactされるが、証跡保存前に破棄して再発行する。`release:create-neon-backup-evidence` もSecret風のartifact識別子を拒否する。
 
-#### 1.2.1 PITR retention とゲート閾値の関係（2026-08-11 調査。設定変更は未実施）
+#### 1.2.1 PITR retention とゲート閾値の関係（2026-08-11 調査・2026-08-12 実装）
 
-背景: 実測の `history_retention_seconds` が 86400秒（24時間）で、ゲート既定値 `historyWindowHours >= 24` と**境界一致**している。この余裕ゼロ状態を read-only で調査した結果を記録する。
+背景: 実測の `history_retention_seconds` が 86400秒（24時間）で、ゲート既定値 `historyWindowHours >= 24` と**境界一致**している。この余裕ゼロ状態を read-only で調査し、ゲートの実測化（Issue #126）で是正した経緯を記録する。
 
 ##### (1) 実測値（read-only、2026-08-11）
 
@@ -217,44 +258,37 @@ npm run release:check-neon-backup-evidence
 | **Launch（現行）** | **1日** | **7日** |
 | Scale | 1日 | 30日 |
 
-- 設定単位は project 全体（全branchへ一律適用）。API property は `history_retention_seconds`（7日 = `604800`）。
-- `0` にすると instant restore と Time Travel が**無効化**される。
-- 課金は History storage として **$0.20/GB-month**（Launch / Scale）。通常のブランチデータ storage とは別枠。
-
 ##### (3) 結論(a): 24時間は「下限固定」ではなく「有料プランの既定値」
 
 Launch プランでは `0`〜`604800` 秒の範囲で**人間が任意に変更できる**。したがって 24時間は Neon 側が保証する下限ではなく、**変動しうる値**である。retention を下げる操作が行われれば、実際の復旧可能範囲は 24時間未満になりうる。
 
-##### (4) 結論(b): ゲート既定値を 23h へ下げるのは不適切。真の欠陥は「ゲートが実測しないこと」
+##### (4) 是正（2026-08-12 実装済み・Issue #126）
 
-`historyWindowHours` の値は Neon API から取得されていない。呼び出し側が渡した定数がそのまま記録され、同じく定数の閾値と比較されている。
+旧実装では `historyWindowHours` の値は Neon API から取得されておらず、呼び出し側が渡した定数がそのまま記録され、同じく定数の閾値と比較されていた（偽陰性）。
 
 ```text
-.github/workflows/neon-backup.yml
+旧: .github/workflows/neon-backup.yml
   history_window_hours="${CODIP_NEON_HISTORY_WINDOW_HOURS:-24}"   ← 環境変数未設定なら定数 24
         ↓ --history-window-hours で受け渡し
-scripts/tools/create-neon-backup-evidence.js
-  受け取った値を evidence JSON の historyWindowHours へそのまま記録（Neon API を参照しない）
+    scripts/tools/create-neon-backup-evidence.js
+      受け取った値を evidence JSON の historyWindowHours へそのまま記録（Neon API を参照しない）
         ↓
-scripts/tools/check-neon-backup-evidence.js
-  historyWindowHours >= DEFAULT_MIN_HISTORY_WINDOW_HOURS（= 24）   ← 定数 vs 定数
+    scripts/tools/check-neon-backup-evidence.js
+      historyWindowHours >= DEFAULT_MIN_HISTORY_WINDOW_HOURS（= 24）   ← 定数 vs 定数
 ```
 
-このため次が成立する。
+新実装では `create-neon-backup-evidence.js` が Neon API `GET /projects/{project_id}` の `history_retention_seconds` を**実測**し、証跡の `historyRetentionSecondsMeasured` / `historyWindowHours` へ記録する。実測に失敗した場合は fail-closed で証跡を生成しない（自己申告値へのフォールバックは禁止）。`check-neon-backup-evidence.js` は実測値のみを判定対象とし、`--history-window-hours` は「宣言した期待値」として drift 検知の参考値に留まる。
 
-- Neon 側の retention が 12時間へ下げられても、evidence には `24` が記録され、**ゲートは PASS する**（偽陰性）。
-- 閾値を 23h へ下げても `24 >= 23` で PASS。検知力は増えず、要求水準だけが緩む。
-- 現状のゲートは「PITR window短縮を機械的に落とす」という §1.2 冒頭の目的を**果たしていない**。
+> ⚠️ この問題は「境界一致でいつか落ちる時限爆弾」ではなく、「**実際に短縮されても落ちない検知漏れ**」であり、閾値調整ではなく実測値の取得が是正である。
 
-> ⚠️ よってこの問題は「境界一致でいつか落ちる時限爆弾」ではなく、「**実際に短縮されても落ちない検知漏れ**」である。優先すべき是正は閾値調整ではなく実測値の取得。
+##### (5) 実装の要点（Issue #126 / #127）
 
-##### (5) backend への変更仕様（未実装。QAは実装しない）
-
-| # | 対象 | 変更内容 | 目的 |
+| # | 対象 | 変更内容 | 状態 |
 | --- | --- | --- | --- |
-| 1 | `scripts/tools/create-neon-backup-evidence.js` | Neon API `GET /projects/{project_id}` の `history_retention_seconds` を取得し、`historyWindowHours` へ実測値を格納する。`--history-window-hours` は API 取得失敗時の明示 override としてのみ残し、override 使用時は evidence に `historyWindowSource: "override"` を記録する | 定数比較を実測比較へ変え、retention 短縮を検知可能にする |
-| 2 | `scripts/tools/check-neon-backup-evidence.js` | 閾値 `DEFAULT_MIN_HISTORY_WINDOW_HOURS = 24` は**据え置く**。`historyWindowSource` が `override` の場合は検証を PASS ではなく警告付き（または fail-closed）で扱う | 実測値が入って初めて境界 24 が本来の意味を持つ。override による検知回避を防ぐ |
-| 3 | `.github/workflows/neon-backup.yml` | Neon API 読み取り用の read-only token を Secret として参照（値は人間が設定）。未設定時は #1 の override 経路へ fail-closed で退避 | 権限追加は人間承認事項のため、未設定でもジョブが壊れないようにする |
+| 1 | `scripts/tools/create-neon-backup-evidence.js` | Neon API `GET /projects/{project_id}` の `history_retention_seconds` を実測し、`historyRetentionSecondsMeasured` / `historyWindowHours` へ格納。実測失敗・API key未設定は fail-closed。`--restore-drill-status` / `--restore-drill-record` を必須化（既定値なし） | **実装済み**（2026-08-12） |
+| 2 | `scripts/tools/check-neon-backup-evidence.js` | 閾値 `DEFAULT_MIN_HISTORY_WINDOW_HOURS = 24` は**据え置き**。判定は実測値のみを使用し、自己申告 `historyWindowHours` は合否に使わない | **実装済み**（2026-08-12） |
+| 3 | `.github/workflows/neon-backup.yml` | `NEON_API_KEY`（read-only Secret）を参照し `--neon-api-key-env` で受け渡し。`restore_drill_status` / `restore_drill_record` を Validate inputs の必須項目へ追加。未設定時は fail-closed | **実装済み**（2026-08-12） |
+| 4 | `docs/runbooks/restore-drill-record.md` | 復旧訓練の実施記録様式を新設（`notification-test-record.md` と同型） | **実装済み**（2026-08-12） |
 
 ##### (6) retention 引き上げの判断材料（実行しない）
 

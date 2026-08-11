@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const DEFAULT_MIN_HISTORY_WINDOW_HOURS = 24;
 const DEFAULT_MAX_PG_DUMP_AGE_HOURS = 24;
 const DEFAULT_MAX_RESTORE_DRILL_AGE_DAYS = 30;
+const DEFAULT_MAX_HISTORY_MEASUREMENT_AGE_HOURS = 24;
 
 const REQUIRED_STRING_FIELDS = [
   "projectId",
@@ -14,6 +15,7 @@ const REQUIRED_STRING_FIELDS = [
   "lastPgDumpArtifact",
   "restoreDrillStatus",
   "owner",
+  "historyRetentionSource",
 ];
 
 const REQUIRED_DATE_FIELDS = ["checkedAt", "lastPgDumpAt", "lastRestoreDrillAt"];
@@ -32,6 +34,7 @@ function parseArgs(argv) {
     minHistoryWindowHours: DEFAULT_MIN_HISTORY_WINDOW_HOURS,
     maxPgDumpAgeHours: DEFAULT_MAX_PG_DUMP_AGE_HOURS,
     maxRestoreDrillAgeDays: DEFAULT_MAX_RESTORE_DRILL_AGE_DAYS,
+    maxHistoryMeasurementAgeHours: DEFAULT_MAX_HISTORY_MEASUREMENT_AGE_HOURS,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -48,6 +51,8 @@ function parseArgs(argv) {
     else if (arg === "--min-history-window-hours") options.minHistoryWindowHours = parsePositiveNumber(next(), arg);
     else if (arg === "--max-pg-dump-age-hours") options.maxPgDumpAgeHours = parsePositiveNumber(next(), arg);
     else if (arg === "--max-restore-drill-age-days") options.maxRestoreDrillAgeDays = parsePositiveNumber(next(), arg);
+    else if (arg === "--max-history-measurement-age-hours")
+      options.maxHistoryMeasurementAgeHours = parsePositiveNumber(next(), arg);
     else if (arg === "--help" || arg === "-h") {
       options.help = true;
     } else {
@@ -105,8 +110,13 @@ function checkEvidence(evidence, options) {
   const failures = [];
 
   function add(label, ok, detail) {
-    rows.push([label, ok, redact(detail)]);
+    rows.push([label, ok, redact(detail), true]);
     if (!ok) failures.push(`${label}: ${redact(detail)}`);
+  }
+
+  // Recorded in the report but never able to fail the gate.
+  function note(label, ok, detail) {
+    rows.push([label, ok, redact(detail), false]);
   }
 
   for (const field of REQUIRED_STRING_FIELDS) {
@@ -123,12 +133,72 @@ function checkEvidence(evidence, options) {
     }
   }
 
-  const historyWindowHours = Number(evidence.historyWindowHours);
+  // The PITR window gate reads the *measured* retention only.
+  //
+  // `historyWindowHours` used to be the gate input, but it was supplied on the
+  // command line by the same workflow run the gate audits: the run declared a
+  // number and then checked its own declaration. A missing measurement is a
+  // failure, not a reason to fall back to the declaration -- otherwise the
+  // circularity returns through the error path.
+  const measuredSeconds = Number(evidence.historyRetentionSecondsMeasured);
+  const measuredPresent = Number.isFinite(measuredSeconds) && measuredSeconds >= 0;
   add(
-    "historyWindowHours meets minimum",
-    Number.isFinite(historyWindowHours) && historyWindowHours >= options.minHistoryWindowHours,
-    `${Number.isFinite(historyWindowHours) ? historyWindowHours : safeValue(evidence.historyWindowHours)}h (minimum ${options.minHistoryWindowHours}h)`,
+    "historyRetentionSecondsMeasured present",
+    measuredPresent,
+    measuredPresent
+      ? `${measuredSeconds}s measured from the Neon API`
+      : `${safeValue(evidence.historyRetentionSecondsMeasured)} (no measured PITR retention; self-declared values are not accepted)`,
   );
+
+  if (measuredPresent) {
+    const measuredHours = measuredSeconds / 3600;
+    add(
+      "measured PITR retention meets minimum",
+      measuredHours >= options.minHistoryWindowHours,
+      `${measuredHours.toFixed(2)}h measured (minimum ${options.minHistoryWindowHours}h)`,
+    );
+  }
+
+  // A measurement that is never refreshed decays into a slow-moving
+  // declaration, so it carries its own freshness bound.
+  let measuredAt = null;
+  try {
+    measuredAt = parseDate(evidence.historyRetentionMeasuredAt, "historyRetentionMeasuredAt");
+  } catch {
+    measuredAt = null;
+  }
+  if (measuredAt === null) {
+    add("historyRetentionMeasuredAt ISO date", false, safeValue(evidence.historyRetentionMeasuredAt));
+  } else {
+    const ageHours = hoursBetween(options.now, measuredAt);
+    add(
+      "historyRetentionMeasuredAt is fresh",
+      ageHours >= 0 && ageHours <= options.maxHistoryMeasurementAgeHours,
+      `${ageHours.toFixed(1)}h old (maximum ${options.maxHistoryMeasurementAgeHours}h)`,
+    );
+  }
+
+  // Measuring the wrong project would otherwise produce a green gate for a
+  // project nobody is backing up.
+  const measuredProjectId = String(evidence.historyRetentionProjectId ?? "").trim();
+  add(
+    "historyRetentionProjectId matches projectId",
+    measuredProjectId.length > 0 && measuredProjectId === String(evidence.projectId ?? "").trim(),
+    `${safeValue(evidence.historyRetentionProjectId)} vs ${safeValue(evidence.projectId)}`,
+  );
+
+  // Informational: drift between what the pipeline believes and what Neon
+  // reports. Never gating -- gating on a declaration is the defect this
+  // replaced.
+  const declaredHours = Number(evidence.historyWindowHoursDeclared);
+  if (Number.isFinite(declaredHours) && measuredPresent) {
+    const measuredHours = measuredSeconds / 3600;
+    note(
+      "declared window agrees with measurement",
+      Math.abs(declaredHours - measuredHours) < 1e-9,
+      `declared ${declaredHours}h vs measured ${measuredHours.toFixed(2)}h (informational)`,
+    );
+  }
 
   const lastPgDumpAt = new Date(evidence.lastPgDumpAt);
   if (!Number.isNaN(lastPgDumpAt.getTime())) {
@@ -150,6 +220,12 @@ function checkEvidence(evidence, options) {
     );
   }
 
+  // These two assertions are unchanged, but what reaches them is not. Both
+  // statuses used to originate from a hardcoded "success" in the generator
+  // that no caller overrode, so the checker was comparing a literal with
+  // itself. The generator now measures the dump status from the artifact and
+  // refuses to emit evidence when the drill outcome is not supplied, which is
+  // what gives these lines a path to failure.
   add(
     "lastPgDumpStatus is success",
     String(evidence.lastPgDumpStatus ?? "").trim().toLowerCase() === "success",
@@ -161,6 +237,21 @@ function checkEvidence(evidence, options) {
     safeValue(evidence.restoreDrillStatus),
   );
 
+  // Non-gating on purpose: the generator already refuses to write evidence
+  // without these, so failing here would only catch hand-forged documents.
+  // They are surfaced so a reader of the report can tell a measured status
+  // from a declared one without opening the JSON.
+  note(
+    "lastPgDumpStatus was measured, not declared",
+    String(evidence.lastPgDumpStatusSource ?? "").startsWith("artifact-stat:"),
+    safeValue(evidence.lastPgDumpStatusSource ?? "(not recorded)"),
+  );
+  note(
+    "restoreDrillRecord referenced",
+    String(evidence.restoreDrillRecord ?? "").trim().length > 0,
+    safeValue(evidence.restoreDrillRecord ?? "(not recorded)"),
+  );
+
   return { ok: failures.length === 0, rows, failures };
 }
 
@@ -170,13 +261,17 @@ function buildReport(evidence, options) {
     "# Neon Backup Evidence Gate",
     "",
     `- Overall: ${result.ok ? "✅ backup evidence fresh" : "⚠️ backup evidence incomplete or stale"}`,
-    `- Minimum PITR history window: ${options.minHistoryWindowHours}h`,
+    `- Minimum PITR history window: ${options.minHistoryWindowHours}h (judged on the measured value only)`,
+    `- Maximum PITR measurement age: ${options.maxHistoryMeasurementAgeHours}h`,
     `- Maximum pg_dump age: ${options.maxPgDumpAgeHours}h`,
     `- Maximum restore drill age: ${options.maxRestoreDrillAgeDays}d`,
     "",
     "| Check | State | Detail |",
     "| --- | --- | --- |",
-    ...result.rows.map(([label, ok, detail]) => `| ${label} | ${ok ? "✅" : "⚠️"} | ${detail} |`),
+    ...result.rows.map(([label, ok, detail, gating = true]) => {
+      const state = ok ? "✅" : gating ? "⚠️" : "ℹ️";
+      return `| ${label} | ${state} | ${detail} |`;
+    }),
     "",
   ];
 
@@ -191,6 +286,10 @@ function usage() {
     "",
     "Environment:",
     "  CODIP_NEON_BACKUP_EVIDENCE_JSON may provide the same JSON payload.",
+    "",
+    "Notes:",
+    "  The PITR window is judged on historyRetentionSecondsMeasured (measured from the Neon API).",
+    "  A missing measurement fails the gate; the self-declared historyWindowHours is never used to pass it.",
   ].join("\n");
 }
 
