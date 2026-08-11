@@ -8,13 +8,49 @@ function readNormalized(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8").replace(/\r\n/g, "\n");
 }
 
-const ci = readNormalized(".github/workflows/ci.yml");
-const codeql = readNormalized(".github/workflows/codeql.yml");
-const neonBackup = readNormalized(".github/workflows/neon-backup.yml");
-const productionSmoke = readNormalized(".github/workflows/production-smoke.yml");
-const packageJson = readNormalized("package.json");
+const WORKFLOW_DIR = ".github/workflows";
+
+/**
+ * 全ワークフローに掛かる検査 (SHA ピン・禁止パターン) の対象は、ディレクトリを
+ * 実際に読んで導出する。ハードコード列挙だと workflow を1つ足した日に検査対象が
+ * 増えず、追加分だけが無検査のまま緑で通る (Issue #133)。
+ */
+function listWorkflowFiles() {
+  return fs
+    .readdirSync(path.join(root, WORKFLOW_DIR), { withFileTypes: true })
+    .filter((entry) => entry.isFile() && /\.ya?ml$/.test(entry.name))
+    .map((entry) => `${WORKFLOW_DIR}/${entry.name}`)
+    .sort();
+}
+
+const workflowFiles = listWorkflowFiles();
+
+// 走査対象が空のときに「対象が無いので合格」とすると、ディレクトリの改名やパス誤りが
+// 「検査していない」ではなく「検査して合格した」として現れる。0 件は合格ではない。
+if (workflowFiles.length === 0) {
+  console.error(`[github-actions-contract][error] no workflow files found under ${WORKFLOW_DIR}`);
+  process.exit(1);
+}
+
+const workflowSources = new Map(workflowFiles.map((file) => [file, readNormalized(file)]));
 
 const errors = [];
+
+/** 内容検査が名指しするファイル。消えていれば空文字ではなく error として現れる。 */
+function workflowSource(relativePath) {
+  const source = workflowSources.get(relativePath);
+  if (source === undefined) {
+    errors.push(`expected workflow file is missing: ${relativePath}`);
+    return "";
+  }
+  return source;
+}
+
+const ci = workflowSource(".github/workflows/ci.yml");
+const codeql = workflowSource(".github/workflows/codeql.yml");
+const neonBackup = workflowSource(".github/workflows/neon-backup.yml");
+const productionSmoke = workflowSource(".github/workflows/production-smoke.yml");
+const packageJson = readNormalized("package.json");
 
 function requireText(label, source, needle) {
   if (!source.includes(needle)) {
@@ -138,26 +174,32 @@ const forbiddenPatterns = [
 ];
 
 for (const pattern of forbiddenPatterns) {
-  if (
-    ci.includes(pattern) ||
-    codeql.includes(pattern) ||
-    neonBackup.includes(pattern) ||
-    productionSmoke.includes(pattern)
-  ) {
-    errors.push(`GitHub workflows must not contain ${pattern}`);
+  for (const [file, source] of workflowSources) {
+    if (source.includes(pattern)) {
+      errors.push(`${file} must not contain ${pattern}`);
+    }
   }
 }
 
-const unpinnedActions = [
-  ...`${ci}\n${codeql}\n${neonBackup}\n${productionSmoke}`.matchAll(
-    /uses:\s+[^@\s]+\/[^@\s]+@([^\s#]+)/g,
-  ),
-]
-  .map((match) => match[1])
-  .filter((ref) => !/^[0-9a-f]{40}$/i.test(ref));
+const actionRefs = [...workflowSources].flatMap(([file, source]) =>
+  [...source.matchAll(/uses:\s+[^@\s]+\/[^@\s]+@([^\s#]+)/g)].map((match) => ({
+    file,
+    ref: match[1],
+  })),
+);
+
+// 参照が1件も採れないなら、正規表現が実体に追随できていないか workflow が空である。
+// どちらも「ピンが正しい」ではないので、0 件を合格にしない。
+if (actionRefs.length === 0) {
+  errors.push(`no action refs found in ${workflowFiles.length} workflow file(s): pin check inspected nothing`);
+}
+
+const unpinnedActions = actionRefs
+  .filter(({ ref }) => !/^[0-9a-f]{40}$/i.test(ref))
+  .map(({ file, ref }) => `${file}@${ref}`);
 
 if (unpinnedActions.length > 0) {
-  errors.push(`CI workflow has non-SHA action refs: ${unpinnedActions.join(", ")}`);
+  errors.push(`workflows have non-SHA action refs: ${unpinnedActions.join(", ")}`);
 }
 
 if (errors.length > 0) {
@@ -165,4 +207,7 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log("[github-actions-contract] OK");
+// 何件を見たうえでの OK かをログに残す。件数が落ちたことをログ差分で気付けるようにする。
+console.log(
+  `[github-actions-contract] OK (${workflowFiles.length} workflow files, ${actionRefs.length} action refs pinned)`,
+);
