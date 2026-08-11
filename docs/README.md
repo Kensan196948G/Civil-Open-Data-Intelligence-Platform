@@ -31,6 +31,7 @@ Civil Open Data Intelligence Platform（CODIP）は、土木建設関連の公�
 | ファイル | 用途 |
 | --- | --- |
 | [security/dependency-advisory-status.md](security/dependency-advisory-status.md) | 依存advisoryの対応状況、2段audit ゲートの役割、allowlist維持判断と再評価期限 |
+| [security/production-evidence-format.md](security/production-evidence-format.md) | 本番証跡変数8件の形式要件、判定規則、レポート出力の読み方、導入時の注意 |
 
 方針そのものは [09-security-and-compliance.md](09-security-and-compliance.md)、上表は現時点の対応実態を記録する。
 
