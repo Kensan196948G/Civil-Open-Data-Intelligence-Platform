@@ -14,6 +14,7 @@
 | 文書 | 内容 |
 | --- | --- |
 | [`font-hosting-and-csp-decision.md`](font-hosting-and-csp-decision.md) | フォント配信方式と CSP 許可ホスト (Issue #36)。self-host 化の実測評価と保留継続の根拠 |
+| [`csp-script-src-decision.md`](csp-script-src-decision.md) | `script-src` / `style-src` の `'unsafe-inline'` 除去可否 (T-F2)。nonce・SRI 両方式の実測評価と解除条件 |
 | [`pwa-mobile-design.md`](pwa-mobile-design.md) | PWA / モバイル対応のデザイン方針 |
 
 ## デザイントークン (実装は `src/app/globals.css` の CSS 変数)
