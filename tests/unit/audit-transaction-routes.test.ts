@@ -9,6 +9,11 @@ const fetchLogCountMock = vi.hoisted(() => vi.fn());
 const sampleResponseCreateMock = vi.hoisted(() => vi.fn());
 const qualityCheckCreateMock = vi.hoisted(() => vi.fn());
 const auditLogCreateMock = vi.hoisted(() => vi.fn());
+// ルートクライアント直書きの書き込みを検出するための独立モック。
+// $transaction 経由の書き込みは上記の tx 用モックだけを使い、これらは一切呼ばれない。
+const rootDataSourceUpdateMock = vi.hoisted(() => vi.fn());
+const rootFetchLogCreateMock = vi.hoisted(() => vi.fn());
+const rootAuditLogCreateMock = vi.hoisted(() => vi.fn());
 const connectorCheckMock = vi.hoisted(() => vi.fn());
 const connectorFetchSampleMock = vi.hoisted(() => vi.fn());
 
@@ -16,14 +21,15 @@ vi.mock("@/lib/db", () => ({
   prisma: {
     dataSource: {
       findUnique: dataSourceFindUniqueMock,
-      update: dataSourceUpdateMock,
+      update: rootDataSourceUpdateMock,
     },
     fetchLog: {
       count: fetchLogCountMock,
+      create: rootFetchLogCreateMock,
     },
     // /api/admin/audit-events は transaction を張らず直接 INSERT する経路。
     auditLog: {
-      create: auditLogCreateMock,
+      create: rootAuditLogCreateMock,
     },
     $transaction: (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
@@ -214,7 +220,7 @@ describe("audit insert failure path", () => {
   it("returns 503 audit_record_failed when the direct audit insert fails", async () => {
     stubAdminEnv();
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    auditLogCreateMock.mockRejectedValueOnce(new Error("audit insert failed"));
+    rootAuditLogCreateMock.mockRejectedValueOnce(new Error("audit insert failed"));
 
     const response = await auditEventsPOST(
       adminPostJson("/api/admin/audit-events", { kind: "audit_export_csv" }),
@@ -225,6 +231,7 @@ describe("audit insert failure path", () => {
     expect(response.status).toBe(503);
     expect(body.error).toBe("audit_record_failed");
     expect(body.ok).toBeUndefined();
+    expect(rootAuditLogCreateMock).toHaveBeenCalledTimes(1);
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
   });
@@ -255,5 +262,10 @@ describe("audit insert failure path", () => {
     // つまり握り潰された場合に commit される対象が実在することを示す。
     expect(fetchLogCreateMock).toHaveBeenCalledTimes(1);
     expect(dataSourceUpdateMock).toHaveBeenCalledTimes(1);
+    // 業務書き込みと監査書き込みは tx 経由のみで実行され、ルートクライアントの
+    // 書き込みモックには到達しないこと（transaction 外へ漏れた場合に検出する）。
+    expect(rootFetchLogCreateMock).not.toHaveBeenCalled();
+    expect(rootDataSourceUpdateMock).not.toHaveBeenCalled();
+    expect(rootAuditLogCreateMock).not.toHaveBeenCalled();
   });
 });

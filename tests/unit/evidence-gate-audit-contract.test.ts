@@ -128,26 +128,33 @@ describe("classifications are traceable to source", () => {
 });
 
 describe("neon backup gate claims match the implementation", () => {
-  it("keeps the 'structurally unfailable' claim true only while it is", () => {
-    // The document's sharpest claim: restoreDrillStatus defaults to "success"
-    // in the generator and no workflow ever overrides it, so the checker's
-    // assertion cannot fail. Both halves must hold for the claim to stand.
+  it("restore drill status has no literal success default and the workflow must supply it", () => {
+    // Issue #127 removed the hardcoded "success" default. The gate can now
+    // fail, and it does so whenever the workflow does not supply a status.
     const generatorHardcodesSuccess = /restoreDrillStatus:\s*"success"/.test(createBackupEvidence);
-    const workflowOverridesIt = /--restore-drill-status/.test(neonBackupWorkflow);
-    const gateCannotFail = generatorHardcodesSuccess && !workflowOverridesIt;
+    const generatorRequiresStatus = /restoreDrillStatus is required via --restore-drill-status/.test(
+      createBackupEvidence,
+    );
+    const workflowSuppliesStatus = /--restore-drill-status/.test(neonBackupWorkflow);
 
-    const docSaysCannotFail = auditDoc.includes("構造的に失敗し得ない検査");
-
-    expect(gateCannotFail).toBe(docSaysCannotFail);
+    expect(generatorHardcodesSuccess).toBe(false);
+    expect(generatorRequiresStatus).toBe(true);
+    expect(workflowSuppliesStatus).toBe(true);
   });
 
-  it("keeps the same claim for lastPgDumpStatus", () => {
+  it("pg_dump status is derived from the artifact stat, not a literal", () => {
+    // The generator derives success from fs.statSync(regular file, size > 0)
+    // and refuses to record a contradictory --pg-dump-status. A literal
+    // default would put the constant back into the evidence path.
     const generatorHardcodesSuccess = /pgDumpStatus:\s*"success"/.test(createBackupEvidence);
-    const workflowOverridesIt = /--pg-dump-status/.test(neonBackupWorkflow);
+    const derivesFromArtifact = /artifact-stat:regular-file,size>0/.test(createBackupEvidence);
+    const requiresStatusWithoutFile = /pgDumpStatus is required via --pg-dump-status/.test(
+      createBackupEvidence,
+    );
 
-    const docListsBothAsSelfDeclared = auditDoc.includes("`lastPgDumpStatus is success`");
-
-    expect(generatorHardcodesSuccess && !workflowOverridesIt).toBe(docListsBothAsSelfDeclared);
+    expect(generatorHardcodesSuccess).toBe(false);
+    expect(derivesFromArtifact).toBe(true);
+    expect(requiresStatusWithoutFile).toBe(true);
   });
 
   it("still asserts both statuses, so the rows describe live checks", () => {

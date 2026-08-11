@@ -41,7 +41,7 @@ Issue #128 以前、検査は「空でない」「placeholder 文字列に一致
 | `CODIP_NEON_MONITORING_EVIDENCE` | 20 | Neon ブランチ名 + 確認日 (ISO 8601) | `branch codip-production checked 2026-07-19 slow-queries=0` |
 | `CODIP_SMOKE_MONITORING_SCHEDULE` | 5 | 5 フィールドの cron 式、または定義済みキーワード（`hourly` / `daily` / `weekly` / `monthly` / `per-release`） | `*/15 * * * *` |
 | `CODIP_ROLLBACK_OWNER` | 4 | 空白を含まない単一の識別子（4 文字以上）。アカウント名、チームハンドル、メールアドレス | `release-manager` |
-| `CODIP_BACKUP_RESTORE_EVIDENCE` | 24 | PITR ウィンドウ + 訓練実施日 (ISO 8601) + 訓練結果（`success` / `failed` / `partial` / `not-run` / `blocked`） | `neon pitr 24h drill 2026-07-19 outcome=not-run` |
+| `CODIP_BACKUP_RESTORE_EVIDENCE` | 24 | PITR ウィンドウ + 訓練実施日 (ISO 8601) + 訓練結果（記録語彙: `success` / `failed` / `partial` / `not-run` / `blocked`。**合格は `success` のみ**） | `neon pitr 24h drill 2026-07-19 outcome=success` |
 
 同じ表は `npm run release:production-evidence` の出力（`## Evidence Format Requirements` 節）にも印字される。
 CI で ⚠️ が出た運用者が、このドキュメントを開かずとも何を入れるべきか分かるようにするためである。
@@ -54,7 +54,9 @@ CI で ⚠️ が出た運用者が、このドキュメントを開かずとも
 
 **訓練結果** — 語境界で照合する。単純な部分文字列照合では `unsuccessful` が `success` に一致し、
 失敗した復旧訓練を成功として読んでしまう。語彙は `scripts/tools/create-neon-backup-evidence.js` と共通で、
-リリース工程のどちら側でも同じ語が同じ意味を持つ。
+リリース工程のどちら側でも同じ語が同じ意味を持つ。**合格とみなすのは `success` のみ**であり、
+`failed` / `partial` / `not-run` / `blocked` を記録すると strict ゲートは理由付きで ⚠️ を返す
+（`docs/runbooks/restore-drill-record.md` §1.2 の判定基準と一致。`partial` は記録できるが合格ではない）。
 
 **スケジュール** — `*/5 read-only smoke` のような自由記述は不合格。スケジュールらしく読めるが、
 機械にも代理の運用者にも実行できる周期を指していない。
@@ -67,7 +69,7 @@ CI で ⚠️ が出た運用者が、このドキュメントを開かずとも
 | --- | --- |
 | `✅ set (recorded, format checked)` | 記録があり、形式要件も満たしている。readiness チェックが ✅ になるのはこの場合のみ |
 | `⚠️ <要件>` | 記録はあるが形式が要件を満たしていない。満たすべき要件が併記される |
-| `⚠️ missing` / `⚠️ placeholder` | 未設定、または placeholder 文字列 |
+| `⚠️ unset` / `⚠️ placeholder-like` | 未設定、または placeholder 文字列 |
 
 証跡の値そのものは、合格時も不合格時もレポートに印字しない。連絡先や運用上の記述を含むためである。
 
@@ -78,9 +80,11 @@ CI で ⚠️ が出た運用者が、このドキュメントを開かずとも
 それはゲートの誤検知ではなく、記録されていた証跡が確認可能な形をしていなかったという意味である。
 値を要件に合う形へ書き直す（＝実際に確認して日付と結果を記録する）ことで解消する。
 
-`scripts/deploy/deploy-production.mjs` は、これらの変数が未設定のときにフォールバック既定値を与える。
-既定値のいくつかは本形式要件を満たさない（例: 連絡先がメール形式でない、スケジュールが自由記述）。
-これは意図した fail-closed であり、退行ではない。恒久的な解決は、既定値を廃して未設定を明示的な FAIL とすることである。
+`scripts/deploy/deploy-production.mjs` は、かつてこれらの変数が未設定のときにフォールバック既定値を与えていた。
+既定値のいくつかは本形式要件を満たさなかった（例: 連絡先がメール形式でない、スケジュールが自由記述）。
+**2026-08-12（T-B7）で既定値は全廃した**。現在は `EVIDENCE_ENV_KEYS` の8変数が1つでも未設定なら
+`resolveEvidenceEnv` が例外を送出し、deploy は Neon 読み取りより前に停止する。
+挙動は `tests/unit/deploy-production-evidence.test.ts` が検証する。
 
 ## 5. 関連
 

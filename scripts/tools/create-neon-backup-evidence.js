@@ -199,14 +199,17 @@ async function measureHistoryRetention(options, deps = {}) {
   // Guard against measuring a different project than the one being backed up
   // (a mistyped id would otherwise produce a green gate for the wrong project).
   const measuredProjectId = String(project?.id ?? "").trim();
-  if (measuredProjectId && measuredProjectId !== projectId) {
+  if (!measuredProjectId) {
+    throw new Error("Neon API response did not contain project.id; refusing to attribute the measurement");
+  }
+  if (measuredProjectId !== projectId) {
     throw new Error("Neon API returned a different project id than requested");
   }
 
   return {
     historyRetentionSecondsMeasured: seconds,
     historyRetentionMeasuredAt: iso(now()),
-    historyRetentionProjectId: measuredProjectId || projectId,
+    historyRetentionProjectId: measuredProjectId,
     historyRetentionSource: "neon-api:GET /projects/{project_id}#history_retention_seconds",
   };
 }

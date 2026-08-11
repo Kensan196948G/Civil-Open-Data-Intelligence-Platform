@@ -93,7 +93,7 @@ Cloudflare zone APIが返した現行tokenの権限は `#dns_records:read` / `#a
 | Cloudflare Workers Logs / Traces | **BLOCKED（権限不足）** — 現行tokenにWorkers Observability readが無く、`cloudflare-observability` MCPも未認証（OAuth要） | error rate、例外sample、対象deploy idをEvidenceへ記録 |
 | Cloudflare alert / Web Analytics | **要再確認** — `alerts-and-notifications.md` は policy `CODIP Worker Error Alert` を2026-08-10に作成・テスト送信済みと記録するが、QAはNotifications read権限が無く**独立検証できていない**。監査ログにも該当作成イベントは現れなかった（alerting変更が監査ログ対象外の可能性あり） | Notifications read付与後に `GET /alerting/v3/policies` で実在・閾値・宛先を確認し、通知テスト受信時刻を §1.1.3 テンプレートへ記録 |
 | Neon monitoring | 監視データはread可（project/branch/compute/PITR/容量を2026-08-11に取得）。**アラートは未設定** | 容量80%・接続数80%のアラートを設定し、通知テスト受信を記録 |
-| GitHub Actions | **通知経路は実装済み（2026-08-11）**。`production-smoke.yml` の `Report production smoke failure as an incident issue` step が、run失敗時に `incident` label 付きIssueを起票する（既存openがあればコメント追記、連続2回以上でP1昇格）。外部webhookやそのSecretは使用しない。**未完了は「誰へ届くか」**で、Issue watcher / 当番の設定は人間作業として残る | 通知テストの受信時刻・受信者を §1.1.3 テンプレートへ記録し、当番を運用台帳へ登録 |
+| GitHub Actions | 🟡 **通知経路は実装済み（2026-08-11）だが、受信状態は未完了**。`production-smoke.yml` の `Report production smoke failure as an incident issue` step が、run失敗時に `incident` label 付きIssueを起票する（既存openがあればコメント追記、連続2回以上でP1昇格）。外部webhookやそのSecretは使用しない。Issue起票は「検知が記録された」証拠であり、「人間へ通知が届いた」証拠ではない。**未完了は「誰へ届くか」**で、Issue watcher / 当番の設定は人間作業として残る | 通知テストの受信時刻・受信者を §1.1.3 テンプレートへ記録し、当番を運用台帳へ登録 |
 
 > 📌 **正本の整合について**: 通知設定の詳細手順は `docs/runbooks/alerts-and-notifications.md` を正本とする。本表は「QAが read-only で独立検証できた範囲」を記録するものであり、両者が食い違う場合は**検証手段が明記されている側**を採用する。2026-08-11時点で、Cloudflare alert policyについては両文書の記述が一致していない（上表参照）。
 
@@ -114,7 +114,7 @@ odipはCloudflare Access配下のため、workflowはGitHub Actions Secret `CF_A
 | 項目 | 挙動 |
 | --- | --- |
 | 発火条件 | job内のいずれかのstep失敗（`if: failure()`）。probe自体の異常終了も含む |
-| 実装 | `actions/github-script`（commit SHA固定）。job権限は `contents: read` + `issues: write` のみ |
+| 実装 | `actions/github-script`（commit SHA固定）。job権限は `contents: read` + `actions: read` + `issues: write`（run履歴の連続失敗判定に `actions: read` が必要） |
 | 重複防止 | `production-smoke` label のopen Issueが在れば新規作成せずコメント追記。15分間隔のprobeがIssueを量産しない |
 | 重大度 | 連続1回=P2、連続2回以上=P1（既存Issueへは `P1` labelを追加して昇格） |
 | 本文 | 重大度・連続失敗回数・失敗runのURL・検知時刻のみ。probe出力は14日保持artifact側に置き、Secret/認証情報/PIIをIssueへ持ち込まない |
@@ -205,6 +205,7 @@ npm run release:create-neon-backup-evidence -- \
   --neon-api-key-env NEON_API_KEY \
   --pg-dump-artifact secure-artifact://codip/neon/20260720T063000Z.dump \
   --pg-dump-at 2026-07-20T06:30:00Z \
+  --pg-dump-status success \
   --restore-drill-at 2026-07-19T06:30:00Z \
   --restore-drill-status success \
   --restore-drill-record docs/runbooks/restore-drill-record.md \

@@ -33,7 +33,7 @@ const completeEvidenceEnv = {
   CODIP_NEON_MONITORING_EVIDENCE: "branch codip-production checked 2026-07-19 slow-queries=0",
   CODIP_SMOKE_MONITORING_SCHEDULE: "*/15 * * * *",
   CODIP_ROLLBACK_OWNER: "release-manager",
-  CODIP_BACKUP_RESTORE_EVIDENCE: "neon pitr 24h drill 2026-07-19 outcome=not-run",
+  CODIP_BACKUP_RESTORE_EVIDENCE: "neon pitr 24h drill 2026-07-19 outcome=success",
 };
 
 function writeWrangler(root: string, hyperdriveId: string, previewHyperdriveId = "REPLACE_WITH_STAGING_HYPERDRIVE_ID") {
@@ -294,6 +294,24 @@ describe("production evidence format requirements (Issue #128)", () => {
 
     expect(result.status).toBe(1);
     expect(result.stdout).toContain("Backup/restore evidence recorded | ⚠️");
+  });
+
+  it("rejects a recorded non-passing drill outcome in strict mode", () => {
+    // `not-run` / `failed` / `partial` / `blocked` are recordable vocabulary,
+    // but only `success` satisfies the deploy evidence gate
+    // (docs/runbooks/restore-drill-record.md §1.2).
+    const result = runProductionEvidence(
+      {
+        ...completeEvidenceEnv,
+        CODIP_BACKUP_RESTORE_EVIDENCE: "neon pitr 24h drill 2026-07-19 outcome=not-run",
+      },
+      ["--strict"],
+      withWrangler("hdg_prod_1234567890abcdef"),
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("Backup/restore evidence recorded | ⚠️");
+    expect(result.stdout).toContain("drill outcome is not passing");
   });
 
   it.each([

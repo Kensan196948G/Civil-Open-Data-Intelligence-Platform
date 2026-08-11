@@ -96,6 +96,10 @@ const OWNER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._@+-]{3,}$/;
 // Same vocabulary as create-neon-backup-evidence.js, so a drill outcome means
 // the same thing on both sides of the release process.
 const DRILL_OUTCOMES = ["success", "failed", "partial", "not-run", "blocked"];
+// A restore drill that did not fully succeed must not satisfy the deploy
+// evidence gate. `partial` is a recorded outcome but it is *not* a passing one
+// (docs/runbooks/restore-drill-record.md §1.2): only `success` may pass.
+const DRILL_PASSING_OUTCOMES = ["success"];
 
 function requireIsoDate(value, now) {
   const matches = value.match(ISO_DATE_PATTERN) ?? [];
@@ -190,12 +194,27 @@ const EVIDENCE_FORMATS = {
         : ["must be one whitespace-free identifier of 4+ characters, not a sentence"],
   },
   CODIP_BACKUP_RESTORE_EVIDENCE: {
-    expectation: `PITR window + drill date (ISO 8601) + drill outcome (${DRILL_OUTCOMES.join(", ")})`,
+    expectation: `PITR window + drill date (ISO 8601) + drill outcome (${DRILL_OUTCOMES.join(", ")}; passing requires ${DRILL_PASSING_OUTCOMES.join("/")})`,
     minLength: 24,
-    validate: (value, now) => [
-      ...requireIsoDate(value, now),
-      ...requireOneOf(value, DRILL_OUTCOMES, "a drill outcome"),
-    ],
+    validate: (value, now) => {
+      const problems = [...requireIsoDate(value, now)];
+      const found = DRILL_OUTCOMES.some((word) =>
+        new RegExp(`(^|[^a-z-])${word}([^a-z-]|$)`, "i").test(value),
+      );
+      if (!found) {
+        problems.push(`needs a drill outcome (one of: ${DRILL_OUTCOMES.join(", ")})`);
+        return problems;
+      }
+      const passing = DRILL_PASSING_OUTCOMES.some((word) =>
+        new RegExp(`(^|[^a-z-])${word}([^a-z-]|$)`, "i").test(value),
+      );
+      if (!passing) {
+        problems.push(
+          `drill outcome is not passing: only ${DRILL_PASSING_OUTCOMES.join("/")} satisfies the deploy gate (recorded non-passing outcomes stay visible in the report)`,
+        );
+      }
+      return problems;
+    },
   },
 };
 

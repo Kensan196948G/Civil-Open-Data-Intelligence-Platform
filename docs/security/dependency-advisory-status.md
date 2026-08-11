@@ -78,7 +78,7 @@ allowlist は `scripts/tools/check-dependency-audit.js` の `ALLOWLIST` が唯�
    peer に `eslint ^7.23.0 || ^8.0.0 || ^9.0.0` を宣言しており、eslint 10 は range 外。
    15.6.0 系は canary のみで安定版が存在しない。
 2. eslint 10 を受け入れるのは `eslint-config-next` 16.x (peer `eslint >=9.0.0`) 以降。
-   ただし ecn 16 は Next 16 系に対応するものであり、採用は **Next 15 → 16 のメジャー移行**とセットになる。
+   ただし `eslint-config-next` 16.x は Next 16 系に対応するものであり、採用は **Next 15 → 16 のメジャー移行**とセットになる。
 3. **移行の当初動機であった brace-expansion advisory は既に解消している**（上記のとおり現在は未検出）。
    セキュリティ上の緊急性は現時点で存在しない。
 4. `@opennextjs/cloudflare` は最新であり、これを理由とする移行制約はない。

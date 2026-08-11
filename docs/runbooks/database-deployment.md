@@ -158,7 +158,7 @@ npm run release:check-neon-backup-evidence
 
 既定ゲートは次の場合に失敗する。**PITR の判定に使うのは実測値 `historyRetentionSecondsMeasured` であり、運用者が申告した `historyWindowHours` ではない。**
 
-- 実測PITR保持期間が24時間未満、実測値が欠落、実測時刻が古い、または実測対象のproject idが `projectId` と不一致
+- 実測PITR保持期間が24時間未満、実測値が欠落、実測時刻 `historyRetentionMeasuredAt` が24時間を超えて古い、または実測対象のproject idが `projectId` と不一致
 - `pg_dump` が24時間を超えて古い
 - restore drillが30日を超えて古い、または `restoreDrillStatus` が `success` 以外
 

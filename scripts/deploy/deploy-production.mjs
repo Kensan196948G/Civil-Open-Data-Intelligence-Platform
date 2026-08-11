@@ -255,8 +255,10 @@ export async function main() {
 
   // Checked before any remote call or mutation (Neon reads, DNS record
   // creation): a deploy that cannot produce its evidence must stop before it
-  // leaves half-applied state, not after. --skip-deploy returns before
-  // cf:deploy:production and produces no evidence report, so it needs none.
+  // leaves half-applied state, not after. --skip-deploy is a dry run that
+  // returns before cf:deploy:production and produces no evidence report, so it
+  // needs no evidence values -- but it must also not mutate DNS, so the
+  // skipDeploy return below happens before ensureDnsRecord().
   const evidenceEnv = skipDeploy ? {} : resolveEvidenceEnv();
 
   step("resolve Neon connection targets (in-process)");
@@ -275,13 +277,15 @@ export async function main() {
   const proxySecret =
     process.env.CODIP_TRUST_PROXY_SECRET?.trim() || randomBytes(32).toString("hex");
 
-  step("ensure DNS record (zone route target)");
-  await ensureDnsRecord(cfToken);
-
   if (skipDeploy) {
-    console.log("[deploy-production] --skip-deploy: stopping before cf:deploy:production");
+    console.log(
+      "[deploy-production] --skip-deploy: stopping before DNS mutation and cf:deploy:production",
+    );
     return;
   }
+
+  step("ensure DNS record (zone route target)");
+  await ensureDnsRecord(cfToken);
 
   step(
     wranglerDirect
