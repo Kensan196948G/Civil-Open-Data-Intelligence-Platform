@@ -1,7 +1,7 @@
 # 統合評価・改善報告書（Integrated Assessment & Improvement Report）
 
 > 2026-08-12 最終更新（第3サイクル） ｜ 対象: Civil Open Data Intelligence Platform（CODIP）
-> 本番: https://odip.mirai-dx-platform.com（Worker `codip-production` 継続稼働 / main `5f0cefb`）
+> 本番: https://odip.mirai-dx-platform.com（Worker `codip-production` 継続稼働 / main `7f72626` = PR #137 merged）
 > 関連文書: [改善前評価](pre-improvement-assessment.md) / [競合分析](competitive-analysis.md) / [代替率](replacement-rate.md) / [改善計画](improvement-plan.md) / [改善後再評価](post-improvement-assessment.md)
 
 ---
@@ -10,7 +10,7 @@
 
 CODIPは**本番稼働中の公開データ統合・地形分析・気象海象判断支援基盤**であり、総合判定は **「条件付き利用可」**。18軸平均は **67.1 → 69.6 → 72.7 → 73.3点（累計 +6.2）**、加重代替率は **47.25% → 48.1% → 51.35% → 52.25%** へ改善した。
 
-第3サイクル（2026-08-12）では、QA監査が検出した**「証跡ゲートの自己認証」系列の重大欠陥7件（#126〜#129・#132〜#134）とsmoke失敗通知（#90）**を実装・検証し、統合ブランチ `claudeos/backend` としてマージ承認待ちとした。
+第3サイクル（2026-08-12）では、QA監査が検出した**「証跡ゲートの自己認証」系列の重大欠陥7件（#126〜#129・#132〜#134）とsmoke失敗通知（#90）**を実装・検証し、**PR #137としてマージ完了（main `7f72626`）**とした。CodeRabbitレビュー16件にも対応し、全スレッド解決後にマージした。
 
 - Neon PITR保持期間をNeon APIから実測し、自己申告値での通過を不可能化（#126）
 - 復旧訓練・pg_dumpの「success既定値」を削除し、未指定はfail-closed化（#127）
@@ -19,6 +19,8 @@ CODIPは**本番稼働中の公開データ統合・地形分析・気象海象�
 - CodeQLを失敗可能なゲートへ復元（#132）、Actions SHA検査を6/6ファイルへ（#133）
 - 監査契約に実挙動テストを追加（#134）
 - production smoke失敗時のincident Issue自動起票・連続失敗P1昇格（#90）
+- CodeQLはGHAS非対応プラン（private・personal account）のためSARIFアップロード不可を実測し、`upload: never`＋SARIF artifact方式でゲート成立（ADR 0003）
+- **Neon PITR復旧訓練を実施**（data_sources=62・PG 17.10・PostGIS 3.5・約14分）し、証跡Variablesを形式検証済み値で登録
 
 ---
 
@@ -132,14 +134,14 @@ CODIPは**本番稼働中の公開データ統合・地形分析・気象海象�
 
 | 項目 | 状況（2026-08-12） |
 | --- | --- |
-| main head | `5f0cefb`（PR #124 merge） |
-| 統合セキュリティ改善 | ブランチ `claudeos/backend`（`f2837cb`）・PR作成待ち/提出済み・**マージ承認待ち** |
-| オープンPR | #130（dependabot）/ #131（#129）/ #135（#128）/ #136（#90）＋統合PR。後者3本は統合PRのサブセット |
-| 単体テスト | 統合ブランチ実測 64ファイル 715件 pass（main 557件） |
+| main head | `7f72626`（PR #137 merge） |
+| 統合セキュリティ改善 | **マージ済み**（PR #137） |
+| オープンPR | #130（dependabot）/ #141（Phase-1準備: RBAC設計・Excel/PDF・データソース5件）/ #138（評価文書）。#131/#135/#136は包含済み |
+| 単体テスト | 64ファイル 720件 pass（統合ブランチ実測） |
 | E2E | 30 spec pass（CI実績）＋CSP/console error契約追加 |
 | lint / typecheck | 0 errors / 0 errors（統合ブランチ） |
 | 契約ゲート | github-actions-contract: 6 workflow・35 action refs SHA固定 |
-| CodeQL (PR #137) | **RED（環境要因）**: 解析は250 TS/45 JS/6 Actionsをスキャン成功、SARIFアップロードのみ失敗（リポジトリ設定「Code scanning無効」#139）。#132修正により従来の隠蔽が可視化された |
+| CodeQL | **PASS**（`upload: never` + SARIF artifact方式・ADR 0003）。GHAS非対応プランのためSecurity tab連携は不可 |
 | 本番Worker | `codip-production` 継続稼働（Version `71fdfb11`） |
 | 本番スモーク | 15分毎 success（直近run全緑） |
 | 日次バックアップ | AES256 pg_dump success（14日保持）＋PITR実測ゲート化（PR待ち） |
@@ -152,11 +154,10 @@ CODIPは**本番稼働中の公開データ統合・地形分析・気象海象�
 
 | 区分 | 内容 | 担当 |
 | --- | --- | --- |
-| 承認 | 統合セキュリティPRのレビュー・マージ（#131/#135/#136のクローズ判断含む） | human + Reviewer |
-| 設定 | Code scanning有効化（Settings → Code security and analysis）。無効の間PR #137のCodeQLはRED（#139） | human（repo admin） |
+| 承認 | サブセットPR #131/#135/#136のクローズ（#137に包含済み） | human |
 | 運用 | アラート通知先・当番設定・受信テスト（incident Issue watcher含む） | human kensan＋DevOps |
-| 運用 | 復旧訓練の実施と記録 | human kensan＋DevOps |
-| Secret | `CODIP_NEON_API_KEY`・production evidence 8変数・production環境Secrets | human kensan |
+| 運用 | 復旧訓練の定期化（次回2026-11-11） | DevOps |
+| Secret | `CODIP_NEON_API_KEY`・production環境Secretsの登録（証跡8変数は登録済み） | human kensan |
 | 機能 | RBAC・PDF/Excel出力未実装 | Phase 1 |
 | データ | 実データ50種・台帳500件未達 | データ運用 |
 | 性能 | ロードテスト未実施（P95実測なし） | DevOps |
@@ -194,10 +195,10 @@ CODIPは**本番稼働中の公開データ統合・地形分析・気象海象�
 
 ## 12. 次に着手すべき具体的作業
 
-1. **統合セキュリティPR（`claudeos/backend`）のレビューとマージ承認**（#126〜#129・#132〜#134・#90）
-2. **アラート通知先・当番の決定と設定**（incident Issue watcher、受信テスト）-- `docs/runbooks/alerts-and-notifications.md` 準拠
-3. **復旧訓練の実施と記録**（`docs/runbooks/restore-drill-record.md` 様式）
-4. **RBAC基本設計の着手**（Access proxy認証稼働済みを前提としたロール定義）
-5. **PDF/Excel出力の技術選定とプロトタイプ**（判定根拠レポート・地形分析帳票）
-6. **PWAオフライン戦略の本格実装**（`docs/design/pwa-mobile-design.md` に従う）
+1. ~~統合セキュリティPR~~ → **完了（#137 merged）**
+2. ~~復旧訓練・証跡Variables~~ → **完了（2026-08-12）**
+3. **Phase-1準備PR #141のマージ**（RBAC設計・Excel/PDFプロトタイプ・公式ソース5件）
+4. **アラート通知先・当番の決定と設定**（incident Issue watcher、受信テスト）-- `docs/runbooks/alerts-and-notifications.md` 準拠
+5. **RBAC実装**（`docs/design/rbac-design.md` の段階計画に従いスキーマ→ミドルウェア→管理UI）
+6. **PDF/Excelの本格化**（OOXML .xlsx・サーバー側PDF生成の技術選定）
 7. **実データ50種コネクタ追加の継続**（利用規約確認→収集→品質監視）
