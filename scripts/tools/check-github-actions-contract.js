@@ -59,8 +59,19 @@ function requireText(label, source, needle) {
 }
 
 /**
- * workflow の step 列を切り出す。インデント幅は最初の step 行から取り、
+ * workflow 内の**全ジョブ**の step を切り出す。インデント幅は最初の step 行から取り、
  * 決め打ちにしない。
+ *
+ * 設計上の要点が 3 つある。
+ *
+ * 1. コメント行 (行頭が `#`) は step 本文から**除去**する。契約の needle がコメント文で
+ *    満たせるなら、それは実効設定ではなく説明文を検査していることになり、「文言の部分一致で
+ *    網羅を主張する」形へ戻ってしまう。
+ * 2. コメント行を step 列の終端と見なさない。step と同じインデントのコメントは
+ *    step 列の途中に普通に現れる。
+ * 3. 浅いインデントの実体行では**打ち切らず**、現在の step を閉じて走査を続ける。
+ *    ジョブ境界で打ち切ると、2 つ目以降のジョブに置いた step が契約から見えなくなり、
+ *    「ジョブを分けた瞬間に静かに found 0」になる。
  */
 function workflowSteps(source) {
   const lines = source.split("\n");
@@ -69,15 +80,22 @@ function workflowSteps(source) {
 
   const indent = /^(\s*)- /.exec(lines[first])[1];
   const isStepStart = (line) => line.startsWith(`${indent}- `);
+  const isComment = (line) => line.trimStart().startsWith("#");
   const steps = [];
+  let current = null;
   for (const line of lines.slice(first)) {
     if (isStepStart(line)) {
-      steps.push([line]);
+      current = [line];
+      steps.push(current);
       continue;
     }
-    // 空行は step の内側にも現れる。step 列の終わりは「浅いインデントの実体行」で判定する。
-    if (line.trim() !== "" && !line.startsWith(`${indent} `)) break;
-    steps[steps.length - 1].push(line);
+    if (isComment(line)) continue;
+    // 空行は step の内側にも現れる。step の終わりは「浅いインデントの実体行」で判定する。
+    if (line.trim() !== "" && !line.startsWith(`${indent} `)) {
+      current = null;
+      continue;
+    }
+    if (current) current.push(line);
   }
   return steps.map((step) => step.join("\n"));
 }
@@ -224,10 +242,33 @@ requireText("CodeQL workflow", codeql, "github/codeql-action/analyze@1ad29ea4a42
 // このリポジトリは personal account の private repo のため GitHub Advanced Security
 // (SARIFアップロード) が使えない。upload: never で解析自体をローカル実行し、解析失敗時は
 // ジョブを落とす。SARIFはartifactとして保持する (ADR 0003 / Issue #139)。
-requireText("CodeQL workflow", codeql, "upload: never");
-requireText("CodeQL workflow", codeql, "output: sarif-results");
-requireText("CodeQL workflow", codeql, "name: codeql-sarif");
-requireText("CodeQL workflow", codeql, "retention-days: 14");
+//
+// ⏳ 再評価トリガ: この2行は回避策を恒久化する向きの束縛である。GHAS が利用可能になった
+// (= Issue #139 がクローズできる) 時点で、`upload: never` の契約行と analyze の該当設定を
+// 削除し、通常の code-scanning アップロードへ戻すこと。契約に賞味期限が書かれていないと、
+// 制約が消えた後も契約が正しい変更を阻む。詳細と判定条件は
+// docs/adr/0003-codeql-upload-platform-limitation.md「将来の再評価」に置く。
+requireStepText("CodeQL workflow", codeql, "github/codeql-action/analyze@", "upload: never");
+requireStepText("CodeQL workflow", codeql, "github/codeql-action/analyze@", "output: sarif-results");
+// セレクタは step 自身の名前で指定する。`name: codeql-sarif` は artifact 名であり、
+// 保存側と取得側の両方に現れるため一意にならない。
+requireStepText("CodeQL workflow", codeql, "name: Retain CodeQL SARIF as a CI artifact", "retention-days: 14");
+requireStepText(
+  "CodeQL workflow",
+  codeql,
+  "name: Retain CodeQL SARIF as a CI artifact",
+  "if-no-files-found: error",
+);
+// upload: never の下では analyze は「アナライザが失敗したとき」しか落ちず、検出結果では
+// 落ちない。findings を判定する step が無ければ、この security scan は presence-only
+// (等級3) のままになる。step へ束縛して、名前を変えただけで検査が消えないようにする。
+requireStepText(
+  "CodeQL workflow",
+  codeql,
+  "name: Fail on CodeQL findings",
+  "node scripts/tools/check-codeql-sarif.js sarif-results",
+);
+requireText("package.json", packageJson, "\"release:check-codeql-sarif\": \"node scripts/tools/check-codeql-sarif.js\"");
 // analyze は最終 step なので、落ちても実行すべき後続が無い。continue-on-error を付けると
 // security scan が必ず success になり、「CI必須チェックが全て success (security scan含む)」を
 // 満たしたと主張できなくなる (Issue #132)。復活を検知するため、不在側を契約にする。
