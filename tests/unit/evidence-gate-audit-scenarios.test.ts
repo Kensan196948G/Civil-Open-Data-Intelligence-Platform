@@ -1,4 +1,13 @@
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -117,6 +126,62 @@ function legacySubstringCheck(csp: string): boolean {
   );
 }
 
+// --- #22: 監査契約ゲートを「実装だけ改変した木」に対して実行する ---------------
+
+const AUDIT_GATE_PATH = "scripts/tools/check-audit-contract.js";
+const AUDIT_ROUTE_PATH = "src/app/api/admin/audit-events/route.ts";
+/** ゲートが cwd 起点で読むパス。src だけは実体を混ぜるので個別に組み立てる。 */
+const AUDIT_GATE_LINKED_ENTRIES = ["docs", "scripts", "package.json"];
+const AUDIT_GATE_LINKED_LIB = ["src/lib/audit.ts", "src/lib/audit-events-client.ts"];
+
+const auditRouteSource = readFileSync(path.join(REPO_ROOT, AUDIT_ROUTE_PATH), "utf8");
+
+/**
+ * `check-audit-contract.js` を、`route.ts` だけ差し替えた砂場で**そのまま実行**する。
+ *
+ * ゲートの needle 一覧をテストへ写経しない。写経した瞬間それは代理指標になり、
+ * ゲート側に本物の振る舞い検査が入っても更新されず緑のまま嘘になる (§2.5 の主旨)。
+ * ゲートは `process.cwd()` 起点で読むので、cwd を差し替えるだけで実体を偽装できる。
+ */
+function auditContractGatePasses(routeSource: string): boolean {
+  const sandbox = mkdtempSync(path.join(os.tmpdir(), "codip-audit-gate-"));
+  try {
+    for (const entry of AUDIT_GATE_LINKED_ENTRIES) {
+      symlinkSync(path.join(REPO_ROOT, entry), path.join(sandbox, entry));
+    }
+    for (const file of AUDIT_GATE_LINKED_LIB) {
+      mkdirSync(path.join(sandbox, path.dirname(file)), { recursive: true });
+      symlinkSync(path.join(REPO_ROOT, file), path.join(sandbox, file));
+    }
+    mkdirSync(path.join(sandbox, path.dirname(AUDIT_ROUTE_PATH)), { recursive: true });
+    writeFileSync(path.join(sandbox, AUDIT_ROUTE_PATH), routeSource);
+
+    const result = spawnSync(process.execPath, [path.join(REPO_ROOT, AUDIT_GATE_PATH)], {
+      cwd: sandbox,
+      encoding: "utf8",
+    });
+    if (result.error) throw result.error;
+    return result.status === 0;
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+}
+
+/**
+ * ADR 0002 の「監査INSERT失敗時は 503」を実装側で否定する改変。
+ * 応答本体の `audit_record_failed` はそのまま残るため、文字列照合しか
+ * していないゲートには見えない。
+ */
+function auditRouteWithoutFailureStatus(): string {
+  const mutated = auditRouteSource.replace("{ status: 503 }", "{ status: 200 }");
+  if (mutated === auditRouteSource) {
+    throw new Error(
+      `${AUDIT_ROUTE_PATH} に "{ status: 503 }" が無い。S22 の改変が実体からずれている`,
+    );
+  }
+  return mutated;
+}
+
 // --- シナリオ登録簿 ---------------------------------------------------------
 
 /**
@@ -155,6 +220,14 @@ const SCENARIOS: Record<string, Scenario> = {
   S16: {
     kind: "executed",
     run: () => smokeAcceptsCsp(withoutDirective(contractCompliantCsp(), "connect-src")),
+  },
+  // #22: check-audit-contract.js は ADR 0002 の「監査INSERT失敗時は 503」を、
+  // src/lib/audit-events-client.ts の**コメント文字列の存在**だけで検査する
+  // (check-audit-contract.js:55)。応答コードを 503 から 200 へ落としても
+  // ゲートは緑のまま通る (Issue #134)。
+  S22: {
+    kind: "executed",
+    run: () => auditContractGatePasses(auditRouteWithoutFailureStatus()),
   },
   // 採番外: deploy スクリプト自身が証跡値を供給していた経路 (T-B7)。
   SB7: {
@@ -240,6 +313,12 @@ describe("監査文書の偽陰性シナリオを実コードで検算する (�
   it("契約準拠の CSP は本番スモークを通る (S16 の対照)", () => {
     // これが false なら S16 の失敗は「緩和を検知した」ではなく「基準がずれた」。
     expect(smokeAcceptsCsp(contractCompliantCsp())).toBe(true);
+  });
+
+  it("未改変の砂場では監査契約ゲートが通る (S22 の対照)", () => {
+    // これが false なら S22 の「通ってしまう」は偽陰性の証明ではなく、
+    // 砂場の組み立て失敗 (symlink 漏れ・ゲートの読取対象の増加) である。
+    expect(auditContractGatePasses(auditRouteSource)).toBe(true);
   });
 
   it("表の各行は登録簿に存在する", () => {

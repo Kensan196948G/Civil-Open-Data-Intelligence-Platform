@@ -3,6 +3,7 @@
 > 🗓️ 実施: 2026-08-11（T-Q3）｜ 種別: **read-only 調査記録**｜ 実施者: QA
 > 🔁 更新: 2026-08-11（T-B4 / Issue #126・#127）｜ 更新者: backend｜ 範囲: §2.1 の是正済み行と、それに連動する件数・内訳・残課題のみ。**分類の方法論（§1）と §2.2 以降の判定は QA の記録のまま変更していない**
 > 🔁 更新: 2026-08-12（Issue #128・#129 / T-B7）｜ 更新者: backend（本ファイルの当該範囲は CTO により backend へ所有権移管）｜ 範囲: §2.2 #7・#8、§2.4 #16 の是正反映と §2.2 の注記追加、および **§2.5 の新設**。**分類（🟢/🟡/🔴）と §0.1 の件数・総数 26 は変更していない**（供給元の性質は是正で変わっていないため）
+> 🔁 更新: 2026-08-12（Issue #134）｜ 更新者: backend｜ 範囲: §2.3 #22 の分類を **🟢 → 🟡** へ格下げし、§0.1 の内訳・§2.5（S22 追加）・§3.4 を連動更新。総数 26 と採番は変えていない。**格下げは新たな欠陥の発生ではなく、群の最弱（振る舞いの主張をコメント照合で見ている箇所）に分類を合わせた再評価である**
 > ⚠️ 本監査の主張が実態と一致していることは `tests/unit/evidence-gate-audit-scenarios.test.ts` が実行検査する（§2.5）。**是正の反映漏れは CI で落ちる。**
 > 関連: [監視・アラート runbook §1.2.1](../runbooks/monitoring.md)（Neon PITR の個別調査）/ [運用台帳](../operations/operations-ledger.md) / [通知テスト記録](../runbooks/notification-test-record.md) / [復旧訓練 実施記録](../runbooks/restore-drill-record.md)
 
@@ -18,11 +19,12 @@
 
 | 分類 | 件数 | 意味 |
 | --- | ---: | --- |
-| 🟢 実測 | 13 | 対象システム（DB・HTTP・レジストリ）またはリポジトリ実体から値を取得している |
-| 🟡 半実測 | 3 | 実測値だが、検査側と同じ run で生成された対象を見ている |
+| 🟢 実測 | 12 | 対象システム（DB・HTTP・レジストリ）またはリポジトリ実体から値を取得している |
+| 🟡 半実測 | 4 | 実測値だが、検査側と同じ run で生成された対象、または主張そのものではなくその宣言を見ている |
 | 🔴 自己申告 | 10 | workflow input / GitHub Variables / スクリプト内定数など、**実行者または実装者が値を決められる** |
 
 > 🔁 上表は T-B4 是正後の値である。QA 調査時点（2026-08-11 午前）は 🟢 11 / 🟡 3 / 🔴 12 だった。Issue #126 で #1 が、Issue #127 で #3 が 🔴 → 🟢 へ移動している。
+> 🔁 Issue #134 で #22 を 🟢 → 🟡 へ格下げした。総数 26 と採番は変えていない（新規行の採番は QA の判断。§4 参照）。
 
 **最重要の発見は Neon PITR ではなかった。** `restoreDrillStatus is success`（`scripts/tools/check-neon-backup-evidence.js:234-238`）は、調査時点では値の供給元が `create-neon-backup-evidence.js` のハードコード既定値 `"success"` であり、これを上書きする `--restore-drill-status` フラグは**リポジトリ内のどの workflow からも渡されていなかった**。すなわちこの検査は「古い定数」ではなく、**失敗し得ない構造**を持っていた。復旧訓練の成否を保証していると読める名前を持ちながら、訓練が失敗しても、一度も実施しなくても success と記録される。
 
@@ -109,7 +111,7 @@ Issue #127 でこの構造は撤去した。既定値を削除し、`--restore-d
 | 19 | 依存監査（全グラフ + allowlist、`ci.yml:65`） | `check-dependency-audit.js:131` `spawnSync("npm", ["audit","--json"])` | 🟢 | ⚠️ ただし `:17-48` の `ALLOWLIST` は人間の自己申告による抑止。`:129` の `--input` で保存済みレポートを評価する経路も存在する（CI では未使用） | **良い型の実例。** allowlist に `expires` / `owner` / `tracking` を必須化しており、自己申告に**時限**が付いている。`--input` は test 専用である旨をコメントで明示済み（`:11-12`） |
 | 20 | production env 契約（synthetic） | `release-gate.js:63-70` がスクリプト内リテラルの `DATABASE_URL`（`example.com`）・`CODIP_ADMIN_TOKEN` を渡す。CI 版は `ci.yml:113-118` | 🔴 | **本番の env が壊れていてもこのゲートは通る。** 検査しているのは validator の挙動であって production の状態ではない | 是正不要だが名称の明確化を推奨。`release-gate.js:63` は既に `(synthetic)` と自己申告しており誠実。CI 側（`ci.yml:118`）には同等の注記がない |
 | 21 | SQLite 前提の DB ゲート群（`db:migrate` / `db:check-duplicates` / `db:check-standard-record-policy` / `db:prune --dry-run`。`ci.yml:99-104`、`release-gate.js:27,30-48`） | `DATABASE_URL: file:./dev.db`（`release-gate.js:27`）。`check-standard-record-policy.js:18-32` が SQLite を実クエリ | 🟡 | 同一 run で作った使い捨て SQLite を検査している。**本番 PostgreSQL のデータ状態は一切見ていない。** 例えば本番の重複 `officialUrl` は検知されない | 分類は 🟡 で妥当。ゲート名から「本番データの検査」と誤読されないよう文書側で区別する |
-| 22 | ドキュメント/API 契約検査群（`release:check-v1-contract` / `check-doc-api-contract` / `check-openapi-coverage` / `check-docker-contract` / `check-audit-contract` / `check-cloudflare-contract`。`ci.yml:80-87`） | いずれもリポジトリ内ファイルの実読み込み。例: `check-cloudflare-neon-contract.js:7-22`（`.env.example`・4 runbook・`wrangler.jsonc`・`src/lib/db.ts`・`schema.prisma` など13ファイル）、`check-audit-contract.js:17-20` | 🟢 | — | ⚠️ **検査対象のズレ**: 「文書と実装の整合」を検査しており、実装が正しいことは保証しない。設計どおりの役割であり是正不要 |
+| 22 | ドキュメント/API 契約検査群（`release:check-v1-contract` / `check-doc-api-contract` / `check-openapi-coverage` / `check-docker-contract` / `check-audit-contract` / `check-cloudflare-contract`。`ci.yml:80-87`） | いずれもリポジトリ内ファイルの実読み込み。例: `check-cloudflare-neon-contract.js:7-22`（`.env.example`・4 runbook・`wrangler.jsonc`・`src/lib/db.ts`・`schema.prisma` など13ファイル）、`check-audit-contract.js:17-20` | 🟡 | **群の最弱に合わせた分類（Issue #134）。** `check-audit-contract.js:55` は ADR 0002 の振る舞いの主張（監査INSERT失敗時の応答コード）を `src/lib/audit-events-client.ts` のコメント文字列の存在だけで検査するため、`src/app/api/admin/audit-events/route.ts:65` の status を書き換えても緑のまま通る（他5件は 🟢 相当） | ⚠️ **検査対象のズレ**: 「文書と実装の整合」を検査しており、実装が正しいことは保証しない。設計どおりの役割だが、**振る舞いの主張はコメント照合では守れない**。→ **是正済み（Issue #134）**: 失敗系の実測を `tests/unit/audit-transaction-routes.test.ts` に追加した（503 応答と、監査INSERT失敗時に業務側書き込みを commit しないこと）。ゲート自体の分類は 🟡 のまま（供給元はコメントのままで、テストは別経路の担保である） |
 | 23 | GitHub Actions 契約（`check-github-actions-contract.js:8`） | workflow YAML の実読み込み（`readFileSync`） | 🟢 | — | ⚠️ **検査対象のズレ**: YAML の記述内容を検査するが、その job が実際に実行・成功したかは見ない |
 | 24 | preview smoke（`ci.yml:121-136`） | `release-smoke.js:21` の `fetch` だが対象は同一 job で起動した `127.0.0.1:3100`（`ci.yml:127`） | 🟡 | 同一 run で起動した preview サーバを検査している。本番の挙動とは独立 | 分類どおり。#16（本番 smoke）と併存しているため実害は小さい |
 
@@ -143,6 +145,7 @@ Issue #127 でこの構造は撤去した。既定値を削除し、`--restore-d
 | S10 | #10 DNS/route の実在を検査せず、宣言値の一致だけで通る | 📣 | 🔓 | 未実行: S9 と同一スクリプト・同一理由。Cloudflare API 読取権限も併せて必要 |
 | S11 | #11 Worker のデプロイ実体を検査せず、`wrangler.jsonc` の記述で通る | 📣 | 🔓 | 未実行: S9 と同一スクリプト・同一理由。実体確認には Workers API 読取権限が要る |
 | S16 | #16 本番 smoke の CSP 判定は部分文字列照合で、`connect-src` を丸ごと削除しても通る | 🔬 | 🔒 | 契約準拠 CSP から `connect-src` を除いたヘッダを `requireCspContract()` に与え、不合格になることを確認する。併せて**契約準拠 CSP が合格すること**も確認する（基準がずれて全部落ちている状態を「検知できた」と読み違えないための対照） |
+| S22 | #22 `check-audit-contract.js` は ADR 0002 の**振る舞いの主張**をコメント文字列の存在だけで見るため、監査INSERT失敗時の応答を 503 から 200 へ落としてもゲートは通る | 🔬 | 🔓 | `route.ts` だけを改変した木を組み、`check-audit-contract.js` を**そのまま子プロセスで実行**して exit 0 になることを確認する。ゲートの needle 一覧はテストへ写経しない（写経すれば代理指標になる）。併せて**未改変なら通ること**も確認する（砂場の組み立て失敗を「検知できた」と読み違えないための対照）。現況が 🔓 なのは、Issue #134 の是正が**ゲート側ではなく別経路のテスト**（`tests/unit/audit-transaction-routes.test.ts` の失敗系）だからである |
 | SB7 | 採番外（§2.2 の注記）: deploy スクリプトが証跡値を自分で供給していた | 🔬 | 🔒 | env を空にして `resolveEvidenceEnv()` を呼び、例外で停止することを確認する。旧実装は8変数すべてを既定値で埋めて deploy を続行していた |
 
 > 📌 **是正済みと書いたら、ここに行を足すこと。** §2 のゲート行で是正案セルに「是正済み」と書かれたものは、本節に対応行を持つことをテストが強制する。文言だけ直して監査記録の見た目を整える経路を塞ぐための規則であり、実行検査が難しければ 📣 宣言として理由を書けばよい。**要件は「実測か宣言か」が読み手に伝わることであって、全項目を実行検査することではない。**
@@ -186,7 +189,7 @@ Issue #127 でこの構造は撤去した。既定値を削除し、`--restore-d
 
 ### 3.4 分類が 🟢 でも安心できない場合
 
-#13・#22・#23 は供給元としては実測だが、検査対象がリポジトリ内の宣言である。「wrangler.jsonc が正しい」ことと「デプロイ済み Worker が正しい」ことは別の命題であり、前者から後者は導けない。現在この差を埋めているのは #16（本番 smoke）と #25（定期 smoke）のみである。
+#13・#23（および Issue #134 で 🟡 へ移した #22）は供給元としては実測だが、検査対象がリポジトリ内の宣言である。「wrangler.jsonc が正しい」ことと「デプロイ済み Worker が正しい」ことは別の命題であり、前者から後者は導けない。現在この差を埋めているのは #16（本番 smoke）と #25（定期 smoke）のみである。
 
 ---
 
@@ -240,13 +243,13 @@ grep -nE '(pgDumpStatus|restoreDrillStatus):\s*"success"' scripts/tools/create-n
 | | `…-contract.test.ts`（QA 所有） | `…-scenarios.test.ts`（backend 所有 / §2.5） |
 | --- | --- | --- |
 | 見るもの | 文書の**構造**（分類記号・件数の整合・根拠引用の有無・秘密混入） | 文書の**主張の真偽**（偽陰性が今も再現するか） |
-| 判定方法 | 実装ソースを正規表現で読む**代理指標** | 実装を import して**実行** |
+| 判定方法 | 実装ソースを正規表現で読む**代理指標** | 実装を import、またはゲートを子プロセスで**実行** |
 | 強み | 実行できない主張にも効く。全行を機械的に走査できる | 是正の実装方法に依存しない。代理指標が先読みを外しても検知する |
 | 弱み | 是正が代理指標の外側で行われると、緑のまま主張だけ偽になる（#128 で実際に起きた） | 実行可能な経路にしか置けない（§2.5 の 📣 行がその境界） |
 
 > 📌 §2.5 の追加後も、`…-contract.test.ts` の #7 に関する代理指標（`evidenceState` 本体に外部呼び出しが現れるか）はそのまま残っている。この指標は Issue #128 の是正では動かず、現在も「外部呼び出しなし」を観測し続ける。**代理指標を実行検査へ置き換えるかどうかは QA の判断**であり、backend は当該ファイルを編集していない。
 
-> 🔢 このテストの件数は固定ではない。引用検査が `it.each` で **🔴 / 🟡 行の数だけ動的に生成される**ため、分類が変われば総数も変わる。T-Q3（是正前・🔴 12 / 🟡 3）では 42件、T-B4 是正後（🔴 10 / 🟡 3）では **40件**である。件数の変化そのものが分類状態のシグナルであり、減少は「🔴 が 🟢 へ移った」ことを意味する。
+> 🔢 このテストの件数は固定ではない。引用検査が `it.each` で **🔴 / 🟡 行の数だけ動的に生成される**ため、分類が変われば総数も変わる。T-Q3（是正前・🔴 12 / 🟡 3）では 42件、T-B4 是正後（🔴 10 / 🟡 3）では 40件、Issue #134 の再評価後（🔴 10 / 🟡 4）では **41件**である。件数の変化そのものが分類状態のシグナルであり、減少は「🔴 が 🟢 へ移った」こと、増加は「🟢 が 🟡 以下へ移った」ことを意味する。**この数値は実行結果を書き写すこと**（推測で更新すると、件数そのものがまた自己申告になる）。
 
 ### 5.1 変異検査（テストが実際に何かを守っていることの確認）
 
