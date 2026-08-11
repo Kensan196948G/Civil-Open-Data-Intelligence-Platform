@@ -68,6 +68,7 @@ CI で ⚠️ が出た運用者が、このドキュメントを開かずとも
 | `✅ set (recorded, format checked)` | 記録があり、形式要件も満たしている。readiness チェックが ✅ になるのはこの場合のみ |
 | `⚠️ <要件>` | 記録はあるが形式が要件を満たしていない。満たすべき要件が併記される |
 | `⚠️ missing` / `⚠️ placeholder` | 未設定、または placeholder 文字列 |
+| `⚠️ no format requirement registered (add <KEY> to EVIDENCE_FORMATS)` | 証跡キーとして検査対象なのに形式要件が未登録。**値の問題ではなく実装側の登録漏れ**（§4.1） |
 
 証跡の値そのものは、合格時も不合格時もレポートに印字しない。連絡先や運用上の記述を含むためである。
 
@@ -81,6 +82,27 @@ CI で ⚠️ が出た運用者が、このドキュメントを開かずとも
 `scripts/deploy/deploy-production.mjs` は、これらの変数が未設定のときにフォールバック既定値を与える。
 既定値のいくつかは本形式要件を満たさない（例: 連絡先がメール形式でない、スケジュールが自由記述）。
 これは意図した fail-closed であり、退行ではない。恒久的な解決は、既定値を廃して未設定を明示的な FAIL とすることである。
+
+### 4.1 証跡変数を追加するとき
+
+証跡変数を `MONITORING_ENV_KEYS` または `BACKUP_RESTORE_ENV_KEYS` へ追加した場合、
+**同時に `EVIDENCE_FORMATS` へ形式要件を登録しなければならない。**
+
+登録を忘れたキーは、`⚠️ no format requirement registered` を返して readiness チェックを FAIL させる。
+これは意図した挙動である。登録漏れのキーを「形式要件が無いのだから素通り」として扱うと、
+そのキーだけが Issue #128 以前の presence-only 判定（＝空でなければ ✅）へ戻ることになり、
+本ドキュメントが要求している検査が、追加した本人にも気づかれないまま無効化される。
+
+この不変条件は `tests/unit/production-evidence-report.test.ts` の
+`evidence format registration is exhaustive` が双方向に表明する。
+
+| 表明 | 防ぐもの |
+| --- | --- |
+| 検査対象キー ⊆ `EVIDENCE_FORMATS` | 要件の登録漏れ（そのキーだけ検査されない） |
+| `EVIDENCE_FORMATS` ⊆ 検査対象キー | 死んだ要件（書いたが誰も参照しない要件を「効いている」と誤認する） |
+
+実行時の fail-closed とテストの網羅表明は役割が異なり、片方では足りない。
+テストだけでは本番実行時に素通りし、実行時分岐だけでは「なぜ ⚠️ なのか」が実装者へ伝わらない。
 
 ## 5. 関連
 

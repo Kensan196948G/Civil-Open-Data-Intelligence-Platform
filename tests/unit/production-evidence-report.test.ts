@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { createRequire } from "node:module";
 
 const repoRoot = process.cwd();
 const scriptPath = path.join(repoRoot, "scripts/tools/production-evidence-report.js");
@@ -209,6 +210,56 @@ const EVIDENCE_KEYS = [
   "CODIP_ROLLBACK_OWNER",
   "CODIP_BACKUP_RESTORE_EVIDENCE",
 ] as const;
+
+const require = createRequire(import.meta.url);
+const evidenceModule = require(scriptPath) as {
+  EVIDENCE_FORMATS: Record<string, unknown>;
+  MONITORING_ENV_KEYS: string[];
+  BACKUP_RESTORE_ENV_KEYS: string[];
+  evidenceFormatState: (key: string, value: string, now: Date) => string;
+};
+
+describe("evidence format registration is exhaustive (Issue #128)", () => {
+  // Without these three assertions, adding an evidence key and forgetting its
+  // EVIDENCE_FORMATS entry is invisible: the key would be format-checked by
+  // nobody, and every test here would still pass. That is the Issue #128 defect
+  // re-entering through a registration gap rather than through the checker.
+  const checkedKeys = [
+    ...evidenceModule.MONITORING_ENV_KEYS,
+    ...evidenceModule.BACKUP_RESTORE_ENV_KEYS,
+  ].sort();
+  const specKeys = Object.keys(evidenceModule.EVIDENCE_FORMATS).sort();
+
+  it("registers a format requirement for every checked evidence key", () => {
+    expect(checkedKeys.filter((key) => !specKeys.includes(key))).toEqual([]);
+  });
+
+  it("has no format requirement that no evidence key uses", () => {
+    // The reverse direction. A dead spec means a requirement someone wrote and
+    // believes is enforced, which is enforced nowhere.
+    expect(specKeys.filter((key) => !checkedKeys.includes(key))).toEqual([]);
+  });
+
+  it("keeps this file's own key list in step with the script", () => {
+    // EVIDENCE_KEYS / EVIDENCE_READINESS_LABELS below are hand-maintained copies.
+    // If they drift, the per-key cases stop covering what the script checks.
+    expect([...EVIDENCE_KEYS].sort()).toEqual(checkedKeys);
+    expect(EVIDENCE_READINESS_LABELS).toHaveLength(checkedKeys.length);
+  });
+
+  it("refuses to pass an evidence key that has no registered format", () => {
+    // Fail-closed proof, independent of the lists above: even a perfectly
+    // ordinary non-empty value must not produce ✅ for an unregistered key.
+    const state = evidenceModule.evidenceFormatState(
+      "CODIP_UNREGISTERED_EVIDENCE_KEY",
+      "an entirely reasonable looking evidence string 2026-08-12",
+      new Date("2026-08-12T00:00:00Z"),
+    );
+
+    expect(state.startsWith("✅")).toBe(false);
+    expect(state).toContain("no format requirement registered");
+  });
+});
 
 describe("production evidence format requirements (Issue #128)", () => {
   it("rejects the two characters that used to satisfy all eight checks", () => {

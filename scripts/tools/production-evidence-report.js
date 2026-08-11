@@ -266,7 +266,17 @@ function evidenceFormatState(key, value, now) {
   if (!presence.startsWith("✅")) return presence;
 
   const spec = EVIDENCE_FORMATS[key];
-  if (!spec) return presence;
+  // Fail closed. Returning `presence` here would mean "an evidence key with no
+  // registered format silently reverts to presence-only", which is the exact
+  // defect this change removes — reintroduced through a default that looks
+  // defensive. A missing spec is a registration bug, and a registration bug must
+  // not be able to produce a ✅ that a readiness check reads as evidence.
+  // The exhaustiveness assertion in tests/unit/production-evidence-report.test.ts
+  // is what keeps this branch unreachable; this branch is what makes the failure
+  // safe on the day the assertion is bypassed (e.g. a key added at runtime).
+  if (!spec) {
+    return `⚠️ no format requirement registered (add ${key} to EVIDENCE_FORMATS)`;
+  }
 
   const trimmed = value.trim();
   const problems = [
@@ -500,4 +510,13 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { buildReport, evidenceFormatState, EVIDENCE_FORMATS };
+module.exports = {
+  buildReport,
+  evidenceFormatState,
+  EVIDENCE_FORMATS,
+  // Exported so the test suite can assert that these lists and EVIDENCE_FORMATS
+  // stay in one-to-one correspondence. Without that assertion the fail-closed
+  // branch above is only found by a production run.
+  MONITORING_ENV_KEYS,
+  BACKUP_RESTORE_ENV_KEYS,
+};
