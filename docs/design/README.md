@@ -9,6 +9,13 @@
 | 取得日 | 2026-07-18 (DesignSync MCP 経由) |
 | 位置づけ | **仕様・参照物**。production 実装 (`src/app/`) とは区別する。実装は本ファイルのレイアウト・配色・情報設計・導線を可能な範囲で維持する |
 
+## 裁定記録
+
+| 文書 | 内容 |
+| --- | --- |
+| [`font-hosting-and-csp-decision.md`](font-hosting-and-csp-decision.md) | フォント配信方式と CSP 許可ホスト (Issue #36)。self-host 化の実測評価と保留継続の根拠 |
+| [`pwa-mobile-design.md`](pwa-mobile-design.md) | PWA / モバイル対応のデザイン方針 |
+
 ## デザイントークン (実装は `src/app/globals.css` の CSS 変数)
 
 | トークン | 値 | 用途 |
@@ -28,7 +35,7 @@
 | `--purple` / `--purple-bg` | `#6B45B0` / `#EDE7F6` | 補助 |
 | `--radius` | `10px` | カード角丸 |
 | `--shadow` | `0 1px 2px rgba(16,24,40,.04)` | カード影 |
-| フォント | IBM Plex Sans JP / IBM Plex Mono (next/font/google で self-host) | 全体 / コード・数値 |
+| フォント | IBM Plex Sans JP / IBM Plex Mono (Google Fonts を `<link>` で読み込み。self-host しない裁定と実測根拠は [`font-hosting-and-csp-decision.md`](font-hosting-and-csp-decision.md)) | 全体 / コード・数値 |
 
 ## 画面構成 (VIEW_META)
 

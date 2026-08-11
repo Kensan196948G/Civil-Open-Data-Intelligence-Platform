@@ -23,8 +23,10 @@ const securityHeaders = [
       "form-action 'self'",
       scriptSrc,
       // fonts.googleapis.com / fonts.gstatic.com はデザイン正本 (docs/design/) 指定の
-      // IBM Plex フォント配信のみに使用。next/font はこの環境の WASM メモリ制限
-      // (上記 webpack ワークアラウンドと同根) でビルド不能のため <link> 方式を採用
+      // IBM Plex フォント配信のみに使用。self-host 化は 2026-08-11 に実測評価し、
+      // next/font はビルド不能 (WASM メモリ制限。上記 webpack ワークアラウンドと同根)
+      // かつ日本語 subset 非対応、woff2 直接同梱は 507 ファイル 5.70MB で見送り。
+      // 詳細は docs/design/font-hosting-and-csp-decision.md (Issue #36)
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       // OSM タイルはモック完全一致の人間判断 (2026-07-18) による。GSI は標高 API 等で残置
