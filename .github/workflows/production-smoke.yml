@@ -132,6 +132,20 @@ jobs:
               "詳細は run の Summary と `production-status` artifact (14日保持) を参照してください。",
             ].join("\n");
 
+            // 起票に使うlabelがリポジトリへ未登録でも通知を落とさないよう、
+            // 事前に冪等作成する (既存なら422を無視)。labelの事前手動登録という
+            // 外部依存を残すと、忘れた時に気づくのが障害発生時になる。
+            const ensureLabel = async (name, color, description) => {
+              try {
+                await github.rest.issues.createLabel({ owner, repo, name, color, description });
+              } catch (error) {
+                if (error.status !== 422) throw error;
+              }
+            };
+            await ensureLabel("incident", "b60205", "本番障害。runbookの初動対象");
+            await ensureLabel(DEDUPE_LABEL, "d93f0b", "production smoke workflowが自動起票したincident");
+            await ensureLabel(severity, severity === "P1" ? "b60205" : "fbca04", `重大度 ${severity}`);
+
             // 15分間隔のprobeが継続失敗するとrun毎にIssueが増えるため、
             // 未クローズのincidentがあればコメント追記に寄せる。
             const { data: openIncidents } = await github.rest.issues.listForRepo({

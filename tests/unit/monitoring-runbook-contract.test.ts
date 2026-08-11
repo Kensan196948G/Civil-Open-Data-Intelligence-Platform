@@ -118,6 +118,15 @@ describe("production smoke workflow contract", () => {
     expect(smokeWorkflow).toMatch(/let consecutiveFailures = null;[\s\S]*?try \{[\s\S]*?\} catch/);
   });
 
+  it("does not depend on labels having been registered by hand", () => {
+    // None of incident / production-smoke / P1 / P2 existed in the repository
+    // when this was written. Requiring manual setup means the omission is
+    // discovered during an outage, so the workflow creates them idempotently.
+    expect(smokeWorkflow).toContain("createLabel");
+    expect(smokeWorkflow).toMatch(/error\.status !== 422/);
+    expect(monitoringRunbook).toContain("workflowが起票前に冪等作成する");
+  });
+
   it("pins the notification action to a full commit SHA", () => {
     const pinned = smokeWorkflow.match(/uses:\s*actions\/github-script@(\S+)/)?.[1];
     expect(pinned).toMatch(/^[0-9a-f]{40}$/);

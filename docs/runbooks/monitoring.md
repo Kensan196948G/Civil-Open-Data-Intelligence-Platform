@@ -118,6 +118,7 @@ odipはCloudflare Access配下のため、workflowはGitHub Actions Secret `CF_A
 | 重複防止 | `production-smoke` label のopen Issueが在れば新規作成せずコメント追記。15分間隔のprobeがIssueを量産しない |
 | 重大度 | 連続1回=P2、連続2回以上=P1（既存Issueへは `P1` labelを追加して昇格） |
 | 本文 | 重大度・連続失敗回数・失敗runのURL・検知時刻のみ。probe出力は14日保持artifact側に置き、Secret/認証情報/PIIをIssueへ持ち込まない |
+| label | `incident` / `production-smoke` / `P1`\|`P2`。2026-08-11時点でリポジトリ未登録のため、workflowが起票前に冪等作成する（既存は422を無視）。label の事前手動登録を前提にすると、忘れた時に気づくのが障害発生時になる |
 
 外部webhookやチャット連携は**採用しない**。通知先Secretの追加は人間承認事項（Approval PR / CLAUDE.md §17）であり、`GITHUB_TOKEN` の既定権限で完結するIssue起票に限定している。
 
