@@ -116,31 +116,51 @@ CODIP_ADMIN_TOKEN="$CODIP_ADMIN_TOKEN" npm run release:smoke -- --base-url http:
 
 | 項目 | 内容 |
 | --- | --- |
-| Secret | `CODIP_NEON_PGDUMP_DATABASE_URL` と `CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE`。専用dumpロールまたは最小権限URLを登録し、どちらもログではmaskする |
-| Variables/Input | `CODIP_NEON_PROJECT_ID`、`CODIP_NEON_PGDUMP_HOST`（main branchの期待endpoint hostname）、`CODIP_NEON_HISTORY_WINDOW_HOURS`、`CODIP_LAST_RESTORE_DRILL_AT`、`CODIP_BACKUP_OWNER`。証跡branchはworkflowで`main`に固定し、Secret URLのhostnameが期待値と不一致ならdump前にfail-closed |
+| Secret | `CODIP_NEON_PGDUMP_DATABASE_URL` と `CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE`。専用dumpロールまたは最小権限URLを登録し、どちらもログではmaskする。加えてPITR実測用の `CODIP_NEON_API_KEY`（**project スコープの読み取り専用鍵を推奨**）が必要。⚠️ 本番Secretの追加はCLAUDE.md §17 のApproval対象であり、**2026-08-12時点で未登録** |
+| Variables/Input | `CODIP_NEON_PROJECT_ID`、`CODIP_NEON_PGDUMP_HOST`（main branchの期待endpoint hostname）、`CODIP_NEON_HISTORY_WINDOW_HOURS`、`CODIP_LAST_RESTORE_DRILL_AT`、`CODIP_LAST_RESTORE_DRILL_STATUS`、`CODIP_LAST_RESTORE_DRILL_RECORD`、`CODIP_BACKUP_OWNER`。いずれも `Validate backup inputs` の必須リストに含まれ、**未設定なら合成既定値で通過せずジョブが失敗する**。証跡branchはworkflowで`main`に固定し、Secret URLのhostnameが期待値と不一致ならdump前にfail-closed |
 | Artifact | custom format dumpをGPG AES256で暗号化した `codip-neon-pgdump-<UTC>.dump.gpg` を14日保持。復号Secretを持つ本番運用者に限定する |
 | Evidence | `neon-backup-evidence` artifactを30日保持。Secretを含めず、PITR window、dump鮮度、restore drill鮮度を検査する |
-| Fail closed | dump URL Secret未設定、暗号化Secret未設定、restore drill日時未記録、dump/暗号化失敗、証跡鮮度NGではworkflowを失敗させる |
+| Fail closed | dump URL Secret未設定、暗号化Secret未設定、**restore drillの日時・判定・記録参照のいずれかが未記録**、**PITR保持期間を実測できない**、dump/暗号化失敗、証跡鮮度NGではworkflowを失敗させる |
 
-初回運用時は `workflow_dispatch` で `restore_drill_at` を明示し、成功したActions run URLとartifact名をIssue #63へ記録する。Secretや接続文字列はIssue、README、ログへ貼らない。
+初回運用時は `workflow_dispatch` で `restore_drill_at` / `restore_drill_status` / `restore_drill_record` を明示し、成功したActions run URLとartifact名をIssue #63へ記録する。Secretや接続文字列はIssue、README、ログへ貼らない。復旧訓練そのものの実施手順と記録台帳は [復旧訓練 実施記録](./restore-drill-record.md) にある。
 
 ```bash
+# Neon control-plane の読み取り鍵は環境変数名で渡す。値を引数に書かない
+export CODIP_NEON_API_KEY='<neon control-plane read key>'
+
 npm run release:create-neon-backup-evidence -- \
   --project-id falling-dawn-93620497 \
   --branch main \
   --endpoint-host '<main-endpoint>.neon.tech' \
-  --history-window-hours 24 \
   --pg-dump-file /secure/artifacts/codip.dump \
   --restore-drill-at 2026-07-19T06:30:00Z \
+  --restore-drill-status success \
+  --restore-drill-record 'docs/runbooks/restore-drill-record.md#2026-07-19' \
   --owner release-manager \
   --pretty > evidence/neon-backup.json
 
 npm run release:check-neon-backup-evidence
 ```
 
-`release:create-neon-backup-evidence` はDBへ接続せず、dumpファイルの存在、サイズ、mtime、運用者が入力したPITR/restore drill情報から非Secret JSONを生成する。dump内容は読まない。Secret-bearingな `pg_dump` 実行とartifact uploadは承認済みGitHub Actionsまたは運用端末で行い、生成されたJSONだけを `CODIP_NEON_BACKUP_EVIDENCE_JSON` または `--evidence-file` へ渡す。
+`release:create-neon-backup-evidence` はDBへ接続しない。dumpファイルの存在、サイズ、mtimeと、Neon control-plane から取得したPITR保持期間から非Secret JSONを生成する。dump内容は読まない。Secret-bearingな `pg_dump` 実行とartifact uploadは承認済みGitHub Actionsまたは運用端末で行い、生成されたJSONだけを `CODIP_NEON_BACKUP_EVIDENCE_JSON` または `--evidence-file` へ渡す。
 
-最低限の証跡項目は `checkedAt`、`projectId`、`branch`、`historyWindowHours`、`lastPgDumpAt`、`lastPgDumpStatus`、`lastPgDumpArtifact`、`lastRestoreDrillAt`、`restoreDrillStatus`、`owner` とする。`lastPgDumpArtifact` はartifact名、保管先ID、または内部チケットIDに限定し、PostgreSQL URL、password、Neon API tokenを含めない。既定ゲートは `pg_dump` が24時間を超えて古い場合、PITR windowが24時間未満の場合、restore drillが30日を超えて古い場合に失敗する。
+> ⚠️ **Issue #126 / #127 による仕様変更（2026-08-11）。上の例から次のいずれかを外すと fail-closed で異常終了する。**
+>
+> | フラグ | 必須 | 未指定時の挙動 |
+> | --- | :---: | --- |
+> | `--restore-drill-status` | ✅ | 異常終了。**既定値 `success` は撤廃した**。語彙は `success` / `failed` / `partial` / `blocked` / `not-run` |
+> | `--restore-drill-record` | ✅ | 異常終了。[復旧訓練記録](./restore-drill-record.md) への非Secret な参照を渡す |
+> | `--pg-dump-status` | 条件付き | `--pg-dump-file` があれば**実測**するため不要。`--pg-dump-artifact` 経路では必須。実測と矛盾する値を渡した場合は**どちらも記録せず**異常終了 |
+> | `CODIP_NEON_API_KEY`（環境変数） | ✅ | PITR保持期間を実測できず異常終了。**推定値へのフォールバックは無い**。変数名は `--neon-api-key-env` で変更できる |
+> | `--history-window-hours` | ❌ | 任意。**ゲートの判定には使われず**、実測値とのドリフト検出用に `historyWindowHoursDeclared` として記録されるだけ |
+
+最低限の証跡項目は `checkedAt`、`projectId`、`branch`、`historyRetentionSecondsMeasured`、`historyRetentionMeasuredAt`、`historyRetentionProjectId`、`historyRetentionSource`、`lastPgDumpAt`、`lastPgDumpStatus`、`lastPgDumpStatusSource`、`lastPgDumpArtifact`、`lastRestoreDrillAt`、`restoreDrillStatus`、`restoreDrillRecord`、`owner` とする。`lastPgDumpArtifact` はartifact名、保管先ID、または内部チケットIDに限定し、PostgreSQL URL、password、Neon API tokenを含めない。
+
+既定ゲートは次の場合に失敗する。**PITR の判定に使うのは実測値 `historyRetentionSecondsMeasured` であり、運用者が申告した `historyWindowHours` ではない。**
+
+- 実測PITR保持期間が24時間未満、実測値が欠落、実測時刻 `historyRetentionMeasuredAt` が24時間を超えて古い、または実測対象のproject idが `projectId` と不一致
+- `pg_dump` が24時間を超えて古い
+- restore drillが30日を超えて古い、または `restoreDrillStatus` が `success` 以外
 
 ## 5. 移行順序
 

@@ -1,5 +1,11 @@
 #!/usr/bin/env node
 
+const {
+  PRODUCTION_SCRIPT_SRC_VARIANT,
+  describeCspProblems,
+  evaluateCspHeaders,
+} = require("./csp-contract");
+
 function argValue(name, fallback) {
   const index = process.argv.indexOf(name);
   return index >= 0 ? process.argv[index + 1] : fallback;
@@ -51,6 +57,40 @@ function requireHeader(checks, headers, name) {
 
 function requireCondition(checks, name, ok, detail) {
   checks.push({ name, ok, detail });
+}
+
+/**
+ * CSP をディレクティブ単位で契約 (scripts/tools/csp-contract.js) と突き合わせる。
+ *
+ * Issue #129 以前はここが部分文字列照合で、次の 3 つが素通りしていた:
+ *   1. ディレクティブの追加 — `script-src` に外部オリジンを足しても、探していた
+ *      4 つの部分文字列は全て残るため合格した
+ *   2. `connect-src` の削除 — `https://cyberjapandata.gsi.go.jp` は `img-src` にも
+ *      現れるため、`connect-src` を丸ごと消しても `img-src` 側の出現で成立した
+ *   3. 未検査ディレクティブ — `base-uri` / `form-action` / `style-src` / `font-src` /
+ *      `img-src` は名前すら参照されていなかった
+ *
+ * ヘッダ集合ごと渡すのは、report-only ヘッダの追加を検知するためである
+ * (既存ヘッダだけを見る形だと middleware による別ヘッダ追加が素通りする)。
+ *
+ * `scriptSrcVariant` を production に固定するのは必須である。固定しないと、本番が
+ * 誤って development 構成 (`'unsafe-eval'` 込み) を配信していても「development への
+ * 一致」として説明されてしまう。`npm run release:smoke` の呼び出し元は CI の
+ * `start:checked` (next start) と本番 Worker のいずれも production build である。
+ */
+function requireCspContract(checks, headers) {
+  const observed = headers.get("content-security-policy") ?? "(missing)";
+  const problems = evaluateCspHeaders(Object.fromEntries(headers.entries()), {
+    scriptSrcVariant: PRODUCTION_SCRIPT_SRC_VARIANT,
+  });
+  requireCondition(
+    checks,
+    "header:csp value",
+    problems.length === 0,
+    problems.length === 0
+      ? `matched ${PRODUCTION_SCRIPT_SRC_VARIANT} variant: ${observed}`
+      : `${describeCspProblems(problems).replace(/\n/g, " | ")} || observed: ${observed}`,
+  );
 }
 
 function firstCoordinateFromGeometry(geometry) {
@@ -167,17 +207,7 @@ async function main() {
   ]) {
     requireHeader(checks, rootHead.headers, header);
   }
-  const csp = rootHead.headers.get("content-security-policy") ?? "";
-  requireCondition(
-    checks,
-    "header:csp value",
-    csp.includes("default-src 'self'") &&
-      csp.includes("object-src 'none'") &&
-      csp.includes("frame-ancestors 'none'") &&
-      csp.includes("https://cyberjapandata.gsi.go.jp") &&
-      !csp.includes("'unsafe-eval'"),
-    csp,
-  );
+  requireCspContract(checks, rootHead.headers);
   const hsts = rootHead.headers.get("strict-transport-security") ?? "";
   requireCondition(
     checks,
@@ -624,7 +654,14 @@ async function main() {
   console.log(`[release-smoke] OK ${checks.length} checks against ${baseUrl}`);
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+// require.main ガードは単体テストのため。tests/unit/release-smoke-csp.test.ts が
+// requireCspContract を直接叩いて「Issue #129 の 3 つの素通り変更で FAIL する」ことを
+// 証明する。ガードが無いと require した瞬間に main() が本番 URL を叩きに行く。
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
+
+module.exports = { requireCspContract };
