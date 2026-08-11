@@ -244,7 +244,11 @@ async function ensureDnsRecord(token) {
   console.log(`[deploy-production] created proxied AAAA record for ${PRODUCTION_HOST}`);
 }
 
-async function main() {
+// Exported so the wiring itself can be executed, not just described. A test
+// that only exercises resolveEvidenceEnv() proves the function is fail-closed
+// while saying nothing about whether main() still calls it: replacing the line
+// below with `const evidenceEnv = {}` left the whole suite green (T-B12).
+export async function main() {
   const neonKey = requiredEnv("NEON_API_KEY");
   const cfToken = requiredEnv("CLOUDFLARE_API_TOKEN");
   requiredEnv("CLOUDFLARE_ACCOUNT_ID");
@@ -352,8 +356,9 @@ async function main() {
 }
 
 // Only run when this file is the entrypoint. tests/unit/deploy-production-evidence.test.ts
-// imports resolveEvidenceEnv from here to prove the fail-closed behaviour;
-// without the guard, importing the module would start a real production deploy.
+// imports resolveEvidenceEnv and main from here to prove the fail-closed
+// behaviour and its wiring; without the guard, importing the module would start
+// a real production deploy.
 function invokedAsScript() {
   const entry = process.argv[1];
   if (!entry) return false;

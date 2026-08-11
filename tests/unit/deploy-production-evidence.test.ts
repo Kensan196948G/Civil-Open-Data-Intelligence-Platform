@@ -1,7 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// deploy 経路が子プロセスを起こさないことを観測するための差し替え。
+// 実体の spawnSync を残すと、結線が壊れた場合に本物の npx / wrangler が走る。
+const spawnSyncMock = vi.hoisted(() => vi.fn());
+vi.mock("node:child_process", () => ({ spawnSync: spawnSyncMock }));
 
 import {
   EVIDENCE_ENV_KEYS,
+  main,
   resolveEvidenceEnv,
 } from "../../scripts/deploy/deploy-production.mjs";
 import { EVIDENCE_FORMATS } from "../../scripts/tools/production-evidence-report.js";
@@ -166,5 +172,79 @@ describe("本番 deploy の証跡変数 fail-closed 化 (T-B7)", () => {
     // 形式定義に 9 件目を足しながら deploy 側の必須集合を更新し忘れる、の逆も同様に
     // ここで落ちる。「検査する変数」と「無ければ止める変数」がずれないための結線。
     expect([...EVIDENCE_ENV_KEYS].sort()).toEqual(Object.keys(EVIDENCE_FORMATS).sort());
+  });
+});
+
+/**
+ * ゲートが「正しいこと」と「呼ばれていること」は別の主張である (T-B12)。
+ *
+ * 上のブロックは resolveEvidenceEnv() が fail-closed であることを証明するが、
+ * main() がそれを呼ぶことは見ていない。実測: deploy-production.mjs の
+ * `const evidenceEnv = skipDeploy ? {} : resolveEvidenceEnv();` を
+ * `const evidenceEnv = {};` へ置き換えても、64 files 704 tests は全て緑だった。
+ * 関数を fail-closed に直しても、呼び出しを外せば元の状態に戻る。
+ *
+ * ここでは main() を実際に走らせ、証跡変数が無いときに
+ *   1. 停止すること
+ *   2. remote 読み取り (fetch) にも子プロセス (spawnSync) にも到達していないこと
+ * を測る。source の文字列照合ではないので、関数の改名や行の移動では欺けない。
+ *
+ * ⚠ 測っていないこと:
+ *   - 観測点は fetch と spawnSync の 2 つだけである。この 2 つを経由しない副作用
+ *     （ファイル書き込み等）より前であることは主張していない。現状の main() が
+ *     ゲートより後に持つ副作用はこの 2 種類だけだが、増えたら観測点も足すこと。
+ *   - `--skip-deploy` は argv 由来の module 定数なので、この経路 (skipDeploy=false)
+ *     だけを測っている。ゲートを常に skip 側へ倒す改変はここで落ちる。
+ */
+describe("証跡ゲートの deploy 経路への結線 (T-B12)", () => {
+  /** ゲートより前で main() が要求する変数。値そのものは使われない。 */
+  const PREGATE_ENV_KEYS = ["NEON_API_KEY", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"];
+  const saved: Record<string, string | undefined> = {};
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    for (const key of [...PREGATE_ENV_KEYS, ...EVIDENCE_ENV_KEYS]) {
+      saved[key] = process.env[key];
+      delete process.env[key];
+    }
+    // 実値ではない。requiredEnv を通すためだけの合成値。
+    for (const key of PREGATE_ENV_KEYS) {
+      process.env[key] = ["unit", "test", key.toLowerCase()].join("-");
+    }
+    fetchMock = vi.fn(() => Promise.reject(new Error("remote call must not be reached")));
+    vi.stubGlobal("fetch", fetchMock);
+    spawnSyncMock.mockReset();
+  });
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    vi.unstubAllGlobals();
+  });
+
+  it("対照: 2 つの観測点が実際に差し替わっている", async () => {
+    // これが落ちるなら、下 2 件の not.toHaveBeenCalled() は「呼ばれていない」
+    // ではなく「観測していない」を意味する。空虚な合格を防ぐための対照。
+    const { spawnSync } = await import("node:child_process");
+    expect(spawnSync).toBe(spawnSyncMock);
+    expect(globalThis.fetch).toBe(fetchMock);
+  });
+
+  it("証跡変数が無ければ main() は停止する", async () => {
+    await expect(main()).rejects.toThrow(/missing required production evidence env/);
+  });
+
+  it("その停止は remote 読み取りにも子プロセスにも到達する前に起きる", async () => {
+    await expect(main()).rejects.toThrow();
+    expect(
+      fetchMock,
+      "Neon/Cloudflare API を呼んでからゲートが動いている (順序が逆転した)",
+    ).not.toHaveBeenCalled();
+    expect(
+      spawnSyncMock,
+      "prisma/wrangler を起動してからゲートが動いている (順序が逆転した)",
+    ).not.toHaveBeenCalled();
   });
 });

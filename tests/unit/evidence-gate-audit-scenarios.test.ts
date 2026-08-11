@@ -241,6 +241,13 @@ const SCENARIOS: Record<string, Scenario> = {
       }
     },
   },
+  // SB12: SB7 のゲートが main() から呼ばれていることは
+  // deploy-production-evidence.test.ts が実行して測る。ここで宣言に留めるのは、
+  // その実測が届かない残余 (観測点が fetch / spawnSync の2経路だけであること) の方で、
+  // 「観測点を持たない副作用より前である」ことを実行で示す手段が今は無いためである。
+  // 本ファイルへ結線検査を移すこともできない: 子プロセス砂場 (SB7 / S22) が実体の
+  // spawnSync を使うため、同一ファイルで node:child_process を差し替えられない。
+  SB12: { kind: "declared" },
   // #1 / #3 は T-B4 (Issue #126 / #127) の是正で、当時この仕組みが無かった。
   // 実行検査には Neon control-plane API と pg_dump artifact の実体が要る。
   S1: { kind: "declared" },
