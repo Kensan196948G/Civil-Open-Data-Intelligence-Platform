@@ -2,17 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminRequest } from "@/lib/admin-auth";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
+import { renderReport, REPORT_FORMATS, type ReportFormat } from "@/lib/report-export";
 
 const TEMPLATES = new Set(["daily", "weekly", "monthly", "decision", "marine", "annual"]);
-
-function escapeCsv(value: unknown): string {
-  const text = value == null ? "" : String(value);
-  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
-
-function csv(headers: string[], rows: unknown[][]): string {
-  return [headers, ...rows].map((row) => row.map(escapeCsv).join(",")).join("\n") + "\n";
-}
 
 export async function POST(request: NextRequest) {
   const authError = requireAdminRequest(request);
@@ -23,7 +15,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const siteId = typeof body?.siteId === "string" ? body.siteId : "";
   const template = typeof body?.template === "string" ? body.template : "";
-  const format = body?.format === "markdown" ? "markdown" : "csv";
+  const format: ReportFormat = REPORT_FORMATS.includes(body?.format) ? body.format : "csv";
   if (!siteId || !TEMPLATES.has(template)) {
     return NextResponse.json({ error: { code: "invalid_query", message: "siteId/template(daily|weekly|monthly|decision|marine|annual) を確認してください" } }, { status: 400 });
   }
@@ -68,11 +60,11 @@ export async function POST(request: NextRequest) {
     rows = summarizePeriods(weather, marine, template);
   }
 
-  const filename = `report_${template}_${siteId.slice(0, 8)}.${format === "markdown" ? "md" : "csv"}`;
-  const content = format === "markdown" ? toMarkdown(headers, rows, template, siteId) : csv(headers, rows);
-  return new NextResponse(content, {
+  const rendered = renderReport(format, headers, rows, template, siteId);
+  const filename = `report_${template}_${siteId.slice(0, 8)}.${rendered.extension}`;
+  return new NextResponse(rendered.body, {
     headers: {
-      "Content-Type": format === "markdown" ? "text/markdown; charset=utf-8" : "text/csv; charset=utf-8",
+      "Content-Type": rendered.contentType,
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
@@ -119,20 +111,4 @@ function summarizePeriods(
 
 function round(value: number | null): number | null {
   return value === null ? null : Math.round(value * 1000) / 1000;
-}
-
-function toMarkdown(headers: string[], rows: unknown[][], template: string, siteId: string): string {
-  const lines = [
-    `# ${template} レポート`,
-    "",
-    `- 現場: ${siteId}`,
-    `- 生成日時: ${new Date().toISOString()}`,
-    "",
-    "| " + headers.join(" | ") + " |",
-    "| " + headers.map(() => "---").join(" | ") + " |",
-    ...rows.map((row) => "| " + row.map((v) => String(v ?? "")).join(" | ") + " |"),
-    "",
-    "> ⚠️ 本レポートは確認支援です。施工可否・安全性・法令適合を断定しません。",
-  ];
-  return lines.join("\n") + "\n";
 }
