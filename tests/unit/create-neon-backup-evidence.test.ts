@@ -125,8 +125,15 @@ function runGate(evidenceJson: string, extraArgs: string[] = ["--now", "2026-07-
 const DRILL_ARGS = [
   "--restore-drill-status",
   "success",
+  // The reference used to carry `#2026-07-19`, an anchor that has never existed
+  // in that ledger -- the same shape of defect as the value measured in
+  // production on 2026-08-12. It survived because the gate only checked that the
+  // string was non-empty. Now that the gate resolves the reference, a fabricated
+  // anchor here would fail, and the honest repair is to stop fabricating it: the
+  // ledger's record table has no per-row heading, so naming the file is the most
+  // specific reference that actually resolves.
   "--restore-drill-record",
-  "docs/runbooks/restore-drill-record.md#2026-07-19",
+  "docs/runbooks/restore-drill-record.md",
 ];
 
 function baseArgs(extra: string[]) {
@@ -476,17 +483,43 @@ describe("create-neon-backup-evidence restore drill and pg_dump status", () => {
       "--restore-drill-status",
       "success",
       "--restore-drill-record",
-      "docs/runbooks/restore-drill-record.md#2026-07-19",
+      "docs/runbooks/restore-drill-record.md",
     ]);
 
     expect(result.status).toBe(0);
     const evidence = JSON.parse(result.stdout);
     expect(evidence.restoreDrillStatus).toBe("success");
-    expect(evidence.restoreDrillRecord).toBe("docs/runbooks/restore-drill-record.md#2026-07-19");
+    expect(evidence.restoreDrillRecord).toBe("docs/runbooks/restore-drill-record.md");
 
     const gate = runGate(result.stdout, []);
     expect(gate.status).toBe(0);
     expect(gate.stdout).toContain("restoreDrillStatus is success | ✅");
+  });
+
+  it("writes a reference it cannot resolve, and the gate is what rejects it", async () => {
+    const result = await stubbedRun([
+      "--restore-drill-status",
+      "success",
+      "--restore-drill-record",
+      "docs/runbooks/restore-drill-record.md#2026-07-19",
+    ]);
+
+    // The generator's guarantee is presence, not resolvability: it never opens
+    // the document it is handed a path to, so it records the anchor verbatim
+    // rather than silently repairing or stripping it. That division is
+    // deliberate -- rewriting the operator's reference would hide the mistake
+    // instead of reporting it -- but it means presence alone cannot be trusted
+    // downstream, which is exactly the gap the value recorded in production on
+    // 2026-08-12 fell through.
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout).restoreDrillRecord).toBe(
+      "docs/runbooks/restore-drill-record.md#2026-07-19",
+    );
+
+    const gate = runGate(result.stdout, []);
+    expect(gate.status).toBe(1);
+    expect(gate.stdout).toContain("restoreDrillRecord resolves | ⚠️");
+    expect(gate.stdout).toContain("has no anchor #2026-07-19");
   });
 
   it("records a failed drill and the gate rejects it", async () => {
@@ -494,7 +527,7 @@ describe("create-neon-backup-evidence restore drill and pg_dump status", () => {
       "--restore-drill-status",
       "failed",
       "--restore-drill-record",
-      "docs/runbooks/restore-drill-record.md#2026-07-19",
+      "docs/runbooks/restore-drill-record.md",
     ]);
 
     expect(result.status).toBe(0);
@@ -525,7 +558,7 @@ describe("create-neon-backup-evidence restore drill and pg_dump status", () => {
       "--restore-drill-status",
       "success",
       "--restore-drill-record",
-      "docs/runbooks/restore-drill-record.md#2026-07-19",
+      "docs/runbooks/restore-drill-record.md",
     ]);
 
     expect(result.status).toBe(0);
@@ -544,7 +577,7 @@ describe("create-neon-backup-evidence restore drill and pg_dump status", () => {
       "--restore-drill-status",
       "success",
       "--restore-drill-record",
-      "docs/runbooks/restore-drill-record.md#2026-07-19",
+      "docs/runbooks/restore-drill-record.md",
     ]);
 
     // Neither value is recorded: one of them is wrong and the tool cannot tell

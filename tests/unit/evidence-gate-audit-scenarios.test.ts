@@ -201,6 +201,55 @@ function jobBlock(source: string, jobName: string): string {
   return (end === -1 ? rest : rest.slice(0, end)).join("\n");
 }
 
+// --- SB13: restoreDrillRecord の参照解決 -------------------------------------
+
+const BACKUP_EVIDENCE_GATE = "scripts/tools/check-neon-backup-evidence.js";
+
+/**
+ * 他の判定行がすべて緑になる証跡。restoreDrillRecord 以外の次元で落ちると
+ * run() の false が「解決検査が効いた」なのか「別の検査が落ちた」なのか
+ * 区別できなくなるため、参照だけを動かせる土台として置く。
+ */
+const RESOLVABLE_DRILL_RECORD = "docs/runbooks/restore-drill-record.md";
+
+function backupEvidenceWith(restoreDrillRecord: string) {
+  return {
+    checkedAt: "2026-07-20T07:00:00Z",
+    projectId: "falling-dawn-93620497",
+    branch: "main",
+    endpointHost: "ep-main.example.neon.tech",
+    historyWindowHours: 24,
+    historyRetentionSecondsMeasured: 86400,
+    historyRetentionMeasuredAt: "2026-07-20T07:00:00Z",
+    historyRetentionProjectId: "falling-dawn-93620497",
+    historyRetentionSource: "neon-api:GET /projects/{project_id}#history_retention_seconds",
+    lastPgDumpAt: "2026-07-20T06:30:00Z",
+    lastPgDumpStatus: "success",
+    lastPgDumpStatusSource: "artifact-stat:regular-file,size>0",
+    lastPgDumpArtifact: "secure-artifact://codip/neon/20260720T063000Z.dump",
+    lastRestoreDrillAt: "2026-07-19T06:30:00Z",
+    restoreDrillStatus: "success",
+    restoreDrillRecord,
+    owner: "release-manager",
+  };
+}
+
+/** ゲートを実プロセスで走らせ、通ったかどうかを返す。 */
+function backupEvidenceGatePasses(restoreDrillRecord: string): boolean {
+  const result = spawnSync(
+    process.execPath,
+    [
+      path.join(REPO_ROOT, BACKUP_EVIDENCE_GATE),
+      "--evidence-json",
+      JSON.stringify(backupEvidenceWith(restoreDrillRecord)),
+      "--now",
+      "2026-07-20T07:30:00Z",
+    ],
+    { cwd: REPO_ROOT, encoding: "utf8" },
+  );
+  return result.status === 0;
+}
+
 // --- シナリオ登録簿 ---------------------------------------------------------
 
 /**
@@ -279,6 +328,19 @@ const SCENARIOS: Record<string, Scenario> = {
   SB139: {
     kind: "executed",
     run: () => !jobBlock(codeqlWorkflow, "analyze").includes("check-codeql-sarif.js"),
+  },
+  // SB13: 採番外。#2 / #4 の 🔴 を緩和している「台帳を参照させる」経路そのもの。
+  // 参照の検査が非空判定だけだったため、実在しないアンカーを指した参照が ✅ で
+  // 記録されていた (2026-08-12 に本番の変数で実測)。裏付けとして数えられていた
+  // ものが、実際には何も指していなかったことになる。
+  //
+  // run() は「解決できない参照でもゲートが通るか」を測る。真の値の代わりに
+  // #2026-07-19 を使うのは、本番の値をテストへ写すとその文字列が正解として
+  // 固定され、記録側を直したときに落ちるべき所で落ちなくなるためである。
+  // どちらも同じ欠陥クラス (実在しないアンカー) を代表する。
+  SB13: {
+    kind: "executed",
+    run: () => backupEvidenceGatePasses(`${RESOLVABLE_DRILL_RECORD}#2026-07-19`),
   },
   // #1 / #3 は T-B4 (Issue #126 / #127) の是正で、当時この仕組みが無かった。
   // 実行検査には Neon control-plane API と pg_dump artifact の実体が要る。
@@ -365,6 +427,12 @@ describe("監査文書の偽陰性シナリオを実コードで検算する (�
     // ゲートを丸ごと削除した世界でも同じ true になり、🔓 が「分離しているから」なのか
     // 「そもそも検査が無いから」なのか区別できない。
     expect(jobBlock(codeqlWorkflow, "codeql-findings")).toContain("check-codeql-sarif.js");
+  });
+
+  it("解決できる参照なら同じ証跡がゲートを通る (SB13 の対照)", () => {
+    // これが false なら SB13 の「通らない」は解決検査の成果ではなく、土台の
+    // 証跡が別の次元 (鮮度・実測欄) で落ちているだけである。
+    expect(backupEvidenceGatePasses(RESOLVABLE_DRILL_RECORD)).toBe(true);
   });
 
   it("表の各行は登録簿に存在する", () => {

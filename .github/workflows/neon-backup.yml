@@ -190,7 +190,15 @@ jobs:
           npm run --silent release:check-neon-backup-evidence -- --evidence-file "$evidence_path"
           echo "evidence_path=$evidence_path" >> "$GITHUB_OUTPUT"
 
+      # Runs even when the evidence step failed. The dump is taken before the
+      # evidence gate judges it, so without this condition a defect in the
+      # *evidence* -- a stale variable, a restore-drill reference that no longer
+      # resolves -- would throw away a backup that was successfully taken. The
+      # job still fails; only the artifact is preserved. Guarded on the dump
+      # step's own outcome so that a failed dump does not reach
+      # `if-no-files-found: error` with nothing to upload.
       - name: Upload pg_dump artifact
+        if: always() && steps.dump.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ${{ steps.dump.outputs.artifact_name }}

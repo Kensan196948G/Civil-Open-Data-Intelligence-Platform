@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const fs = require("node:fs");
+const path = require("node:path");
 
 const DEFAULT_MIN_HISTORY_WINDOW_HOURS = 24;
 const DEFAULT_MAX_PG_DUMP_AGE_HOURS = 24;
@@ -35,6 +36,10 @@ function parseArgs(argv) {
     maxPgDumpAgeHours: DEFAULT_MAX_PG_DUMP_AGE_HOURS,
     maxRestoreDrillAgeDays: DEFAULT_MAX_RESTORE_DRILL_AGE_DAYS,
     maxHistoryMeasurementAgeHours: DEFAULT_MAX_HISTORY_MEASUREMENT_AGE_HOURS,
+    // restoreDrillRecord is a repository-relative path, so it can only be
+    // resolved against a checkout. The workflow runs this tool from the
+    // checkout root; tests point it at a fixture tree instead.
+    repoRoot: process.cwd(),
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -53,6 +58,7 @@ function parseArgs(argv) {
     else if (arg === "--max-restore-drill-age-days") options.maxRestoreDrillAgeDays = parsePositiveNumber(next(), arg);
     else if (arg === "--max-history-measurement-age-hours")
       options.maxHistoryMeasurementAgeHours = parsePositiveNumber(next(), arg);
+    else if (arg === "--repo-root") options.repoRoot = next();
     else if (arg === "--help" || arg === "-h") {
       options.help = true;
     } else {
@@ -103,6 +109,148 @@ function hoursBetween(now, earlier) {
 
 function daysBetween(now, earlier) {
   return hoursBetween(now, earlier) / 24;
+}
+
+// Approximates the slug GitHub derives from a rendered heading: lower-case the
+// text, drop everything that is not a letter, digit, hyphen, underscore or
+// space, then turn spaces into hyphens. Repeats take a numeric suffix.
+//
+// The leading whitespace is deliberately *not* re-trimmed after stripping.
+// GitHub does the same, which is why an emoji-prefixed heading such as
+// "# 🗄️ 復旧訓練" yields "-復旧訓練" with a leading hyphen. Trimming here would
+// silently reject an anchor that resolves in the rendered document.
+function slugifyHeading(text) {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\-_ ]/gu, "")
+    .replace(/ /g, "-");
+}
+
+// Reduces a raw heading line to the text a reader sees, because that -- not
+// the markdown source -- is what the slug is derived from.
+function renderedHeadingText(markdown) {
+  return markdown
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/(\*\*|__|\*|_)/g, "");
+}
+
+// Every anchor the referenced document actually offers.
+//
+// Two sources are honoured because both resolve in GitHub's renderer: slugs
+// generated from headings, and explicit <a id>/<a name> targets. The explicit
+// form matters here -- it is the only way to give an append-only table row its
+// own anchor without restructuring the table into headings.
+function collectAnchors(markdown) {
+  const anchors = new Set();
+  const seen = new Map();
+  let inFence = false;
+  let fenceMarker = "";
+
+  for (const line of markdown.split(/\r?\n/)) {
+    const fence = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+    if (fence) {
+      if (!inFence) {
+        inFence = true;
+        fenceMarker = fence[1][0];
+      } else if (fence[1][0] === fenceMarker) {
+        inFence = false;
+      }
+      continue;
+    }
+    if (inFence) continue;
+
+    const heading = /^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$/.exec(line);
+    if (heading) {
+      const base = slugifyHeading(renderedHeadingText(heading[2]));
+      if (base) {
+        const count = seen.get(base) ?? 0;
+        seen.set(base, count + 1);
+        anchors.add(count === 0 ? base : `${base}-${count}`);
+      }
+    }
+
+    for (const match of line.matchAll(/<a\s+[^>]*?(?:id|name)\s*=\s*["']([^"']+)["']/gi)) {
+      anchors.add(match[1].trim().toLowerCase());
+    }
+  }
+
+  return anchors;
+}
+
+function decodeAnchor(anchor) {
+  try {
+    return decodeURIComponent(anchor);
+  } catch {
+    return anchor;
+  }
+}
+
+// Judges `path/to/file.md#anchor` against a checkout.
+//
+// A presence-only test (`length > 0`) accepts a reference that resolves to
+// nothing, which is how docs/runbooks/restore-drill-record.md#2026-08-12 came
+// to be recorded as evidence: the file exists, the anchor does not, and no
+// check could tell the difference.
+//
+// An anchor-less reference is accepted on purpose. The drill ledger is an
+// append-only table whose rows carry no heading, so requiring an anchor would
+// force the ledger into a date-heading layout -- a rewrite of rows the ledger
+// itself forbids ("過去行は書き換えない"). Naming the file is the strongest
+// reference that document shape can honestly support. When an anchor *is*
+// supplied it must resolve, because an unresolvable one is a false claim of
+// precision rather than a missing convenience.
+function resolveDocumentReference(reference, repoRoot) {
+  const raw = String(reference ?? "").trim();
+  if (!raw) return { ok: false, detail: "(not recorded)" };
+
+  const hashIndex = raw.indexOf("#");
+  const relativePath = (hashIndex === -1 ? raw : raw.slice(0, hashIndex)).trim();
+  const anchor = hashIndex === -1 ? "" : raw.slice(hashIndex + 1).trim();
+
+  if (!relativePath) return { ok: false, detail: `${safeValue(raw)} has no file path` };
+  if (relativePath.includes("\0")) return { ok: false, detail: `${safeValue(relativePath)} is not a valid path` };
+  if (path.isAbsolute(relativePath)) {
+    return { ok: false, detail: `${safeValue(relativePath)} is absolute; the reference must be repository-relative` };
+  }
+
+  const root = path.resolve(repoRoot);
+  const resolved = path.resolve(root, relativePath);
+  if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+    return { ok: false, detail: `${safeValue(relativePath)} escapes the repository root` };
+  }
+
+  let stats;
+  try {
+    stats = fs.statSync(resolved);
+  } catch {
+    return { ok: false, detail: `${safeValue(relativePath)} does not exist in the repository` };
+  }
+  if (!stats.isFile()) return { ok: false, detail: `${safeValue(relativePath)} is not a regular file` };
+
+  if (!anchor) {
+    return { ok: true, detail: `${safeValue(relativePath)} exists (no anchor supplied)` };
+  }
+
+  let contents;
+  try {
+    contents = fs.readFileSync(resolved, "utf8");
+  } catch {
+    return { ok: false, detail: `${safeValue(relativePath)} could not be read` };
+  }
+
+  const anchors = collectAnchors(contents);
+  const wanted = decodeAnchor(anchor).toLowerCase();
+  if (!anchors.has(wanted)) {
+    return {
+      ok: false,
+      detail: `${safeValue(relativePath)} exists but has no anchor #${safeValue(anchor)} (${anchors.size} anchors found)`,
+    };
+  }
+
+  return { ok: true, detail: `${safeValue(relativePath)}#${safeValue(anchor)} resolves` };
 }
 
 function checkEvidence(evidence, options) {
@@ -238,19 +386,24 @@ function checkEvidence(evidence, options) {
   );
 
   // Non-gating on purpose: the generator already refuses to write evidence
-  // without these, so failing here would only catch hand-forged documents.
-  // They are surfaced so a reader of the report can tell a measured status
-  // from a declared one without opening the JSON.
+  // without this, so failing here would only catch hand-forged documents.
+  // It is surfaced so a reader of the report can tell a measured status from
+  // a declared one without opening the JSON.
   note(
     "lastPgDumpStatus was measured, not declared",
     String(evidence.lastPgDumpStatusSource ?? "").startsWith("artifact-stat:"),
     safeValue(evidence.lastPgDumpStatusSource ?? "(not recorded)"),
   );
-  note(
-    "restoreDrillRecord referenced",
-    String(evidence.restoreDrillRecord ?? "").trim().length > 0,
-    safeValue(evidence.restoreDrillRecord ?? "(not recorded)"),
-  );
+
+  // Gating, unlike the note above, and the difference is not a change of
+  // appetite. The generator's guarantee covers *presence*: it will not emit
+  // evidence with an empty restoreDrillRecord. It cannot cover *resolvability*,
+  // because it never opens the document it is handed a path to. The value
+  // measured in production on 2026-08-12 proves the gap -- the file existed,
+  // the anchor did not, and the presence-only note reported ✅ regardless.
+  // Nothing upstream catches that, so it has to be caught here.
+  const drillRecord = resolveDocumentReference(evidence.restoreDrillRecord, options.repoRoot);
+  add("restoreDrillRecord resolves", drillRecord.ok, drillRecord.detail);
 
   return { ok: failures.length === 0, rows, failures };
 }
@@ -287,9 +440,14 @@ function usage() {
     "Environment:",
     "  CODIP_NEON_BACKUP_EVIDENCE_JSON may provide the same JSON payload.",
     "",
+    "Options:",
+    "  --repo-root <dir>  Checkout to resolve restoreDrillRecord against (default: cwd).",
+    "",
     "Notes:",
     "  The PITR window is judged on historyRetentionSecondsMeasured (measured from the Neon API).",
     "  A missing measurement fails the gate; the self-declared historyWindowHours is never used to pass it.",
+    "  restoreDrillRecord must name a file that exists; an anchor, when supplied, must resolve to a",
+    "  heading slug or an explicit <a id>/<a name> target in that file.",
   ].join("\n");
 }
 

@@ -1,6 +1,8 @@
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const repoRoot = process.cwd();
 const scriptPath = path.join(repoRoot, "scripts/tools/check-neon-backup-evidence.js");
@@ -24,7 +26,12 @@ const freshEvidence = {
   lastPgDumpArtifact: "secure-artifact://codip/neon/20260720T063000Z.dump",
   lastRestoreDrillAt: "2026-07-19T06:30:00Z",
   restoreDrillStatus: "success",
-  restoreDrillRecord: "docs/runbooks/restore-drill-record.md#2026-07-19",
+  // This used to read ".../restore-drill-record.md#2026-07-19", an anchor that
+  // has never existed in that file. The presence-only check accepted it, so the
+  // fixture certified the defect instead of exposing it. The ledger is a table
+  // with no per-row heading, so naming the file is the honest reference here;
+  // anchor resolution is exercised against purpose-built fixtures below.
+  restoreDrillRecord: "docs/runbooks/restore-drill-record.md",
   owner: "release-manager",
 };
 
@@ -211,14 +218,6 @@ describe("check-neon-backup-evidence PITR retention gate", () => {
     expect(result.stdout).toContain("declared:--pg-dump-status");
   });
 
-  it("surfaces a missing restore drill record without changing the verdict", () => {
-    const result = runGate({ ...freshEvidence, restoreDrillRecord: undefined });
-
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain("restoreDrillRecord referenced | ℹ️");
-    expect(result.stdout).toContain("(not recorded)");
-  });
-
   it("fails when the measurement source is not recorded", () => {
     const result = runGate({
       ...freshEvidence,
@@ -227,5 +226,168 @@ describe("check-neon-backup-evidence PITR retention gate", () => {
 
     expect(result.status).toBe(1);
     expect(result.stdout).toContain("historyRetentionSource present | ⚠️");
+  });
+});
+
+// Issue #145 / T-B13. `restoreDrillRecord` used to be checked with
+// `String(value).trim().length > 0`, which accepts any non-empty string. The
+// value in production on 2026-08-12 named a file that exists and an anchor
+// that does not, and the gate reported it as satisfied. These cases fix the
+// distinction between "a reference was written down" and "the reference leads
+// somewhere", against a real filesystem rather than a stubbed one.
+describe("check-neon-backup-evidence restoreDrillRecord resolution", () => {
+  let fixtureRoot = "";
+
+  const LEDGER = [
+    "# 🗄️ 復旧訓練 実施記録テンプレート",
+    "",
+    "## 1. 記録様式",
+    "",
+    "## 4. 記録台帳",
+    "",
+    "| 実施日時 | 判定 |",
+    "| --- | --- |",
+    '| <a id="drill-2026-08-12"></a>2026-08-12T00:00:00Z | success |',
+    "",
+    "## 1. 記録様式",
+    "",
+    "```text",
+    "## 見出しではない",
+    "```",
+    "",
+  ].join("\n");
+
+  beforeAll(() => {
+    fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "codip-drill-ref-"));
+    fs.mkdirSync(path.join(fixtureRoot, "docs/runbooks"), { recursive: true });
+    fs.writeFileSync(path.join(fixtureRoot, "docs/runbooks/ledger.md"), LEDGER, "utf8");
+    fs.writeFileSync(path.join(fixtureRoot, "outside.md"), "# outside\n", "utf8");
+  });
+
+  afterAll(() => {
+    if (fixtureRoot) fs.rmSync(fixtureRoot, { recursive: true, force: true });
+  });
+
+  function runAgainstFixture(restoreDrillRecord: unknown) {
+    return runGate({ ...freshEvidence, restoreDrillRecord }, ["--repo-root", fixtureRoot]);
+  }
+
+  it("passes for an existing file and an anchor generated from a real heading", () => {
+    const result = runAgainstFixture("docs/runbooks/ledger.md#4-記録台帳");
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("restoreDrillRecord resolves | ✅");
+    expect(result.stdout).toContain("#4-記録台帳 resolves");
+  });
+
+  it("passes for an explicit <a id> target, which is how an append-only table row can be addressed", () => {
+    const result = runAgainstFixture("docs/runbooks/ledger.md#drill-2026-08-12");
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("restoreDrillRecord resolves | ✅");
+  });
+
+  it("fails for an existing file with an anchor that resolves to nothing", () => {
+    // The exact shape recorded in production: the file is real, the anchor is not.
+    const result = runAgainstFixture("docs/runbooks/ledger.md#2026-08-12");
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("restoreDrillRecord resolves | ⚠️");
+    expect(result.stdout).toContain("has no anchor #2026-08-12");
+  });
+
+  it("fails for a file that does not exist in the repository", () => {
+    const result = runAgainstFixture("docs/runbooks/absent.md#4-記録台帳");
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("does not exist in the repository");
+  });
+
+  it("fails for an empty or whitespace-only reference", () => {
+    for (const value of ["", "   "]) {
+      const result = runAgainstFixture(value);
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain("restoreDrillRecord resolves | ⚠️");
+      expect(result.stdout).toContain("(not recorded)");
+    }
+  });
+
+  it("fails when the field is absent altogether", () => {
+    // undefined is dropped by JSON.stringify, so the key is genuinely missing.
+    const result = runAgainstFixture(undefined);
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("restoreDrillRecord resolves | ⚠️");
+  });
+
+  it("fails for a bare anchor with no file path", () => {
+    const result = runAgainstFixture("#4-記録台帳");
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("has no file path");
+  });
+
+  it("accepts a file-only reference, because the ledger has no per-row heading", () => {
+    // Deliberate: requiring an anchor would force the append-only table into a
+    // date-heading layout, which means rewriting rows the ledger forbids
+    // rewriting. Naming the file is the strongest honest reference available.
+    const result = runAgainstFixture("docs/runbooks/ledger.md");
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("exists (no anchor supplied)");
+  });
+
+  it("fails for a directory, an absolute path, and a path escaping the repository", () => {
+    expect(runAgainstFixture("docs/runbooks").status).toBe(1);
+    expect(runAgainstFixture("docs/runbooks").stdout).toContain("is not a regular file");
+
+    const absolute = runAgainstFixture(path.join(fixtureRoot, "docs/runbooks/ledger.md"));
+    expect(absolute.status).toBe(1);
+    expect(absolute.stdout).toContain("must be repository-relative");
+
+    const escaping = runAgainstFixture("../outside.md");
+    expect(escaping.status).toBe(1);
+    expect(escaping.stdout).toContain("escapes the repository root");
+  });
+
+  it("does not treat a '#' line inside a fenced code block as a heading", () => {
+    const result = runAgainstFixture("docs/runbooks/ledger.md#見出しではない");
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("has no anchor");
+  });
+
+  it("reproduces GitHub's slug quirks: duplicate suffixes and emoji-leading hyphens", () => {
+    // A repeated heading takes "-1"; an emoji-prefixed heading keeps the
+    // leading hyphen left behind when the emoji is stripped. Getting either
+    // wrong would reject an anchor that resolves in the rendered document.
+    expect(runAgainstFixture("docs/runbooks/ledger.md#1-記録様式-1").status).toBe(0);
+    expect(runAgainstFixture("docs/runbooks/ledger.md#-復旧訓練-実施記録テンプレート").status).toBe(0);
+  });
+
+  it("resolves a percent-encoded anchor, which is how a browser copies a CJK link", () => {
+    const result = runAgainstFixture(
+      `docs/runbooks/ledger.md#${encodeURIComponent("4-記録台帳")}`,
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("restoreDrillRecord resolves | ✅");
+  });
+});
+
+describe("check-neon-backup-evidence against the real repository", () => {
+  it("rejects the reference that was recorded as evidence on 2026-08-12", () => {
+    // Not a fixture: this is the value held in the repository variable
+    // CODIP_LAST_RESTORE_DRILL_RECORD, judged against the checked-out tree.
+    // It must fail. If this test ever goes green without the ledger gaining a
+    // matching anchor, the anchor comparison has been loosened.
+    const result = runGate({
+      ...freshEvidence,
+      restoreDrillRecord: "docs/runbooks/restore-drill-record.md#2026-08-12",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("restoreDrillRecord resolves | ⚠️");
+    expect(result.stdout).toContain("has no anchor #2026-08-12");
   });
 });
