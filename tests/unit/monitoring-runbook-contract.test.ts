@@ -16,8 +16,11 @@ const read = (relativePath: string) => readFileSync(path.join(repoRoot, relative
 const monitoringRunbook = read("docs/runbooks/monitoring.md");
 const notificationRecord = read("docs/runbooks/notification-test-record.md");
 const alertsRunbook = read("docs/runbooks/alerts-and-notifications.md");
+const operationsLedger = read("docs/operations/operations-ledger.md");
 const smokeWorkflow = read(".github/workflows/production-smoke.yml");
 const postReleaseStatus = read("scripts/tools/post-release-status.js");
+const createBackupEvidence = read("scripts/tools/create-neon-backup-evidence.js");
+const checkBackupEvidence = read("scripts/tools/check-neon-backup-evidence.js");
 
 describe("monitoring runbook structure", () => {
   const requiredSections = [
@@ -32,6 +35,7 @@ describe("monitoring runbook structure", () => {
     "### 1.1.3 通知テスト記録",
     "### 1.1.4 backend への変更仕様",
     "### 1.2 Neon backup鮮度ゲート",
+    "#### 1.2.1 PITR retention とゲート閾値の関係",
   ];
 
   it.each(requiredSections)("keeps the %s section", (heading) => {
@@ -114,6 +118,54 @@ describe("probe script contract", () => {
   });
 });
 
+describe("neon backup evidence gate contract", () => {
+  it("keeps the documented default minimum in sync with the gate implementation", () => {
+    const minimum = checkBackupEvidence.match(
+      /DEFAULT_MIN_HISTORY_WINDOW_HOURS\s*=\s*(\d+)/,
+    )?.[1];
+    expect(minimum).toBeDefined();
+    expect(monitoringRunbook).toContain(`historyWindowHours >= ${minimum}`);
+  });
+
+  it("keeps the runbook honest about the gate comparing constants", () => {
+    // Runbook 1.2.1(4) states the gate never reads the real retention value from
+    // Neon, which makes a shortened history window undetectable. That claim holds
+    // only while the evidence scripts make no Neon API call at all.
+    const scriptsReadNeonApi = /neon\.tech|api\/v2\/projects|history_retention_seconds/.test(
+      createBackupEvidence + checkBackupEvidence,
+    );
+    const runbookClaimsNoMeasurement = monitoringRunbook.includes(
+      "`historyWindowHours` の値は Neon API から取得されていない",
+    );
+
+    // Exactly one must hold. Once backend sources the value from the API,
+    // this fails until 1.2.1 stops describing the gate as tautological.
+    expect(scriptsReadNeonApi).toBe(!runbookClaimsNoMeasurement);
+  });
+
+  it("records the measured retention rather than only the plan maximum", () => {
+    // Both numbers matter: 86400 is what production actually has, 604800 is what
+    // the Launch plan permits. Documenting only one hides the available headroom.
+    expect(monitoringRunbook).toContain("86400");
+    expect(monitoringRunbook).toContain("604800");
+  });
+});
+
+describe("operations ledger reflects the monitoring verification", () => {
+  it("no longer describes P1 detection as merely an unconfigured alert", () => {
+    expect(operationsLedger).not.toContain("アラート（未設定）");
+    expect(operationsLedger).toContain("計測不能");
+  });
+
+  it("cross-references the notification test record", () => {
+    expect(operationsLedger).toContain("notification-test-record.md");
+  });
+
+  it("states the measured PITR retention instead of an unqualified 24h", () => {
+    expect(operationsLedger).toContain("history_retention_seconds=86400");
+  });
+});
+
 describe("notification test record template", () => {
   const requiredColumns = [
     "実施日時 (UTC)",
@@ -151,6 +203,7 @@ describe("operational runbooks contain no credentials", () => {
     "monitoring.md": monitoringRunbook,
     "notification-test-record.md": notificationRecord,
     "alerts-and-notifications.md": alertsRunbook,
+    "operations-ledger.md": operationsLedger,
   };
 
   const secretPatterns: Array<[string, RegExp]> = [
