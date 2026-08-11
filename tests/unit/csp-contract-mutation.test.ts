@@ -339,15 +339,28 @@ describe("console allowlist は偶然一致でも CSP 違反を通さない", ()
     location,
   });
 
+  /** 文言側の規則が拾うマーカー。network 層の行はこれを 1 つも含まないこと。 */
+  const WORDING_MARKER = /Content Security Policy|Refused to/i;
+
   /**
-   * allowlist の matches に**わざと一致させた上で** CSP 違反文言を混ぜたもの。
+   * allowlist の matches に**わざと一致させた上で** CSP 違反を示すもの。
    * 各行は「allowlist が実際に一致すること」と「それでも通らないこと」を両方表明する。
    * 前者を表明しないと、matches の条件が変わったときにこのテストが素通りする。
+   *
+   * `layer` は拾われた経路の区別。Chromium は navigation / frame / worker が CSP で
+   * 落ちた場合、説明文ではなく net error だけを出す。両方を持たないと、片方の枝を
+   * 消しても表全体は緑のままになる (2026-08-12 に実際に取りこぼしていた)。
    */
-  const collisions: ReadonlyArray<{ label: string; entryId: string; captured: CapturedEntry }> = [
+  const collisions: ReadonlyArray<{
+    label: string;
+    entryId: string;
+    layer: "wording" | "network";
+    captured: CapturedEntry;
+  }> = [
     {
       label: "style-src から fonts.googleapis.com が外れたときの文言",
       entryId: "google-fonts-cdn-unreachable",
+      layer: "wording",
       captured: entry(
         "Refused to load the stylesheet 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP' " +
           'because it violates the following Content Security Policy directive: "style-src \'self\'". ' +
@@ -358,10 +371,32 @@ describe("console allowlist は偶然一致でも CSP 違反を通さない", ()
     {
       label: "font-src から fonts.gstatic.com が外れたときの文言",
       entryId: "google-fonts-cdn-unreachable",
+      layer: "wording",
       captured: entry(
         "Refused to load the font 'https://fonts.gstatic.com/s/ibmplexsansjp/v1/font.woff2' " +
           "because it violates the following Content Security Policy directive. " +
           "net::ERR_FAILED",
+        "https://fonts.gstatic.com/s/ibmplexsansjp/v1/font.woff2",
+      ),
+    },
+    {
+      // 2026-08-12 の取りこぼし本体。CSP でオリジンを外してもテストが緑のままだった
+      label: "CSP ブロックが net error だけで出る場合 (説明文が付かない)",
+      entryId: "google-fonts-cdn-unreachable",
+      layer: "network",
+      captured: entry(
+        "Failed to load resource: net::ERR_BLOCKED_BY_CSP",
+        "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP",
+      ),
+    },
+    {
+      // CSP 専用ではない (X-Frame-Options / CORP / COEP でも出る) が、
+      // いずれもセキュリティヘッダ由来のブロックなので外形要因として説明させない
+      label: "セキュリティヘッダによるブロックが net error だけで出る場合",
+      entryId: "google-fonts-cdn-unreachable",
+      layer: "network",
+      captured: entry(
+        "Failed to load resource: net::ERR_BLOCKED_BY_RESPONSE",
         "https://fonts.gstatic.com/s/ibmplexsansjp/v1/font.woff2",
       ),
     },
@@ -383,6 +418,26 @@ describe("console allowlist は偶然一致でも CSP 違反を通さない", ()
     expect(unexplainedEntries([captured]), "CSP 違反が失敗対象から外れた").toHaveLength(1);
   });
 
+  it.each(collisions.filter((collision) => collision.layer === "network"))(
+    "$label は CSP の説明文を含まないのに通らない",
+    ({ captured }) => {
+      // この表明が無いと、CSP_VIOLATION_PATTERN から net error の枝を消しても
+      // 文言側の行が拾ってくれるので表全体は緑のままになる。
+      // 「説明文を含まない」ことを先に固定して、net error 側の検査であることを保証する
+      expect(
+        WORDING_MARKER.test(captured.text),
+        "この行は文言側の規則で拾われており、net error 側の検査になっていない",
+      ).toBe(false);
+      expect(decideAllowlist(captured).allowed, "net error 形式の CSP ブロックが握り潰された").toBe(false);
+    },
+  );
+
+  it("衝突表が文言側と net error 側の両方を持つ", () => {
+    // 片方だけになると、その層の判定が消えても表は緑のままになる
+    const layers = new Set(collisions.map((collision) => collision.layer));
+    expect([...layers].sort(), "衝突表から層が欠けている").toEqual(["network", "wording"]);
+  });
+
   it("allowlist を空にしても CSP 違反の判定は変わらない", () => {
     // CSP_VIOLATION_PATTERN が allowlist より先に評価されることの表明。
     // 順序が入れ替わると、この検査の存在理由そのものを allowlist が隠せてしまう
@@ -391,14 +446,19 @@ describe("console allowlist は偶然一致でも CSP 違反を通さない", ()
     }
   });
 
-  it("CSP 由来でないネットワーク失敗は従来どおり allowlist される", () => {
-    // 逆側の固定。除外規則を広げすぎると、既知の外形要因まで落ちるようになる
-    const decision = decideAllowlist(
-      entry(
-        "Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
-        "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP",
-      ),
-    );
+  it.each([
+    // 逆側の固定。除外規則を広げすぎると、既知の外形要因まで落ちるようになる。
+    // ERR_BLOCKED_BY_* を足したときに `net::ERR_` 全体を弾いてしまう誤りを検知する
+    "Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+    "Failed to load resource: net::ERR_CONNECTION_TIMED_OUT",
+    "Failed to load resource: net::ERR_INTERNET_DISCONNECTED",
+  ])("CSP 由来でないネットワーク失敗は従来どおり allowlist される: %s", (text) => {
+    const captured = entry(text, "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP");
+    expect(
+      CSP_VIOLATION_PATTERN.test(captured.text),
+      "真の外形要因がセキュリティブロックとして扱われている",
+    ).toBe(false);
+    const decision = decideAllowlist(captured);
     expect(decision.allowed).toBe(true);
     expect(decision.entryId).toBe("google-fonts-cdn-unreachable");
   });
