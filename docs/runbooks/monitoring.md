@@ -10,9 +10,57 @@
 | DB readiness | Access認証済みで `/api/ready=ready`、manual production smoke 75/75成功 (2026-08-02) | 稼働 |
 | 定期smoke | Access service token設定済み。15分間隔 strict read-only probe成功（初回 2026-08-05T02:30Z run 30969524446、scheduled成功 03:41Z run 30972974222、デプロイ後 03:59Z run 30973772209） | 稼働 |
 | Neon | mainへread-only直結成功、migration 2/2、孤児・重複・不正geometry 0 | DB rollback不要 |
-| Backup | pg_dump初回成功（2026-08-04T21:05Z workflow_dispatch run 30950851419、暗号化artifact `codip-neon-pgdump-20260804T210642Z.dump.gpg`、証跡JSONあり）。scheduled初回は2026-08-06 03:17 JSTに検証予定 | 稼働（手動初回） |
+| Backup | pg_dump初回成功（2026-08-04T21:05Z workflow_dispatch run 30950851419、暗号化artifact `codip-neon-pgdump-20260804T210642Z.dump.gpg`、証跡JSONあり）。scheduled初回は2026-08-06 03:17 JSTに検証予定 | 稼働（手動再検証） |
 
 旧 `civilopendata.mirai-dx-platform.com` は現行ターゲットではない。DNS、Secrets、Access、DBを変更する前に、まず稼働deploymentとGit SHAを突き合わせる。
+
+## 0.1 監視実態の read-only 再検証 (2026-08-11, Issue #90)
+
+Issue #90 に対し、変更操作を伴わない read-only 検証をQAが実施した。**「確認済み」「BLOCKED（権限不足）」「未整備」を区別して記録する。実施していない確認を実施済みとして扱わない。**
+
+### 0.1.1 確認できた事実（PASS）
+
+| 対象 | 実測値 | 確認手段 |
+| --- | --- | --- |
+| Cloudflare zone | `mirai-dx-platform.com` status=`active`、type=`full`、plan=`Free Website`、activated 2026-06-30 | Cloudflare zones API (read) |
+| 公開DNS | `odip.mirai-dx-platform.com` → A `104.21.57.65` / `172.67.189.96`、AAAA `2606:4700:3032::6815:3941` / `2606:4700:3037::ac43:bd60`（Cloudflare proxied edge） | 公開DNS問い合わせ |
+| Access境界 | 未認証 `GET /api/health` が **302** を返し `winter-lake-f4c9.cloudflareaccess.com` のloginへ誘導。redirect metaは `auth_status=NONE` / `service_token_status=false` | 未認証HTTPプローブ |
+| production smoke | scheduled runが15分間隔で継続。直近20件すべて `success`（2026-08-11T03:54Z〜12:58Z、run 31456833751〜31493821450） | GitHub Actions run一覧 |
+| Neon project | `falling-dawn-93620497`、PG17、`aws-us-west-2`、PITR履歴 `history_retention_seconds=86400`（**24時間**）、storage 約83MB、quota reset 2026-09-01 | Neon API (read) |
+| Neon 本番compute | `ep-still-feather-afoyv69p`（branch `br-solitary-breeze-afr5lrq4`）、1 CU固定、state=`active`、last_active 2026-08-11T12:55:09Z | Neon API (read) |
+| ローカル品質ゲート | lint PASS / typecheck PASS / unit test 498 passed (59 files) PASS | `npm run lint` / `npm run typecheck` / `npm test` |
+
+### 0.1.2 BLOCKED（read権限不足で検証不能）
+
+Cloudflare zone APIが返した現行tokenの権限は `#dns_records:read` / `#analytics:read` / `#zone:read` / `#member:read` / `#organization:read` の5種のみで、Zero Trust・Workers・Notifications・Pagesのread scopeを含まない。Issue #90 記載の403はこのscope不足に一致する。
+
+| 未検証項目 | 状態 | 解除に必要な最小read権限 |
+| --- | --- | --- |
+| Access application / policy / allowlist / service token登録状態 | BLOCKED | Account → **Access: Apps and Policies : Read**、**Access: Service Tokens : Read** |
+| Cloudflare alert policy（`CODIP Worker Error Alert` 等）の実在と閾値 | BLOCKED | Account → **Notifications : Read** |
+| Workers Logs / Traces / error rate | BLOCKED | Account → **Workers Observability : Read**（または Workers Scripts : Read + Logs 閲覧） |
+| Worker route / custom domain / Pages の競合有無 | BLOCKED | Account → **Workers Scripts : Read**、**Pages : Read**、Zone → **Workers Routes : Read** |
+| DNSレコード実体（proxied設定、record type） | BLOCKED | Zone → **DNS : Read**（tokenは `#dns_records:read` を持つがrecord一覧APIは本セッションのMCP経路に無い） |
+| Web Analytics | BLOCKED | Account → **Account Analytics : Read** |
+
+監査ログ経路でも独立検証を試みたが、2026-08-10〜08-12の `create` イベント35件はすべてWorkers tail操作であり、alert policy作成イベントは現れなかった。Cloudflare alerting APIの変更が監査ログ対象外である可能性と、policyが存在しない可能性の**双方が残る**ため、`docs/runbooks/alerts-and-notifications.md` の policy作成記録は本検証では**肯定も否定もできない**。Notifications : Read 付与後に `GET /alerting/v3/policies` で確認する。
+
+### 0.1.3 未整備（権限ではなく設定そのものが存在しない）
+
+| 項目 | 実態 | 根拠 |
+| --- | --- | --- |
+| production smoke 失敗時の通知 | **未整備**。`.github/workflows/production-smoke.yml` に `if: failure()` の通知step、Issue起票step、webhook呼び出しのいずれも存在しない。失敗表現は最終stepの `exit 1` によるrun失敗のみ | workflow定義の全文確認。リポジトリ内workflow全体でも失敗時通知は `ci.yml` のtrace artifact upload 1件のみ |
+| 失敗通知の受信経路 | **未整備かつリポジトリ内から検証不能**。現状はGitHubの既定通知（ユーザー個人のNotification設定）に暗黙依存しており、リポジトリ設定として担当・宛先を固定していない | workflow定義にnotification先の記述なし |
+| 連続失敗（`/api/ready` 継続失敗）の自動判定 | **未整備**。§1の異常判定は「連続2回以上」だが、production smokeは各runが独立で、run間の失敗連続数を保持・評価する仕組みが存在しない。P1相当の「継続失敗」を機械判定する主体はどこにも無い | `scripts/tools/post-release-status.js` は単一実行内で判定し `process.exit(1)` するのみ |
+| Neon アラート（容量・接続数） | **未整備** | `docs/runbooks/alerts-and-notifications.md` §1 と一致 |
+| 通知テストの受信記録 | **未整備**。受信時刻・担当者を記録する様式が存在しなかったため、§1.1.3 にテンプレートを新設した | — |
+
+### 0.1.4 付随して判明した運用上の留意点（P3、本Issue範囲外）
+
+- Neon本番computeは `pooler_enabled=false`（PgBouncer未使用）。Workers側の同時実行が増えた場合の接続枯渇を監視対象に含めるか、次サイクルで判断する。
+- Neonに未使用のidle computeが4本残存（`ep-sweet-river-afwej471` / `ep-misty-rain-afqrpjly` / `ep-cold-credit-af49mzs0` / `ep-autumn-cell-af5g4shc`、2026-07-19〜08-04作成）。容量・コストの棚卸し対象。
+- PITR履歴が24時間ちょうどで、§1.2のバックアップ鮮度ゲート既定値 `historyWindowHours >= 24` と境界一致しており余裕が無い。
+- `.gitignore` に `.worktrees/` エントリが無い。現在はgitが登録済みworktreeパスをstatusから除外するため未追跡だが、worktree登録が解除されるとuntrackedとして一斉に現れ誤commitされ得る。GitHub Actionsランナーは `actions/checkout` が追跡ファイルのみを展開するため、CI上での重複lint・重複typecheckは**発生しない**（確認済み）。
 
 ## 1. 監視対象
 
@@ -24,6 +72,8 @@
 | 管理保護 | 未認証 `GET /api/fetch-logs` | 401 以外 |
 | ブラウザ | ダッシュボード表示、console error/warn | 主要画面の描画失敗、console error |
 
+> ⚠️ **異常判定の実装ギャップ（2026-08-11 確認）**: 上表の「連続2回以上」「503継続」という*連続性*の条件を評価している自動化は現時点で存在しない。`scripts/tools/post-release-status.js` は1回の実行内でのみ判定して `process.exit(1)` し、`production-smoke.yml` はrun間の連続失敗回数を保持しない。したがって「連続」の判定は現状**人間がrun履歴を目視する運用**でしか成立しない。機械判定を成立させる場合は §1.1.4 の変更仕様を実装する。
+
 ## 1.1 アラート運用
 
 実通知先は本番Cloudflare/Neon作成時に確定する。未確定の間は、本表を暫定SLO/エスカレーション基準として扱い、確認結果を `docs/16-release-readiness-checklist.md` と `docs/release-notes.md` に記録する。
@@ -34,12 +84,14 @@
 | P2 | 主要API 5xx増加、Workers error増加、Neon接続遅延、read-only smoke失敗 | 30分 | DevOps / QA | SecurityまたはDB影響時はCTOへ即時共有 | 4時間 |
 | P3 | console warn、低頻度の外部API timeout、監査ログ欠落疑い、性能劣化傾向 | 1営業日 | QA / Developer | 週次改善Issueへ登録 | 次回改善サイクル |
 
-| 通知経路 | 現状 | 本番化時の完了条件 |
+| 通知経路 | 現状（2026-08-11 QA再検証） | 本番化時の完了条件 |
 | --- | --- | --- |
-| Cloudflare Workers Logs / Traces | 手動確認予定 | error rate、例外sample、対象deploy idをEvidenceへ記録 |
-| Cloudflare alert / Web Analytics | 未設定 | 通知先、閾値、通知テスト結果を記録 |
-| Neon monitoring | 未設定 | branch、容量、接続数、slow query、PITR windowを記録 |
-| GitHub Actions | workflow追加済み・通知受信未確認 | CI/production smoke失敗時の通知先・担当・Issue化ルールをProjectへ反映し、受信テストを記録 |
+| Cloudflare Workers Logs / Traces | **BLOCKED（権限不足）** — 現行tokenにWorkers Observability readが無く、`cloudflare-observability` MCPも未認証（OAuth要） | error rate、例外sample、対象deploy idをEvidenceへ記録 |
+| Cloudflare alert / Web Analytics | **要再確認** — `alerts-and-notifications.md` は policy `CODIP Worker Error Alert` を2026-08-10に作成・テスト送信済みと記録するが、QAはNotifications read権限が無く**独立検証できていない**。監査ログにも該当作成イベントは現れなかった（alerting変更が監査ログ対象外の可能性あり） | Notifications read付与後に `GET /alerting/v3/policies` で実在・閾値・宛先を確認し、通知テスト受信時刻を §1.1.3 テンプレートへ記録 |
+| Neon monitoring | 監視データはread可（project/branch/compute/PITR/容量を2026-08-11に取得）。**アラートは未設定** | 容量80%・接続数80%のアラートを設定し、通知テスト受信を記録 |
+| GitHub Actions | **通知は未整備**。`production-smoke.yml` に失敗時の通知step・Issue起票step・webhookのいずれも存在せず、失敗表現は `exit 1` によるrun失敗のみ。実際の受信はGitHub既定通知（各ユーザー個人設定）に依存し、リポジトリ設定としては固定されていない | §1.1.4 の変更仕様をbackendが実装し、通知テスト受信を §1.1.3 テンプレートへ記録 |
+
+> 📌 **正本の整合について**: 通知設定の詳細手順は `docs/runbooks/alerts-and-notifications.md` を正本とする。本表は「QAが read-only で独立検証できた範囲」を記録するものであり、両者が食い違う場合は**検証手段が明記されている側**を採用する。2026-08-11時点で、Cloudflare alert policyについては両文書の記述が一致していない（上表参照）。
 
 ### 1.1.1 定期production smoke
 
@@ -65,6 +117,8 @@ odipはCloudflare Access配下のため、workflowはGitHub Actions Secret `CF_A
 
 エスカレーションは§1.1のP1/P2/P3表を正とし、復旧目標はP1=60分、P2=4時間、P3=次回改善サイクルとする。通知先・通知テストは未設定のため、2026-08-05時点では「監視は成立、通知はGitHub Actionsデフォルトに依存」と記録する。
 
+**2026-08-11 再確認（Issue #90）**: 上記の状態は解消していない。「検知 P1: 15分以内に検知・初動」の計測方法欄にある「production-smoke失敗 + 通知」のうち、**通知が未整備**（§0.1.3）であり、かつ「連続失敗」を評価する主体が存在しない（§1 注記）ため、本SLOの「検知」行は**現時点では計測不能**とする。達成度を数値報告する場合は、この制約を併記する。
+
 実ターゲットの監視証跡は、Secrets値や個人情報を出さずに次の環境変数で `production-evidence` へ渡す。値はレポートに表示されず、`set (recorded)` のみ出力される。
 
 | 変数 | 記録する証跡 |
@@ -84,6 +138,24 @@ npm run release:production-evidence -- --strict
 ```
 
 `--strict` はAccess証跡、上記監視証跡、バックアップ・リストア証跡が未記録の場合も失敗する。Cloudflare Workers Observabilityは `wrangler.jsonc` の `observability.enabled=true` を維持し、Workers Logs / Traces / alert policy の実確認結果をEvidenceへ転記する。NeonはPITR履歴ウィンドウ、restore rehearsalまたはrollback drillの結果、復旧確認担当を `CODIP_BACKUP_RESTORE_EVIDENCE` として記録する。
+
+### 1.1.3 通知テスト記録
+
+通知経路の合否は「送信APIが success を返したか」ではなく、**人間が実際に受信できたか**で判定する。受信時刻・受信確認者を記録する非Secretのテンプレートと台帳を [`docs/runbooks/notification-test-record.md`](./notification-test-record.md) に置く。
+
+- 実通知テストの発火（意図的失敗run、Dashboardのテスト送信）と受信確認は**人間操作を要する**ため、QAは手順と記録様式の整備までを担当する。
+- 通知先の追加・変更・ローテーションは人間承認事項（Approval PR 対象）であり、本runbookの手順には含めない。
+- 2026-08-11時点の台帳は `cloudflare-alert-policy = NOT RUN（受信記録なし）`、`github-actions-failure = BLOCKED（通知先未確定）`、`neon-alert = BLOCKED（未設定）`。
+
+### 1.1.4 backend への変更仕様（未実装。QAは実装しない）
+
+`/api/ready` の継続失敗をP1として通知するには、次の3点が必要となる。いずれも `.github/workflows/**` および `scripts/**` の変更であり、**QAの所有範囲外のため未実装**。実装可否と時期はCTOが判断する。
+
+| # | 対象 | 変更仕様 | 目的 |
+| --- | --- | --- | --- |
+| 1 | `.github/workflows/production-smoke.yml` | `Enforce production readiness` step の後に `if: failure()` の通知jobを追加する。最小構成は `actions/github-script`（SHA固定）による重複防止付きIssue起票（`label: incident,P1`、同一labelのopen issueがあればコメント追記のみ）。webhook宛先はSecret参照とし、workflow本文へ書かない | 失敗がGitHub既定通知（個人設定依存）以外の、リポジトリとして固定された経路へ届く |
+| 2 | `.github/workflows/production-smoke.yml` または `scripts/tools/` | 連続失敗回数の永続化。案A: 失敗時にrun成果をrepository variable / Issue本文へ記録し、直前runの結果と突き合わせて連続2回目でP1昇格。案B: `gh run list --workflow "Production Smoke" --status failure` で直近N runを参照し連続性を判定 | §1の異常判定「連続2回以上」を機械評価可能にする（現状は評価主体が存在しない） |
+| 3 | `.gitignore` | `.worktrees/` を追加 | worktree登録解除時に `.worktrees/**` がuntrackedとして現れ、`git add -A` で誤commitされる事故を予防する（CI側は `actions/checkout` が追跡ファイルのみ展開するため影響なし＝検証済み） |
 
 ### 1.2 Neon backup鮮度ゲート
 
