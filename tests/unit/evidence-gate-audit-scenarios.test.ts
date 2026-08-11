@@ -182,6 +182,25 @@ function auditRouteWithoutFailureStatus(): string {
   return mutated;
 }
 
+/**
+ * `.github/workflows/codeql.yml` から単一ジョブの本文を切り出す。
+ *
+ * YAML パーサを使わないのは、`js-yaml` が本リポジトリの直接依存ではないためである
+ * （推移的に入っているだけの依存をテストが直接 import すると、無関係な依存整理で
+ * 静かに壊れる）。ジョブ境界は「2 スペースインデントのキー行」で決まり、
+ * この判定に構文解析は要らない。
+ */
+const codeqlWorkflow = readFileSync(path.join(REPO_ROOT, ".github/workflows/codeql.yml"), "utf8");
+
+function jobBlock(source: string, jobName: string): string {
+  const lines = source.split("\n");
+  const start = lines.findIndex((line) => line === `  ${jobName}:`);
+  if (start === -1) throw new Error(`job ${jobName} not found`);
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => /^ {2}[A-Za-z0-9_-]+:/.test(line));
+  return (end === -1 ? rest : rest.slice(0, end)).join("\n");
+}
+
 // --- シナリオ登録簿 ---------------------------------------------------------
 
 /**
@@ -248,6 +267,19 @@ const SCENARIOS: Record<string, Scenario> = {
   // 本ファイルへ結線検査を移すこともできない: 子プロセス砂場 (SB7 / S22) が実体の
   // spawnSync を使うため、同一ファイルで node:child_process を差し替えられない。
   SB12: { kind: "declared" },
+  // SB139: CodeQL の security scan。検出内容を判定するゲート自体は
+  // codeql-sarif-gate.test.ts が実測しており、そこは 🔒 になった。
+  // ここで測る残余は「**必須チェック analyze の緑 = high 脆弱性ゼロ**」という
+  // 読み方の偽陰性である。判定は非必須の codeql-findings へ分離してあるため、
+  // analyze は high を抱えたまま緑になれる。リポジトリ内で観測できる形に落とすと
+  // 「analyze ジョブのどの step も SARIF の検出内容を判定していない」になる。
+  //
+  // 必須化 (§17 の保護規則変更) の際に判定を analyze 側へ寄せれば、この run() は
+  // false へ反転し、文書が 🔓 のままなら落ちる。分離という判断が黙って恒久化しない。
+  SB139: {
+    kind: "executed",
+    run: () => !jobBlock(codeqlWorkflow, "analyze").includes("check-codeql-sarif.js"),
+  },
   // #1 / #3 は T-B4 (Issue #126 / #127) の是正で、当時この仕組みが無かった。
   // 実行検査には Neon control-plane API と pg_dump artifact の実体が要る。
   S1: { kind: "declared" },
@@ -326,6 +358,13 @@ describe("監査文書の偽陰性シナリオを実コードで検算する (�
     // これが false なら S22 の「通ってしまう」は偽陰性の証明ではなく、
     // 砂場の組み立て失敗 (symlink 漏れ・ゲートの読取対象の増加) である。
     expect(auditContractGatePasses(auditRouteSource)).toBe(true);
+  });
+
+  it("判定ゲート自体は存在し、別ジョブで走っている (SB139 の対照)", () => {
+    // SB139 の run() は「analyze が検出内容を見ていない」を true とする。対照が無いと、
+    // ゲートを丸ごと削除した世界でも同じ true になり、🔓 が「分離しているから」なのか
+    // 「そもそも検査が無いから」なのか区別できない。
+    expect(jobBlock(codeqlWorkflow, "codeql-findings")).toContain("check-codeql-sarif.js");
   });
 
   it("表の各行は登録簿に存在する", () => {
