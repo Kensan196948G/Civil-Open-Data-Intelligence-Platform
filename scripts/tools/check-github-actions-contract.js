@@ -58,6 +58,56 @@ function requireText(label, source, needle) {
   }
 }
 
+/**
+ * workflow の step 列を切り出す。インデント幅は最初の step 行から取り、
+ * 決め打ちにしない。
+ */
+function workflowSteps(source) {
+  const lines = source.split("\n");
+  const first = lines.findIndex((line) => /^\s+- (name|id|uses|run):/.test(line));
+  if (first === -1) return [];
+
+  const indent = /^(\s*)- /.exec(lines[first])[1];
+  const isStepStart = (line) => line.startsWith(`${indent}- `);
+  const steps = [];
+  for (const line of lines.slice(first)) {
+    if (isStepStart(line)) {
+      steps.push([line]);
+      continue;
+    }
+    // 空行は step の内側にも現れる。step 列の終わりは「浅いインデントの実体行」で判定する。
+    if (line.trim() !== "" && !line.startsWith(`${indent} `)) break;
+    steps[steps.length - 1].push(line);
+  }
+  return steps.map((step) => step.join("\n"));
+}
+
+/**
+ * needle を **step へ束縛して** 検査する。ファイル全体の部分一致は「どこかに
+ * 書いてある」しか見ないため、`continue-on-error: true` を probe 以外の step へ
+ * 移しても通ってしまう（そのとき probe は落ちなくなり、後続の判定 step は
+ * 動くのに judge 対象が失敗を報告しない）。
+ *
+ * selector に一致する step がちょうど1つでなければ失敗させる。0件は「対象が
+ * 無いので合格」ではなく、step 名の変更や YAML 構造の変化で**検査が成立しなかった**
+ * ことを意味する（docs/security/evidence-gate-audit.md §3.5）。
+ */
+function requireStepText(label, source, selector, needle) {
+  const steps = workflowSteps(source);
+  if (steps.length === 0) {
+    errors.push(`${label}: no steps parsed (step contract cannot be evaluated)`);
+    return;
+  }
+  const matched = steps.filter((step) => step.includes(selector));
+  if (matched.length !== 1) {
+    errors.push(`${label}: expected exactly one step matching "${selector}", found ${matched.length}`);
+    return;
+  }
+  if (!matched[0].includes(needle)) {
+    errors.push(`${label}: step "${selector}" missing ${needle}`);
+  }
+}
+
 function requireJobBlock(source, jobName) {
   const match = source.match(new RegExp(`\\n  ${jobName}:\\n[\\s\\S]*?(?=\\n  [a-zA-Z0-9_-]+:\\n|\\n?$)`));
   if (!match) {
@@ -134,9 +184,23 @@ requireText("Production smoke workflow", productionSmoke, "timeout-minutes: 5");
 requireText("Production smoke workflow", productionSmoke, "persist-credentials: false");
 requireText("Production smoke workflow", productionSmoke, 'cron: "7,22,37,52 * * * *"');
 requireText("Production smoke workflow", productionSmoke, "cancel-in-progress: false");
-requireText("Production smoke workflow", productionSmoke, "continue-on-error: true");
-requireText("Production smoke workflow", productionSmoke, "if: always()");
-requireText("Production smoke workflow", productionSmoke, "if: steps.production-status.outcome == 'failure'");
+// probe は落ちても後続 (summary / artifact / 判定) を走らせる必要があるため
+// continue-on-error を持つ。ただしそれは probe step の性質であって workflow の
+// 性質ではない。以下は step へ束縛する (T-B12)。
+requireStepText("Production smoke workflow", productionSmoke, "id: production-status", "continue-on-error: true");
+requireStepText("Production smoke workflow", productionSmoke, "name: Publish run summary", "if: always()");
+requireStepText(
+  "Production smoke workflow",
+  productionSmoke,
+  "name: Upload redacted monitoring evidence",
+  "if: always()",
+);
+requireStepText(
+  "Production smoke workflow",
+  productionSmoke,
+  "name: Enforce production readiness",
+  "if: steps.production-status.outcome == 'failure'",
+);
 requireText("Neon backup workflow", neonBackup, "CODIP_NEON_BRANCH: main");
 requireText("Neon backup workflow", neonBackup, "vars.CODIP_NEON_PGDUMP_HOST");
 requireText("Neon backup workflow", neonBackup, "--endpoint-host");
