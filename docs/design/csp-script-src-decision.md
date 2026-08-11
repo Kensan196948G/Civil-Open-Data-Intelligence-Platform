@@ -239,6 +239,26 @@ CSP を変更しても静的ページの白画面化を CI が検知できない
 この状態で CSP を締めると、回帰が本番で初めて露見する。
 （`tests/` は QA 所有。CTO により **T-Q4** として QA へ起票済み。）
 
+#### CSP 期待値の正本は `scripts/tools/csp-contract.js`
+
+Issue #129 の対応により、CSP の期待値は **`scripts/tools/csp-contract.js` が唯一の正本**となった。
+E2E と本番スモーク（`scripts/tools/release-smoke.js`）の双方がこの 1 ファイルを参照する。
+素の CommonJS で書かれているのは、本番スモークが `npm ci --omit=dev` 環境の `node` から
+直接読める必要があるためである（`tests/` 配下の TypeScript は require できない）。
+
+**解除条件の成立を判定する際は、この契約と実装（`next.config.ts`）の双方を突き合わせること。**
+片方だけを見て判断してはならない。理由は契約の設計にある。
+
+- 契約は期待値を**リテラルとしてピン留め**しており、`next.config.ts` から導出していない。
+  検査対象から期待値を導出する検査は対象がどう変わっても常に通るためである。
+  したがって `next.config.ts` を変えただけでは契約は追従せず、**必ず失敗する**。
+- 契約は「意図せぬ緩和」だけでなく **「意図せぬ硬化」でも失敗する**（`kind: "hardened"`）。
+  本裁定が案C（現状維持）である以上、`'unsafe-inline'` の除去は契約違反として検出される。
+  これは不具合ではなく、CTO 判断を経ない解除を止めるためのガードである。
+
+2026-08-12 時点で、契約の `PINNED_DIRECTIVES` 9 件と `ACCEPTED_SCRIPT_SRC` 2 構成
+（production / development）は `next.config.ts` の実装値と**全 11 件が一致**することを実測確認済み。
+
 ### 解除時に併せて必要になる作業
 
 - **`worker-src 'self'` の明示追加**（§2-5）。`strict-dynamic` 下では
@@ -247,3 +267,7 @@ CSP を変更しても静的ページの白画面化を CI が検知できない
 - **`AuditLogPanel.tsx` の blob inline script の除去**（§1-3）。
   `blob:` ドキュメントは生成元の CSP を継承し、そこへ nonce を渡す経路が
   CSP3 の仕様上存在しないため、この 1 箇所は nonce 方式でも救済できない。
+- **`scripts/tools/csp-contract.js` の期待値更新**（上記「前提条件」参照）。
+  契約は硬化方向でも失敗する設計のため、実装だけを変更すると E2E と本番スモークが
+  必ず落ちる。**同ファイルは backend 所有**であり、frontend 単独では変更できない。
+  解除を実施する変更は、実装・契約・裁定記録の 3 点を同一の変更単位で揃える必要がある。
