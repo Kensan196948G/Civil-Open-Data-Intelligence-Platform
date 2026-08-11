@@ -77,7 +77,7 @@ function completeEvidenceEnv(): Record<string, string> {
       "Workers observability enabled for odip.mirai-dx-platform.com, retention 7d, checked 2026-08-10",
     CODIP_NEON_MONITORING_EVIDENCE:
       "Neon project monitoring for odip.mirai-dx-platform.com, slow-query review 2026-08-10",
-    CODIP_SMOKE_MONITORING_SCHEDULE: "per-release, last success 2026-08-10, owner oncall:codip-platform",
+    CODIP_SMOKE_MONITORING_SCHEDULE: "*/15 * * * *",
     CODIP_ROLLBACK_OWNER: "kensan196948G",
     CODIP_BACKUP_RESTORE_EVIDENCE:
       "restore drill 2026-08-10 outcome success, verified by kensan196948G on odip.mirai-dx-platform.com",
