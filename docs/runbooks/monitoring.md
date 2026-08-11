@@ -196,6 +196,78 @@ npm run release:check-neon-backup-evidence
 
 既定では `historyWindowHours >= 24`、`lastPgDumpAt` が24時間以内、`lastRestoreDrillAt` が30日以内、各statusが `success` の場合だけ成功する。接続文字列、Neon API token、DB passwordはこのJSONへ入れない。誤って混入したSecret風文字列は出力時にredactされるが、証跡保存前に破棄して再発行する。`release:create-neon-backup-evidence` もSecret風のartifact識別子を拒否する。
 
+#### 1.2.1 PITR retention とゲート閾値の関係（2026-08-11 調査。設定変更は未実施）
+
+背景: 実測の `history_retention_seconds` が 86400秒（24時間）で、ゲート既定値 `historyWindowHours >= 24` と**境界一致**している。この余裕ゼロ状態を read-only で調査した結果を記録する。
+
+##### (1) 実測値（read-only、2026-08-11）
+
+| 項目 | 実測値 | 取得元 |
+| --- | --- | --- |
+| Neon organization plan | `launch` | Neon API organization 情報 |
+| project `falling-dawn-93620497` の `history_retention_seconds` | `86400`（24時間） | Neon API project 情報 |
+| production branch | `br-solitary-breeze-afr5lrq4`（`main`、`protected: true`） | Neon API branch 一覧 |
+| project 合成ストレージ量 | `83,317,464` bytes（約79.5 MiB） | Neon API `synthetic_storage_size` |
+
+##### (2) 仕様（Neon 公式ドキュメント `docs/introduction/history-window.md`）
+
+| プラン | history window 既定 | 上限 |
+| --- | --- | --- |
+| Free | 6時間 | 6時間（history 1GB上限） |
+| **Launch（現行）** | **1日** | **7日** |
+| Scale | 1日 | 30日 |
+
+- 設定単位は project 全体（全branchへ一律適用）。API property は `history_retention_seconds`（7日 = `604800`）。
+- `0` にすると instant restore と Time Travel が**無効化**される。
+- 課金は History storage として **$0.20/GB-month**（Launch / Scale）。通常のブランチデータ storage とは別枠。
+
+##### (3) 結論(a): 24時間は「下限固定」ではなく「有料プランの既定値」
+
+Launch プランでは `0`〜`604800` 秒の範囲で**人間が任意に変更できる**。したがって 24時間は Neon 側が保証する下限ではなく、**変動しうる値**である。retention を下げる操作が行われれば、実際の復旧可能範囲は 24時間未満になりうる。
+
+##### (4) 結論(b): ゲート既定値を 23h へ下げるのは不適切。真の欠陥は「ゲートが実測しないこと」
+
+`historyWindowHours` の値は Neon API から取得されていない。呼び出し側が渡した定数がそのまま記録され、同じく定数の閾値と比較されている。
+
+```text
+.github/workflows/neon-backup.yml
+  history_window_hours="${CODIP_NEON_HISTORY_WINDOW_HOURS:-24}"   ← 環境変数未設定なら定数 24
+        ↓ --history-window-hours で受け渡し
+scripts/tools/create-neon-backup-evidence.js
+  受け取った値を evidence JSON の historyWindowHours へそのまま記録（Neon API を参照しない）
+        ↓
+scripts/tools/check-neon-backup-evidence.js
+  historyWindowHours >= DEFAULT_MIN_HISTORY_WINDOW_HOURS（= 24）   ← 定数 vs 定数
+```
+
+このため次が成立する。
+
+- Neon 側の retention が 12時間へ下げられても、evidence には `24` が記録され、**ゲートは PASS する**（偽陰性）。
+- 閾値を 23h へ下げても `24 >= 23` で PASS。検知力は増えず、要求水準だけが緩む。
+- 現状のゲートは「PITR window短縮を機械的に落とす」という §1.2 冒頭の目的を**果たしていない**。
+
+> ⚠️ よってこの問題は「境界一致でいつか落ちる時限爆弾」ではなく、「**実際に短縮されても落ちない検知漏れ**」である。優先すべき是正は閾値調整ではなく実測値の取得。
+
+##### (5) backend への変更仕様（未実装。QAは実装しない）
+
+| # | 対象 | 変更内容 | 目的 |
+| --- | --- | --- | --- |
+| 1 | `scripts/tools/create-neon-backup-evidence.js` | Neon API `GET /projects/{project_id}` の `history_retention_seconds` を取得し、`historyWindowHours` へ実測値を格納する。`--history-window-hours` は API 取得失敗時の明示 override としてのみ残し、override 使用時は evidence に `historyWindowSource: "override"` を記録する | 定数比較を実測比較へ変え、retention 短縮を検知可能にする |
+| 2 | `scripts/tools/check-neon-backup-evidence.js` | 閾値 `DEFAULT_MIN_HISTORY_WINDOW_HOURS = 24` は**据え置く**。`historyWindowSource` が `override` の場合は検証を PASS ではなく警告付き（または fail-closed）で扱う | 実測値が入って初めて境界 24 が本来の意味を持つ。override による検知回避を防ぐ |
+| 3 | `.github/workflows/neon-backup.yml` | Neon API 読み取り用の read-only token を Secret として参照（値は人間が設定）。未設定時は #1 の override 経路へ fail-closed で退避 | 権限追加は人間承認事項のため、未設定でもジョブが壊れないようにする |
+
+##### (6) retention 引き上げの判断材料（実行しない）
+
+| 論点 | 判定 |
+| --- | --- |
+| プラン変更の要否 | **不要**。7日（`604800`）は現行 Launch プランの上限内 |
+| 課金への影響 | **あり**。History storage が $0.20/GB-month で従量課金される。retention を長くするほど保持 WAL が増える |
+| 増分費用の見積り | **算出不能**。History 単独の使用量を read-only で取得できていない（`synthetic_storage_size` はプロジェクト合成値であり History 内訳ではない）。実際の増分は WAL 生成量に依存する |
+| Neon の推奨 | 公式ドキュメントは production ワークロードについて 7日への延長を推奨（数日気付かれない人為ミスからの復旧、保持要件対応） |
+| 本 runbook の判断 | 現行 24時間は「気付くまでに1日以上かかった誤操作は復旧不能」を意味する。延長は妥当だが、**費用構造に影響するため人間承認事項**として扱い、QA / CTO セッションでは実行しない |
+
+> 🔒 本調査で使用した Neon API token は project に対する変更権限を持つが、T-Q2 の禁止事項に従い read-only 操作のみを実施した。`history_retention_seconds` の変更、branch 作成・削除、compute 設定変更はいずれも**未実施**である。
+
 ## 2. ポストリリース状態確認
 
 Cloudflare / Neon の実リソースを変更せず、DNS、HTTP到達性、応答時間、`/api/ready` のDB状態を読み取り専用で確認する。production DNSが未解決の場合、通常モードでは「本番未接続」として記録し、共有previewの健全性を確認できればコマンドは成功する。
