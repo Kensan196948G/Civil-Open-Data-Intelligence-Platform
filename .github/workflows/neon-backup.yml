@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       history_window_hours:
-        description: "Observed Neon PITR history window in hours"
+        description: "Expected PITR window in hours. Recorded for drift detection only; the gate judges the value measured from the Neon API"
         required: false
         type: string
         default: "24"
@@ -37,6 +37,10 @@ jobs:
       # Dedicated read-only or least-privilege dump URL. Never echo this value.
       NEON_DATABASE_URL: ${{ secrets.CODIP_NEON_PGDUMP_DATABASE_URL }}
       CODIP_BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE }}
+      # Read-only Neon control-plane key. Needed because the PITR retention
+      # window is a control-plane property and cannot be read over SQL.
+      # Only ever consumed as an env var by the evidence tool; never echoed.
+      NEON_API_KEY: ${{ secrets.CODIP_NEON_API_KEY }}
       CODIP_NEON_PROJECT_ID: ${{ vars.CODIP_NEON_PROJECT_ID }}
       CODIP_NEON_BRANCH: main
       CODIP_NEON_PGDUMP_HOST: ${{ vars.CODIP_NEON_PGDUMP_HOST }}
@@ -73,6 +77,7 @@ jobs:
         run: |
           echo "::add-mask::$NEON_DATABASE_URL"
           echo "::add-mask::$CODIP_BACKUP_ENCRYPTION_PASSPHRASE"
+          echo "::add-mask::$NEON_API_KEY"
           missing=()
           [ -n "${NEON_DATABASE_URL:-}" ] || missing+=("secrets.CODIP_NEON_PGDUMP_DATABASE_URL")
           [ -n "${CODIP_BACKUP_ENCRYPTION_PASSPHRASE:-}" ] || missing+=("secrets.CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE")
@@ -80,6 +85,14 @@ jobs:
           [ -n "${CODIP_LAST_RESTORE_DRILL_AT:-}" ] || missing+=("inputs.restore_drill_at or vars.CODIP_LAST_RESTORE_DRILL_AT")
           if [ "${#missing[@]}" -gt 0 ]; then
             printf '::error::Missing required Neon backup configuration: %s\n' "${missing[*]}"
+            exit 1
+          fi
+          # Reported separately from the list above because the remediation is
+          # different: this Secret must be registered by a human (CLAUDE.md §17)
+          # and cannot be substituted by a declared value without making the
+          # evidence gate self-attesting again.
+          if [ -z "${NEON_API_KEY:-}" ]; then
+            echo "::error::secrets.CODIP_NEON_API_KEY is not registered. The PITR retention window must be measured from the Neon control plane; the gate will not accept a declared history_window_hours in its place. Register a project-scoped, read-only Neon API key for project $CODIP_NEON_PROJECT_ID."
             exit 1
           fi
           actual_host="$(node -e '
@@ -128,8 +141,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo "::add-mask::$NEON_API_KEY"
           project_id="${CODIP_NEON_PROJECT_ID:-falling-dawn-93620497}"
           branch="$CODIP_NEON_BRANCH"
+          # Declared expectation only. The tool measures the real PITR window
+          # from the Neon API and records this alongside it so that a stale
+          # repository variable shows up as drift instead of passing the gate.
           history_window_hours="${CODIP_NEON_HISTORY_WINDOW_HOURS:-24}"
           owner="${CODIP_BACKUP_OWNER:-release-manager}"
           evidence_path="$RUNNER_TEMP/neon-backup-evidence.json"
@@ -138,6 +155,7 @@ jobs:
             --branch "$branch" \
             --endpoint-host "$CODIP_NEON_PGDUMP_HOST" \
             --history-window-hours "$history_window_hours" \
+            --neon-api-key-env NEON_API_KEY \
             --pg-dump-file "${{ steps.dump.outputs.artifact_path }}" \
             --pg-dump-artifact "github-actions-artifact://${{ steps.dump.outputs.artifact_name }}" \
             --restore-drill-at "$CODIP_LAST_RESTORE_DRILL_AT" \
