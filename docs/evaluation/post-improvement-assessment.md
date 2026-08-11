@@ -119,6 +119,7 @@ QA監査（`docs/security/evidence-gate-audit.md`）が検出した「証跡ゲ�
 | --- | --- | --- | --- |
 | 監視アラート通知先・受信テスト | 重大 | incident Issue自動起票は実装済み（PR待ち）。メール/Teams/当番の設定と受信確認は人間作業 | P0・人間承認 |
 | 復旧訓練の実施と記録 | 重大 | 記録様式は新設済み。実訓練の実施・記録は人間操作（本番Neon操作） | P0・人間承認 |
+| Code scanning無効（#139） | 高 | #132修正でSARIFアップロード失敗が可視化。解析は成功、設定のみ無効 | P0・repo adminが有効化 |
 | RBAC未実装 | 高 | 計画済み。Access proxy認証は稼働 | Phase 1（3か月） |
 | PDF/Excel出力未実装 | 高 | CSV/Markdown出力のみ。帳票実務には不十分 | Phase 1（3か月） |
 | 実データ収集20ジョブ規模 | 高 | 50種目標に未達。XML/公式JSONコネクタ追加で拡張中 | Phase 1で50種 |

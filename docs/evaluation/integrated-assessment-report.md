@@ -139,6 +139,7 @@ CODIPは**本番稼働中の公開データ統合・地形分析・気象海象�
 | E2E | 30 spec pass（CI実績）＋CSP/console error契約追加 |
 | lint / typecheck | 0 errors / 0 errors（統合ブランチ） |
 | 契約ゲート | github-actions-contract: 6 workflow・35 action refs SHA固定 |
+| CodeQL (PR #137) | **RED（環境要因）**: 解析は250 TS/45 JS/6 Actionsをスキャン成功、SARIFアップロードのみ失敗（リポジトリ設定「Code scanning無効」#139）。#132修正により従来の隠蔽が可視化された |
 | 本番Worker | `codip-production` 継続稼働（Version `71fdfb11`） |
 | 本番スモーク | 15分毎 success（直近run全緑） |
 | 日次バックアップ | AES256 pg_dump success（14日保持）＋PITR実測ゲート化（PR待ち） |
@@ -152,6 +153,7 @@ CODIPは**本番稼働中の公開データ統合・地形分析・気象海象�
 | 区分 | 内容 | 担当 |
 | --- | --- | --- |
 | 承認 | 統合セキュリティPRのレビュー・マージ（#131/#135/#136のクローズ判断含む） | human + Reviewer |
+| 設定 | Code scanning有効化（Settings → Code security and analysis）。無効の間PR #137のCodeQLはRED（#139） | human（repo admin） |
 | 運用 | アラート通知先・当番設定・受信テスト（incident Issue watcher含む） | human kensan＋DevOps |
 | 運用 | 復旧訓練の実施と記録 | human kensan＋DevOps |
 | Secret | `CODIP_NEON_API_KEY`・production evidence 8変数・production環境Secrets | human kensan |
