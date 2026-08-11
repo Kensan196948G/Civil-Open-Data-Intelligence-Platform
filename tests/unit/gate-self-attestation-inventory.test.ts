@@ -34,10 +34,17 @@ import { describe, expect, it } from "vitest";
  *      package.json の release:* / db:* が指すスクリプトも解決して、
  *      「棚卸しに載っていない実行可能ゲート」が 1 つも無いことを要求する。
  *
- *   3. 欠陥の導出 (unpairedContinueOnError / workflowFilesReadBy / defect)
+ *   3. 欠陥の導出 (unpairedContinueOnError / workflowInspectionScope / defect)
  *      等級1 以上と判定した項目は、その欠陥が **本ブランチの現物に今も在る**
  *      ことを正規表現で示す。是正が統合されたら一致しなくなり、テストが落ちて
  *      再分類が強制される。「是正中だから保留」で等級を空にしない。
+ *
+ *      抽出器は Observation を返す。空集合には「本当に無い」と「抽出器が現物を
+ *      追えなくなった」の 2 つの意味があり、後者を合格として読ませないためである
+ *      (2026-08-12 実測: workflowFilesReadBy が readNormalized だけを見ていたため、
+ *      backend が workflowSource へ置換した木では抽出 0 件になり、『覆っていない』
+ *      という主張が空集合のまま緑で通った)。抽出 0 件は「覆っていないことを確認
+ *      した」ではなく「観測に失敗した」であり、必ず失敗として扱う。
  *
  *   4. 実行条件の導出 (deriveRunsOn)
  *      package.json → workflow YAML → job → job の if: → workflow の on:
@@ -58,7 +65,9 @@ import { describe, expect, it } from "vitest";
  *     「検査は厳密だが測っている対象が意図とずれている」側 (偽 FAIL。正しい成果物を
  *     落とす) は原因が別で、混ぜると等級の大小が意味を失うため本表には載せない。
  *     ただし偽 PASS 側にも現れる亜種 —— 検査範囲を期待値から導出している型 ——
- *     だけは scopeSelfDerived として下位型に持つ (CTO 提案 2026-08-12 のうち A)。
+ *     だけは scope-self-derived として下位型に持つ (CTO 提案 2026-08-12 のうち A)。
+ *     偽 FAIL 側の亜種 B・C は捨てずに DESIGN_MISMATCHES へ **等級列を持たない
+ *     別表** として残す (CTO 裁定 2026-08-12)。
  *   - runsOn は **ファイルが走るか** を測っており、**その検査が走るか** ではない。
  *     同じファイルが無条件 job と条件付き job の両方から、別々の引数で呼ばれる場合、
  *     条件付き側の検査モードは PR で一度も評価されない。この差は下記
@@ -74,6 +83,25 @@ const listFiles = (relativeDir: string) =>
     .map((entry) => `${relativeDir}/${entry.name}`)
     .sort();
 const workflowFilesOnDisk = () => listFiles(".github/workflows").filter((file) => /\.ya?ml$/.test(file));
+
+/**
+ * 抽出器の戻り値。「何を観測したか」と「そもそも観測できたか」を分けて持つ。
+ *
+ * 正規表現で現物から欠陥を数える抽出器は、対象の書き方が変わると静かに 0 件を
+ * 返す。0 件を「欠陥が無い」と読むと、抽出器が壊れた瞬間に検査が緑になる ——
+ * これは本テストが等級2 (検査経路の閉塞) として摘発している欠陥と同じ形である。
+ * よって抽出器は 0 件の意味を自分で言えなければならない。
+ */
+type Observation<T> = {
+  /** false = 抽出器が現物の形を追えていない。value を結論の根拠にしてはならない */
+  observed: boolean;
+  /** 追えなかった理由。observed が true なら空文字 */
+  blindSpot: string;
+  value: T;
+};
+
+const observed = <T>(value: T): Observation<T> => ({ observed: true, blindSpot: "", value });
+const blind = <T>(blindSpot: string, value: T): Observation<T> => ({ observed: false, blindSpot, value });
 
 // ---------------------------------------------------------------------------
 // 1. 信号の導出
@@ -293,8 +321,9 @@ type GateEntry = {
   /** runsOn !== "pr" のとき、走らない間に何が未検査になるか。"pr" のときは空 */
   notRunMeans: string;
   defect?: Defect;
-  /** 等級2 の下位型「検査範囲を期待値から導出している」に該当する */
-  scopeSelfDerived?: boolean;
+  // 等級2 の下位型 scope-self-derived はここに真偽を持たない。
+  // 現物から導出できる主張を散文や真偽値で固定すると、是正が入っても言い張れて
+  // しまう (2026-08-12: 実際に偽になった)。供給元は SCOPE_SELF_DERIVED_PROOFS だけ。
 };
 
 const SCRIPT_GATES: readonly GateEntry[] = [
@@ -365,11 +394,13 @@ const SCRIPT_GATES: readonly GateEntry[] = [
     file: "scripts/tools/check-github-actions-contract.js",
     grade: 4,
     issue: "open",
-    why: "92 件の requireText。加えて SHA ピン検査の対象がハードコード列挙で、.github/workflows の全ファイルを覆っていない (下記 workflowFilesReadBy で導出)。等級2 下位型 scope-self-derived にも該当する",
+    why:
+      "requireText による文言の部分一致で workflow の内容を検査している。" +
+      "SHA ピン検査の走査範囲が全 workflow を覆っているかは散文で主張せず、" +
+      "SCOPE_SELF_DERIVED_PROOFS が現物から導出する (Issue #133 として起票済み)",
     signals: { substringDominant: true, probesExternal: false, probesFs: false },
     runsOn: "pr",
     notRunMeans: "",
-    scopeSelfDerived: true,
   },
   {
     file: "scripts/tools/check-neon-backup-evidence.js",
@@ -555,8 +586,30 @@ const SCRIPT_GATES: readonly GateEntry[] = [
   },
 ];
 
-/** ゲートではないもの。理由を必ず持たせ、除外そのものを監査可能にする。 */
-const NON_GATES: readonly { file: string; why: string }[] = [
+/**
+ * ゲートではないもの。理由を必ず持たせ、除外そのものを監査可能にする。
+ *
+ * `arrivesWith` は「他ブランチに在るが本ブランチにはまだ無い」ファイル用の欄。
+ * 分類を統合後まで先送りすると、統合した瞬間に未分類として落ちて統合作業を止める。
+ * かといって恒久的に猶予すると、消えたファイルの分類が亡霊として残り続ける。
+ * よって期限を持たせ、`until` を過ぎたら落ちる —— 猶予であって緩和ではない
+ * (時限付き allowlist。check-dependency-audit.js の expires と同じ型)。
+ */
+type NonGate = {
+  file: string;
+  why: string;
+  arrivesWith?: { ref: string; until: string };
+};
+
+const NON_GATES: readonly NonGate[] = [
+  {
+    file: "scripts/tools/csp-contract.js",
+    why:
+      "CSP 期待値のリテラル定義とヘッダ評価関数のライブラリ。合否を作るのは呼び出し側 " +
+      "(release-smoke.js / tests/e2e/csp-contract.spec.ts) であり、このファイル自体は証跡を受理・棄却しない。" +
+      "devDependencies 無しで読めるよう素の CommonJS で書かれている点も、ライブラリとしての位置づけを裏づける",
+    arrivesWith: { ref: "backend e199e64 (Issue #129)", until: "2026-08-26" },
+  },
   { file: "scripts/tools/prisma-client-loader.js", why: "Prisma クライアントの解決ヘルパー。合否判定を持たない" },
   { file: "scripts/tools/spawn-result.js", why: "子プロセス実行結果の整形ヘルパー" },
   { file: "scripts/tools/start-checked.js", why: "サーバ起動を待ち受けるヘルパー。合否判定を持たない" },
@@ -569,6 +622,58 @@ const NON_GATES: readonly { file: string; why: string }[] = [
   },
 ];
 
+/**
+ * 等級列を持たない別表 (CTO 裁定 2026-08-12)。
+ *
+ * 4 等級は「合否の作り方が甘い」側 —— 偽 PASS —— の順序尺度である。ここに挙げる
+ * のは反対側、つまり検査は厳密なのに測っている対象が意図とずれていて、正しい
+ * 成果物を落とす型 (偽 FAIL) である。原因が別なので等級を付けると大小関係が
+ * 壊れるが、実在するので消しもしない。
+ *
+ * 亜種の区別:
+ *   B = 測定対象の取り違え。検査そのものは正しく動いている
+ *   C = 検査の粒度が対象の粒度と合っていない
+ */
+type DesignMismatch = {
+  id: string;
+  subtype: "B" | "C";
+  what: string;
+  /** いつ・どこで実際に観測したか。机上の懸念をここへ書かない */
+  observed: string;
+  /** 再発時に何が気づかせるか */
+  guard: string;
+};
+
+const DESIGN_MISMATCHES: readonly DesignMismatch[] = [
+  {
+    id: "graded-on-a-tree-that-already-has-the-fix",
+    subtype: "B",
+    what:
+      "等級表の defect 正規表現を、是正 commit が既に載っている木で評価すると不一致になり FAIL する。" +
+      "検査は正しく『この木には欠陥が無い』と言っているが、統合経路に載る木はそれではないため、" +
+      "その FAIL に従って等級を下げると逆に偽になる",
+    observed:
+      "2026-08-12 CTO 実測。backend tip 93c6a6d 上で create-neon-backup-evidence.js の行が FAIL したが、" +
+      "原因は §17 決裁待ちで着地しない T-B4 (6257ed2) が同じ木に載っていたこと。" +
+      "codeql.yml も同じ形 (3088c3d が同じ木に在る)",
+    guard:
+      "等級は必ず『どの木で測ったか』とセットで読む。統合前の他ブランチ tip で測った FAIL は、" +
+      "その commit が実際に統合経路へ載るかを確かめるまで是正の根拠にしない",
+  },
+  {
+    id: "file-granularity-vs-check-granularity",
+    subtype: "C",
+    what:
+      "runsOn / grade はファイル単位でしか持てないが、実際の実行条件と検査品質はスクリプト内の" +
+      "検査モード単位で変わる。同じファイルが PR で走る経路と dispatch でしか走らない経路の両方を持つ場合、" +
+      "ファイル単位の分類はどちらかを必ず取りこぼす",
+    observed:
+      "2026-08-12 棚卸し時。production-evidence-report.js が該当し、#128 の形式ゲートが" +
+      "dispatch-only 側にだけ結線されている",
+    guard: "「実行条件はファイル単位であり、検査モード単位ではない」テストが、取りこぼす側の存在を明示的に固定している",
+  },
+];
+
 type WorkflowEntry = {
   file: string;
   grade: Grade;
@@ -578,6 +683,12 @@ type WorkflowEntry = {
   isGate: boolean;
   runsOn: RunsOn;
   notRunMeans: string;
+  /**
+   * 他ブランチで是正済みの commit。本ブランチの現物から欠陥が消えていた場合に、
+   * 「なぜ等級表がまだ欠陥を載せているのか」を答えられるようにするための欄。
+   * 欠陥が現物に在る間は等級側が根拠になるので、この欄だけでは何も主張しない。
+   */
+  remediatedBy?: string;
 };
 
 const WORKFLOWS: readonly WorkflowEntry[] = [
@@ -593,11 +704,16 @@ const WORKFLOWS: readonly WorkflowEntry[] = [
   {
     file: ".github/workflows/codeql.yml",
     grade: 2,
-    issue: "open",
-    why: "analyze ステップが continue-on-error: true で、その outcome を見て落とし直すステップが無い。解析自体が失敗してもジョブは緑になり、『CodeQL が走った』が反証不能になる",
+    issue: "remediating",
+    why:
+      "analyze ステップが continue-on-error: true で、その outcome を見て落とし直すステップが無い。" +
+      "解析自体が失敗してもジョブは緑になり、『CodeQL が走った』が反証不能になる。" +
+      "Issue #132 として起票し、backend の 3088c3d が analyze から continue-on-error を撤去する契約へ" +
+      "反転させている (本ブランチ未統合)",
     isGate: true,
     runsOn: "pr",
     notRunMeans: "",
+    remediatedBy: "3088c3d",
   },
   {
     file: ".github/workflows/data-ingestion.yml",
@@ -648,8 +764,23 @@ const WORKFLOWS: readonly WorkflowEntry[] = [
 /**
  * `continue-on-error: true` を持ちながら、後続で outcome を見て落とし直す
  * ステップが無いものを列挙する。これがあるとジョブは構造的に失敗し得ない (等級2)。
+ *
+ * 空集合ハザード対策: `continue-on-error` という語の出現数 (粗い指標) と、
+ * `true` / `false` のリテラルとして読めた行数 (精密な指標) を突き合わせる。
+ * 両者が一致しなければ、書式変更や式による指定で述語が現物を追えていない状態
+ * なので、空集合を「欠陥なし」の証拠にせず観測失敗として返す。
  */
-export function unpairedContinueOnError(yaml: string): string[] {
+export function unpairedContinueOnError(yaml: string): Observation<string[]> {
+  const mentions = (yaml.match(/continue-on-error/g) ?? []).length;
+  const readable = (yaml.match(/^\s*continue-on-error:\s*(?:true|false)\s*$/gm) ?? []).length;
+  if (mentions !== readable) {
+    return blind(
+      `continue-on-error の言及 ${mentions} 件に対し true/false のリテラルとして読めたのは ${readable} 件。` +
+        "書式が変わったか値が式で与えられている。空集合を『対で使われている』の証拠にしてはならない",
+      [],
+    );
+  }
+
   const lines = yaml.split("\n");
   const unpaired: string[] = [];
 
@@ -660,7 +791,9 @@ export function unpairedContinueOnError(yaml: string): string[] {
     let stepId: string | null = null;
     for (let cursor = index; cursor >= 0; cursor -= 1) {
       const current = lines[cursor];
-      const idMatch = /^\s*id:\s*([\w-]+)\s*$/.exec(current);
+      // `- id: foo` (ステップ開始行に id が乗る形) も拾う。取りこぼすと id が在るのに
+    // 「誰も参照できない」と読み、対で使っている workflow を欠陥に数えてしまう
+    const idMatch = /^\s*(?:-\s+)?id:\s*([\w-]+)\s*$/.exec(current);
       if (idMatch) {
         stepId = idMatch[1];
         break;
@@ -677,29 +810,86 @@ export function unpairedContinueOnError(yaml: string): string[] {
     if (!referenced) unpaired.push(`${stepId}`);
   });
 
-  return unpaired;
+  return observed(unpaired);
 }
 
-/** check-github-actions-contract.js が実際に読み込んでいる workflow ファイル。 */
-export function workflowFilesReadBy(source: string): string[] {
-  return [...source.matchAll(/readNormalized\("(\.github\/workflows\/[\w.-]+)"\)/g)]
-    .map((match) => match[1])
-    .sort();
+/**
+ * 検査スクリプトが実際に走査する workflow ファイルの集合を導出する。
+ *
+ * 対象の指定には 2 つの形があり、両方を見なければ範囲を誤る。
+ *   1. ディレクトリ列挙 — その場に何ファイルあっても全件が対象になる
+ *   2. 名指し — 列挙されたものだけが対象になる
+ *
+ * 名指しのヘルパー名は変わり得る (実例: readNormalized → workflowSource)。
+ * 名前を並べて追随させるだけでは、次に変わったとき静かに 0 件へ落ちる。
+ * よって「1 件も抽出できない」は空集合ではなく観測失敗として返す。
+ */
+export function workflowInspectionScope(source: string, onDisk: readonly string[]): Observation<string[]> {
+  if (/readdirSync\([\s\S]{0,80}?(?:WORKFLOW_DIR|\.github\/workflows)/.test(source)) {
+    return observed([...onDisk].sort());
+  }
+
+  const named = [
+    ...source.matchAll(/(?:readNormalized|workflowSource)\("(\.github\/workflows\/[\w.-]+)"\)/g),
+  ].map((match) => match[1]);
+  const unique = [...new Set(named)].sort();
+
+  if (unique.length === 0) {
+    return blind(
+      "workflow ファイルへの参照を 1 件も抽出できない。ディレクトリ列挙も名指しも見つからず、" +
+        "抽出器が現物の書き方を追えていない。空集合を『覆っていない』の証拠に使ってはならない",
+      [],
+    );
+  }
+  return observed(unique);
 }
 
 /**
  * 等級2 下位型 scope-self-derived の導出器。
  *
  * 「検査範囲を期待値から導出している」検査は、経路が開いていても範囲外が
- * 構造的に見えない。散文で下位型を主張すると等級1 になるので、該当を主張する
- * 項目には必ずここへ導出器を置き、実際に取りこぼしが在ることを示す。
+ * 構造的に見えない。散文で下位型を主張すると等級1 になるので、該当の有無は
+ * ここでの導出だけを供給元とし、棚卸しのエントリ側へ真偽を書き込まない。
+ *
+ * `positiveSample` / `negativeSample` は導出器そのものへの変異入力である。
+ * 現物の状態は統合の進み方で変わるため、「実際に取りこぼしが在る」を非空虚性の
+ * 根拠にすると、是正が入った瞬間に検査が空虚化する。合成入力で両方の答が出せる
+ * ことを要求すれば、非空虚性はブランチの状態から独立する。
  */
-const SCOPE_SELF_DERIVED_PROOFS: Record<string, () => boolean> = {
-  "scripts/tools/check-github-actions-contract.js": () => {
-    const inspected = workflowFilesReadBy(read("scripts/tools/check-github-actions-contract.js"));
-    return inspected.length < workflowFilesOnDisk().length;
+type ScopeProof = {
+  /** 対象ソースから、実際に走査される集合を導出する */
+  scopeOf: (source: string, universe: readonly string[]) => Observation<string[]>;
+  /** 覆うべき母集合 */
+  universe: () => string[];
+  /** 取りこぼしと判定されなければならない合成入力 */
+  positiveSample: (universe: readonly string[]) => string;
+  /** 覆っていると判定されなければならない合成入力 */
+  negativeSample: (universe: readonly string[]) => string;
+  /** 観測失敗と判定されなければならない合成入力 */
+  blindSample: (universe: readonly string[]) => string;
+};
+
+const SCOPE_SELF_DERIVED_PROOFS: Record<string, ScopeProof> = {
+  "scripts/tools/check-github-actions-contract.js": {
+    scopeOf: workflowInspectionScope,
+    universe: workflowFilesOnDisk,
+    positiveSample: (universe) => `const source = workflowSource(${JSON.stringify(universe[0])});`,
+    negativeSample: () => `fs.readdirSync(path.join(root, WORKFLOW_DIR), { withFileTypes: true })`,
+    blindSample: () => `const sources = collectWorkflows({ dir: WORKFLOW_DIR });`,
   },
 };
+
+/**
+ * 走査範囲を期待値から導出しているか。観測できなければ真偽を答えない。
+ */
+function scopeSelfDerivedOf(file: string): Observation<boolean> {
+  const proof = SCOPE_SELF_DERIVED_PROOFS[file];
+  if (!proof) return blind(`${file} に走査範囲の導出器が無い`, false);
+  const universe = proof.universe();
+  const scope = proof.scopeOf(read(file), universe);
+  if (!scope.observed) return blind(scope.blindSpot, false);
+  return observed(scope.value.length < universe.length);
+}
 
 // ---------------------------------------------------------------------------
 // テスト
@@ -712,8 +902,9 @@ describe("棚卸しは実ファイルを網羅する", () => {
 
     // 未分類 = 新しいゲートを足したのに等級を付けていない状態。ここで落とす
     expect(onDisk.filter((file) => !accounted.includes(file))).toEqual([]);
-    // 亡霊 = 削除済みファイルの分類が残っている状態
-    expect(accounted.filter((file) => !onDisk.includes(file))).toEqual([]);
+    // 亡霊 = 削除済みファイルの分類が残っている状態。統合待ちのものは期限付きで除く
+    const pending = new Set(NON_GATES.filter((entry) => entry.arrivesWith).map((entry) => entry.file));
+    expect(accounted.filter((file) => !onDisk.includes(file) && !pending.has(file))).toEqual([]);
   });
 
   it(".github/workflows の全ファイルが分類済みである", () => {
@@ -743,6 +934,24 @@ describe("棚卸しは実ファイルを網羅する", () => {
   it("除外理由は空文字や一言で済ませられない", () => {
     for (const entry of NON_GATES) {
       expect(entry.why.length, `${entry.file} の除外理由が短すぎる`).toBeGreaterThan(15);
+    }
+  });
+
+  it("統合待ちの分類は期限を持ち、期限内であり、到着したら猶予が外れる", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    for (const entry of NON_GATES) {
+      if (!entry.arrivesWith) continue;
+      expect(entry.arrivesWith.ref.length, `${entry.file} に到着元の参照が無い`).toBeGreaterThan(5);
+      expect(entry.arrivesWith.until).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      // 期限切れ = 統合が来ないまま分類だけが残っている。猶予を無期限にしない
+      expect(
+        entry.arrivesWith.until >= today,
+        `${entry.file} の統合待ち猶予が ${entry.arrivesWith.until} で切れている。` +
+          "到着していないなら分類を外し、到着したなら arrivesWith を外すこと",
+      ).toBe(true);
+      // 到着後にこの欄が残っていても分類そのものは通常どおり検査される
+      // (亡霊検知が空振りするだけで、未分類検知と除外理由の検査は効いている)。
+      // 残骸を掃除させる強制力は until が持つ
     }
   });
 });
@@ -878,54 +1087,121 @@ describe("等級の基準が機械可読である", () => {
   });
 });
 
-describe("等級2 下位型 scope-self-derived は導出できる主張に限る", () => {
-  it("該当を主張する項目には導出器があり、実際に取りこぼしが在る", () => {
-    const claimed = SCRIPT_GATES.filter((gate) => gate.scopeSelfDerived);
-    expect(claimed.length).toBeGreaterThan(0);
-    for (const gate of claimed) {
-      const prove = SCOPE_SELF_DERIVED_PROOFS[gate.file];
-      expect(prove, `${gate.file} の走査範囲欠落を導出する関数が無い`).toBeDefined();
-      expect(prove(), `${gate.file} は走査範囲を覆っている。下位型の主張を取り下げること`).toBe(true);
-      expect(gate.why).toMatch(/scope-self-derived/);
+describe("等級2 下位型 scope-self-derived は現物から導出する", () => {
+  const proofFiles = Object.keys(SCOPE_SELF_DERIVED_PROOFS);
+
+  it("導出器の対象が棚卸しに載っている", () => {
+    expect(proofFiles.length).toBeGreaterThan(0);
+    for (const file of proofFiles) {
+      expect(SCRIPT_GATES.map((gate) => gate.file), `${file} の導出器だけ在って分類が無い`).toContain(file);
     }
   });
 
-  it("導出器を置いたのに主張していない項目が無い", () => {
-    // 導出器だけ残って分類が消える (逆に主張だけ残って導出器が消える) のを防ぐ
-    const claimed = new Set(SCRIPT_GATES.filter((gate) => gate.scopeSelfDerived).map((gate) => gate.file));
-    expect(Object.keys(SCOPE_SELF_DERIVED_PROOFS).filter((file) => !claimed.has(file))).toEqual([]);
+  it.each(proofFiles)("%s の走査範囲を観測できる", (file) => {
+    // 観測できない状態を「覆っていない」とも「覆っている」とも読ませない。
+    // これが 2026-08-12 に緑のまま主張が偽になった経路そのものである
+    const derived = scopeSelfDerivedOf(file);
+    expect(derived.observed, derived.blindSpot).toBe(true);
+  });
+
+  it.each(proofFiles)("%s の導出器は合成入力で答を変える (定数化していない)", (file) => {
+    // 非空虚性を現物の状態に頼ると、是正が統合された瞬間に検査が空虚化する。
+    // 導出器そのものへ変異入力を与えて、両方の答が出せることを要求する
+    const proof = SCOPE_SELF_DERIVED_PROOFS[file];
+    const universe = proof.universe();
+    expect(universe.length, "母集合が 1 件以下では取りこぼしを作れない").toBeGreaterThan(1);
+
+    const shortfall = proof.scopeOf(proof.positiveSample(universe), universe);
+    expect(shortfall.observed, `positiveSample を観測できない: ${shortfall.blindSpot}`).toBe(true);
+    expect(shortfall.value.length, "名指し 1 件の入力を『覆っている』と判定した").toBeLessThan(universe.length);
+
+    const full = proof.scopeOf(proof.negativeSample(universe), universe);
+    expect(full.observed, `negativeSample を観測できない: ${full.blindSpot}`).toBe(true);
+    expect(full.value.length, "ディレクトリ列挙の入力を『取りこぼし』と判定した").toBe(universe.length);
+
+    const unreadable = proof.scopeOf(proof.blindSample(universe), universe);
+    expect(unreadable.observed, "追えない書き方を観測できたことにしている").toBe(false);
+    expect(unreadable.blindSpot.length).toBeGreaterThan(10);
+  });
+
+  it.each(proofFiles)("%s が該当するなら等級2 以上である", (file) => {
+    const derived = scopeSelfDerivedOf(file);
+    expect(derived.observed).toBe(true);
+    if (!derived.value) return;
+    const gate = SCRIPT_GATES.find((entry) => entry.file === file)!;
+    expect(typeof gate.grade === "number" && gate.grade >= 2, `${file} は走査範囲を覆っていない`).toBe(true);
+  });
+
+  it("該当の真偽を散文や真偽値で固定していない", () => {
+    // 現物から導出できる主張を棚卸し側へ書き込むと、是正が入っても言い張れる。
+    // 供給元を導出器ひとつに保つ
+    for (const gate of SCRIPT_GATES) {
+      expect(gate.why, `${gate.file} が下位型の該当を散文で主張している`).not.toMatch(/scope-self-derived/);
+    }
   });
 });
 
 describe("未是正として報告した欠陥が現物から導出できる", () => {
-  it("codeql.yml の analyze は落とし直されない (等級2)", () => {
-    expect(unpairedContinueOnError(read(".github/workflows/codeql.yml"))).not.toEqual([]);
+  it("unpairedContinueOnError は合成入力で対・非対・観測失敗を区別する", () => {
+    // 非空虚性を現物へ頼らない。是正が統合されても、この 3 件は形が変わらない
+    const unpaired = ["jobs:", "  a:", "    steps:", "      - id: analyze", "        continue-on-error: true"].join("\n");
+    const paired = [...unpaired.split("\n"), "      - if: steps.analyze.outcome == 'failure'", "        run: exit 1"].join("\n");
+    const expression = ["      - id: analyze", "        continue-on-error: ${{ github.event_name == 'push' }}"].join("\n");
+
+    expect(unpairedContinueOnError(unpaired).value).toEqual(["analyze"]);
+    expect(unpairedContinueOnError(paired).value).toEqual([]);
+    // 値が式なら true/false として読めない = 対かどうかを答えられない
+    expect(unpairedContinueOnError(expression).observed, "式による指定を読めたことにしている").toBe(false);
+  });
+
+  it("codeql.yml の等級は現物の continue-on-error 状態と一致する", () => {
+    const codeql = WORKFLOWS.find((workflow) => workflow.file === ".github/workflows/codeql.yml")!;
+    const unpaired = unpairedContinueOnError(read(codeql.file));
+    expect(unpaired.observed, unpaired.blindSpot).toBe(true);
+
+    if (unpaired.value.length > 0) {
+      expect(codeql.grade, "analyze が落とし直されないなら等級2").toBe(2);
+      expect(codeql.issue, "欠陥が現物に在るのに起票状態が none になっている").not.toBe("none");
+      return;
+    }
+    // 現物から消えている木で評価された場合。等級表は統合経路の木に対して書かれて
+    // いるので、是正 commit を名指しできることを要求する (DESIGN_MISMATCHES 亜種B)
+    expect(
+      codeql.remediatedBy,
+      "codeql.yml から欠陥が消えている。是正 commit を remediatedBy へ書くか、等級を付け直すこと",
+    ).toBeDefined();
   });
 
   it("production-smoke.yml は continue-on-error を対で使っている (誤検知しないこと)", () => {
-    // この 2 件が同じ判定になるなら、上の検査は「continue-on-error があるか」しか
+    // この判定が上の合成入力と同じ答になるなら、述語は「continue-on-error があるか」しか
     // 見ていないことになり、証跡を残すための正当な用法まで欠陥に数えてしまう
-    expect(unpairedContinueOnError(read(".github/workflows/production-smoke.yml"))).toEqual([]);
+    const observation = unpairedContinueOnError(read(".github/workflows/production-smoke.yml"));
+    expect(observation.observed, observation.blindSpot).toBe(true);
+    expect(observation.value).toEqual([]);
   });
 
   it("unpaired と判定された workflow は棚卸しでも等級2 になっている", () => {
     for (const workflow of WORKFLOWS) {
       if (!workflow.isGate) continue;
       const unpaired = unpairedContinueOnError(read(workflow.file));
-      if (unpaired.length > 0) {
+      expect(unpaired.observed, `${workflow.file}: ${unpaired.blindSpot}`).toBe(true);
+      if (unpaired.value.length > 0) {
         expect(workflow.grade, `${workflow.file} に unpaired continue-on-error がある`).toBe(2);
       }
     }
   });
 
-  it("SHA ピン検査の対象が .github/workflows を覆っていない", () => {
-    const inspected = workflowFilesReadBy(read("scripts/tools/check-github-actions-contract.js"));
-    const uninspected = workflowFilesOnDisk().filter((file) => !inspected.includes(file));
+  it("SHA ピン検査の走査範囲は観測できる形で導出されている", () => {
+    const target = "scripts/tools/check-github-actions-contract.js";
+    const onDisk = workflowFilesOnDisk();
+    const scope = workflowInspectionScope(read(target), onDisk);
 
-    // 網羅対象がハードコード列挙である限り、workflow を足しても検査は増えない。
-    // 是正されて全ファイルを走査する形になったら、この期待も更新すること
-    expect(uninspected.length, "検査対象が全 workflow を覆うようになったなら棚卸しを更新すること").toBeGreaterThan(0);
-    expect(inspected.length).toBeLessThan(workflowFilesOnDisk().length);
+    // 抽出 0 件は「覆っていないことを確認した」ではなく「観測に失敗した」。
+    // ここを空集合のまま通すと、両方の不等式が成立して主張が偽のまま緑になる
+    expect(scope.observed, scope.blindSpot).toBe(true);
+    expect(scope.value.length, "走査対象が 1 件も無いのに観測成功と答えている").toBeGreaterThan(0);
+    // 覆っているかどうかは主張せず、覆っていない場合だけ等級側へ結び付ける
+    expect(scope.value.every((file) => onDisk.includes(file)), "走査対象に現存しない workflow が挙がっている").toBe(true);
   });
 });
 
@@ -950,6 +1226,31 @@ describe("Issue 起票対象が棚卸しから決まる", () => {
   it("すべての項目が根拠を持つ", () => {
     for (const entry of [...SCRIPT_GATES, ...WORKFLOWS]) {
       expect(entry.why.length, `${entry.file} の根拠が短すぎる`).toBeGreaterThan(25);
+    }
+  });
+});
+
+describe("設計のずれ (偽 FAIL 側) は等級を持たない別表で管理する", () => {
+  it("等級と混ざらない", () => {
+    // 4 等級は偽 PASS の順序尺度である。偽 FAIL を同じ列へ入れると大小関係が
+    // 意味を失うため、型の上でも等級を持たせない (CTO 裁定 2026-08-12)
+    expect(DESIGN_MISMATCHES.length).toBeGreaterThan(0);
+    for (const mismatch of DESIGN_MISMATCHES) {
+      expect(Object.keys(mismatch).sort()).toEqual(["guard", "id", "observed", "subtype", "what"]);
+    }
+  });
+
+  it("id が一意で、亜種 B・C の両方が実在する", () => {
+    const ids = DESIGN_MISMATCHES.map((mismatch) => mismatch.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(new Set(DESIGN_MISMATCHES.map((mismatch) => mismatch.subtype))).toEqual(new Set(["B", "C"]));
+  });
+
+  it("机上の懸念ではなく、いつ観測したかを書いている", () => {
+    for (const mismatch of DESIGN_MISMATCHES) {
+      expect(mismatch.observed, `${mismatch.id} に観測日が無い`).toMatch(/\d{4}-\d{2}-\d{2}/);
+      expect(mismatch.what.length, `${mismatch.id} の説明が短すぎる`).toBeGreaterThan(40);
+      expect(mismatch.guard.length, `${mismatch.id} に再発時の気づき方が無い`).toBeGreaterThan(20);
     }
   });
 });
