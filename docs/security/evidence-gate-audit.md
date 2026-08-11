@@ -2,6 +2,8 @@
 
 > 🗓️ 実施: 2026-08-11（T-Q3）｜ 種別: **read-only 調査記録**｜ 実施者: QA
 > 🔁 更新: 2026-08-11（T-B4 / Issue #126・#127）｜ 更新者: backend｜ 範囲: §2.1 の是正済み行と、それに連動する件数・内訳・残課題のみ。**分類の方法論（§1）と §2.2 以降の判定は QA の記録のまま変更していない**
+> 🔁 更新: 2026-08-12（Issue #128・#129 / T-B7）｜ 更新者: backend（本ファイルの当該範囲は CTO により backend へ所有権移管）｜ 範囲: §2.2 #7・#8、§2.4 #16 の是正反映と §2.2 の注記追加、および **§2.5 の新設**。**分類（🟢/🟡/🔴）と §0.1 の件数・総数 26 は変更していない**（供給元の性質は是正で変わっていないため）
+> ⚠️ 本監査の主張が実態と一致していることは `tests/unit/evidence-gate-audit-scenarios.test.ts` が実行検査する（§2.5）。**是正の反映漏れは CI で落ちる。**
 > 関連: [監視・アラート runbook §1.2.1](../runbooks/monitoring.md)（Neon PITR の個別調査）/ [運用台帳](../operations/operations-ledger.md) / [通知テスト記録](../runbooks/notification-test-record.md) / [復旧訓練 実施記録](../runbooks/restore-drill-record.md)
 
 ---
@@ -82,8 +84,8 @@ Issue #127 でこの構造は撤去した。既定値を削除し、`--restore-d
 
 | # | ゲート名（検査項目） | 供給元（ファイル:行） | 分類 | 偽陰性シナリオ | 是正案 |
 | ---: | --- | --- | :---: | --- | --- |
-| 7 | Monitoring evidence 7項目（`Cloudflare Access evidence recorded` ほか。`production-evidence-report.js:241-247`、判定関数は `:120-125`） | `ci.yml:177-183` の `vars.CODIP_CLOUDFLARE_ACCESS_EVIDENCE` / `CODIP_MONITORING_CONTACTS` / `CODIP_CLOUDFLARE_ALERT_POLICY` / `CODIP_CLOUDFLARE_LOGS_EVIDENCE` / `CODIP_NEON_MONITORING_EVIDENCE` / `CODIP_SMOKE_MONITORING_SCHEDULE` / `CODIP_ROLLBACK_OWNER` → `production-evidence-report.js:44-52` | 🔴 | `evidenceState()` は「空でない」かつ「placeholder 正規表現（`:58-67`）に一致しない」だけを見る。**GitHub Variables に `ok` の2文字を入れれば7項目すべてが ✅ になる。** アラートポリシーが存在しなくても、監視連絡先が失効していても通る | 検査可能な識別子（Cloudflare policy ID、Actions schedule 文字列など）に形式を限定し、可能なものは API で存在確認する。少なくとも自由文字列を ✅ 判定の根拠にしない |
-| 8 | `Backup/restore evidence recorded`（`production-evidence-report.js:248`） | `ci.yml:184` `vars.CODIP_BACKUP_RESTORE_EVIDENCE` → `production-evidence-report.js:54-56` | 🔴 | #7 と同じ。§2.1 の Neon 側ゲートとは独立しており、こちらは文字列の非空判定のみ | `release:check-neon-backup-evidence` の判定結果を供給元にする（証跡変数の二重管理をやめる） |
+| 7 | Monitoring evidence 7項目（`Cloudflare Access evidence recorded` ほか。`production-evidence-report.js:241-247`、判定関数は `:264-280`） | `ci.yml:177-183` の `vars.CODIP_CLOUDFLARE_ACCESS_EVIDENCE` / `CODIP_MONITORING_CONTACTS` / `CODIP_CLOUDFLARE_ALERT_POLICY` / `CODIP_CLOUDFLARE_LOGS_EVIDENCE` / `CODIP_NEON_MONITORING_EVIDENCE` / `CODIP_SMOKE_MONITORING_SCHEDULE` / `CODIP_ROLLBACK_OWNER` → `production-evidence-report.js:44-52` | 🔴 | 🗓️ **2026-08-11（QA 調査時点）の所見**: `evidenceState()` は「空でない」かつ「placeholder 正規表現に一致しない」だけを見る。**GitHub Variables に `ok` の2文字を入れれば7項目すべてが ✅ になる。** アラートポリシーが存在しなくても、監視連絡先が失効していても通る。→ この経路は **Issue #128 で閉じた**（現況は §2.5 S7 が実行検査する） | **是正済み（Issue #128）。** `EVIDENCE_FORMATS`（`:133-200`）で変数ごとに形を固定し、`evidenceFormatState()`（`:264-280`）だけが ✅ を出せる。ISO 8601 日付・cron 式・連絡先ハンドル・空白なし識別子など、**人間が場当たりに書けない形**を要求する。分類は 🔴 のまま（供給元は `vars.*` のままで、形式が正しい嘘は依然書ける）。API での存在確認は #9 / #10 と同じく Cloudflare 読取権限が要るため未着手 |
+| 8 | `Backup/restore evidence recorded`（`production-evidence-report.js:248`） | `ci.yml:184` `vars.CODIP_BACKUP_RESTORE_EVIDENCE` → `production-evidence-report.js:54-56` | 🔴 | 🗓️ **2026-08-11（QA 調査時点）の所見**: #7 と同じ。§2.1 の Neon 側ゲートとは独立しており、こちらは文字列の非空判定のみ。→ **Issue #128 で閉じた**（現況は §2.5 S8） | **是正済み（Issue #128）。** PITR window + 訓練日（ISO 8601）+ 訓練結果（`DRILL_OUTCOMES` のいずれか）を要求する（`:192-199`）。残る課題は供給元の一本化で、`release:check-neon-backup-evidence` の判定結果を供給元にする案は未着手（証跡変数の二重管理が残っている） |
 | 9 | `CODIP_NEON_BRANCH` / `CODIP_HYPERDRIVE_BINDING` 必須・非 placeholder（`validate-production-target-env.js:106-110`） | `ci.yml:169-170` の `vars.*` | 🔴 | 実際のデプロイ先と異なる branch 名・binding 名でも、placeholder 語（`:6-14`）を含まなければ通る。誤った Neon branch を指したまま production 判定が成立する | `wrangler.jsonc` の `hyperdrive[].binding` および Neon API の branch 一覧と突合する |
 | 10 | `CODIP_DISABLE_TOKEN_AUTH=true` / `CODIP_TRUST_PROXY_AUTH=true`（`validate-production-target-env.js:121-127`） | `ci.yml:172-173` の `vars.*` | 🔴 | **認証方式の宣言と実際のデプロイ設定が乖離しても検知しない。** Variables が `true` でも、デプロイ済み Worker の実効設定が異なれば直接トークン認証が生きたまま通る | デプロイ後の実挙動で確認する（未認証リクエストが Access へリダイレクトされることを smoke で確認済み。その結果を判定に接続する） |
 | 11 | `DATABASE_URL` / `CODIP_MIGRATION_DATABASE_URL` の形式（postgres・sslmode・非 localhost。`validate-production-target-env.js:42-67, 90-91`） | `ci.yml:164-165` の `secrets.*` | 🔴 | 形式のみの検査で**接続は行わない**。到達不能・権限不足の URL でもこのゲートは通る | 緩和要因あり: 同 job の `db:pg:check-drift`（#14）が同じ `DATABASE_URL` で実接続するため、後段で失敗する。ゲート名を「形式契約」と明示すれば足りる |
@@ -91,8 +93,13 @@ Issue #127 でこの構造は撤去した。既定値を削除し、`--restore-d
 | 13 | `production-placeholders`（routes / workers_dev / CODIP_BASE_URL。`check-production-placeholders.js:64-87`） | `check-production-placeholders.js:26-30` が `wrangler.jsonc` を読む | 🟢 | — | ⚠️ **検査対象のズレ**: 検査対象は「リポジトリの宣言」であって「デプロイ済み Worker の実設定」ではない。Dashboard 側で route を変更されても検知しない。文書側に明記する |
 | 14 | PostgreSQL migration drift（`db:pg:check-drift`） | `check-postgresql-migration-drift.js:5` `process.env.DATABASE_URL` → `:12` `spawnSync` で Prisma を実 DB へ実行 | 🟢 | — | 現状維持。**本 job で最も強い実測** |
 | 15 | PostGIS DDL 検査（`db:pg:check-postgis-ddl`、`ci.yml:212`） | `check-postgis-standard-record-ddl.js`（自前の I/O を持たず、呼び出し側の Prisma 接続経由） | 🟢 | — | 現状維持 |
-| 16 | production smoke（`ci.yml:218,222`） | `release-smoke.js:21` `fetch(url, …)`、対象は `:79` `--base-url`（#12 でピン留め済み） | 🟢 | — | 現状維持 |
+| 16 | production smoke（`ci.yml:218,222`） | `release-smoke.js:21` `fetch(url, …)`、対象は `:79` `--base-url`（#12 でピン留め済み） | 🟢 | ⚠️ **供給元は実測でも判定が弱い例**（§1.1 の一種）。QA 調査時点の CSP 判定は部分文字列照合で、`connect-src` を丸ごと削除しても `img-src` 側の同一オリジン出現だけで条件が成立し、許可元の追加も検知しなかった。→ **Issue #129 で閉じた**（現況は §2.5 S16） | **是正済み（Issue #129）。** `scripts/tools/csp-contract.js` の `PINNED_DIRECTIVES` と突合し、ディレクティブの増減・許可元の増減・report-only の追加・ヘッダ重複を検知する。期待値は E2E と共有の単一定義で、本番構成へピン留めする。**供給元が 🟢 実測でも判定は別途検算が要る**ことの実例 |
 | 17 | Cloudflare build artifact（`ci.yml:206` → `:209`） | `check-cloudflare-build-artifact.js:18-26` が `.open-next/` の実ファイルを `existsSync`/`statSync` | 🟡 | 同一 job の `npm run cf:build` が生成した成果物を同一 job が検査する。**本番へデプロイされた成果物とは独立**。ビルドは通るがデプロイが古いままでも検知しない | デプロイ後に `wrangler deployments list` の結果と突合する（現状は release notes への手貼り運用。`production-evidence-report.js:311` 参照） |
+
+> 🔍 **本監査が見落としていた第二の供給経路（本表では採番していない）**
+> #7 / #8 の供給元を `ci.yml` の `vars.*` に限って追跡したため、**同じ変数を `scripts/deploy/deploy-production.mjs` が自分で埋めていた**経路を記録できていなかった。旧実装は 8 変数それぞれにスクリプト内リテラルの既定値を持ち、未設定でも証跡報告に ✅ が並んだ。`CODIP_CLOUDFLARE_ACCESS_EVIDENCE` の既定値は「Cloudflare Access未設定」と述べる文字列でありながら、それを受け取るゲートは ✅ を出していた。§1 の方法論では**スクリプト内リテラル = 🔴**（#20 と同型）であり、しかも監査対象が自分で証跡を書いていた点で #2 / #3 の調査時点の構造と同じである。
+> **是正済み（T-B7）。** 既定値を全廃し、未設定なら deploy を止める（`deploy-production.mjs` の `resolveEvidenceEnv()`）。ゲートは Neon 読取や DNS レコード作成より**前**に置き、証跡を出せない deploy が遠隔状態を半分だけ変えて止まることを防ぐ。`CODIP_NEON_BRANCH` だけは必須変数にせず、Neon API から取得済みの実測値を使う（機械が既に知っている事実を人間に入力させ、その入力を監査する形は自己申告を増やすだけである）。現況は §2.5 SB7 が実行検査する。
+> 正式な採番と再監査は QA の判断とする（§4 参照）。
 
 ### 2.3 `.github/workflows/ci.yml` job `release-gate` / 契約検査群
 
@@ -112,6 +119,33 @@ Issue #127 でこの構造は撤去した。既定値を削除し、`--restore-d
 | ---: | --- | --- | :---: | --- | --- |
 | 25 | production readiness（`production-smoke.yml` の `production-status` step → `Enforce production readiness`） | `post-release-status.js:383` `probeUrl(args.productionUrl, PRODUCTION_PATHS)` の実 HTTP。既定 URL は `:18` の定数、対象パスは `:11` | 🟢 | — | **自己申告入力を持たない唯一のゲート。** `CODIP_PRODUCTION_URL` で上書き可能だが workflow は渡していない（`production-smoke.yml` の env は Access 用 secret 2件のみ） |
 | 26 | 「連続2回以上の失敗で P1」の評価 | 供給元となる実装が存在しない。run 間の状態を保持しないことは `tests/unit/monitoring-runbook-contract.test.ts:113-118` で固定済み | 🔴 | **人間の記憶が唯一の供給元。** 前回 run の結果を機械が保持しないため、2回連続失敗しても自動では P1 と判定されない | backend への変更仕様は monitoring.md §1.1.4 に記載済み（T-B3） |
+
+### 2.5 偽陰性シナリオの現況（実行検査される）
+
+本監査は「ゲートが自己申告に依存している」ことを指摘した文書である。その文書自身が**自分の正しさを自己申告している**なら、指摘した欠陥をそのまま踏んでいる。上の各行の「偽陰性シナリオ」は調査時点の観測であり、是正が入れば黙って偽になる。実際 §2.2 #7 は Issue #128 の是正で偽になったが、文書は当時のまま残っていた。
+
+そこで、**文書が「こうすれば通ってしまう」と書いた操作を実コードに対して実行し**、その結果と下表の現況を `tests/unit/evidence-gate-audit-scenarios.test.ts` が突き合わせる。食い違えば CI が落ちる。方向は両方向で、解消済みと書いた欠陥が再現しても、未解消と書いた欠陥が既に再現しなくても落ちる（後者は「是正したのに文書を直していない」＝今回と同じ陳腐化である）。
+
+この検査は**代理指標を置かない**。隣接する `tests/unit/evidence-gate-audit-contract.test.ts`（QA 所有）は #7 の緩さを「`evidenceState` の本体に外部呼び出しが現れるか」で近似しているが、#128 は外部呼び出しを増やさず形式検査を足す是正だったため、代理指標は動かないまま文書の主張だけが偽になった。**代理指標は「是正の形」を先読みしている点で、いつか必ず外れる。** 本節は是正の実装方法に依存しない。
+
+責務の境界は次のとおり。各ゲートが正しく動くことの証明は各 Issue のテスト（`production-evidence-report.test.ts` / `release-smoke-csp.test.ts` / `deploy-production-evidence.test.ts`）が負う。本節が負うのは、**この監査記録が実態と一致していること**だけである。
+
+検証欄: 🔬 実行検査（実コードを動かして確認する）／📣 宣言（実行しておらず、根拠は下記の記述のみ）
+現況欄: 🔓 再現する（偽陰性は今も成立）／🔒 解消済み
+
+| ID | 監査上の主張 | 検証 | 現況 | 実行/未実行の内容 |
+| --- | --- | :---: | :---: | --- |
+| S1 | #1 PITR retention をリテラルではなく Neon API 実測から書く | 📣 | 🔒 | 未実行: 再現には Neon control-plane の読取キーが要る。テストへ実キーを置かず、モックで代替すると「モックが返した値をモックで検算する」循環になり、この節が塞ごうとしている自己申告そのものになる。判定は Issue #126 のテストに委ねる |
+| S3 | #3 pg_dump の success 判定を artifact の実在から導く | 📣 | 🔒 | 未実行: 再現には実際の dump artifact と `fs.statSync` が見るファイルの実体が要る。空ファイルを置いて通ることを示す形は可能だが、Issue #127 のテストが同じ検査を artifact 側で行っており重複する |
+| S7 | #7 GitHub Variables に `ok` の2文字を入れれば monitoring evidence 7項目すべてが ✅ になる | 🔬 | 🔒 | 7変数それぞれに2文字の値を渡し、`evidenceFormatState()` が ✅ を返さないことを確認する。1つでも受理すれば欠陥は残っているとみなす（文書の文言は「すべてが ✅」だが、判定はより厳しい側を採る） |
+| S8 | #8 backup/restore evidence も同じく非空判定のみで通る | 🔬 | 🔒 | `CODIP_BACKUP_RESTORE_EVIDENCE` に2文字を渡して同上 |
+| S9 | #9 Cloudflare Access の設定有無を検査せず、変数の存在だけで通る | 📣 | 🔓 | 未実行: `validate-production-target-env.js` は `module.exports` を持たず読込時に `main()` が走る。子プロセスでの再現には proxy secret を含む production 相当の env 一式が要り、テストへ秘密相当のリテラルを置くことになる（gitleaks 検知対象）。§4 の残課題として追跡する |
+| S10 | #10 DNS/route の実在を検査せず、宣言値の一致だけで通る | 📣 | 🔓 | 未実行: S9 と同一スクリプト・同一理由。Cloudflare API 読取権限も併せて必要 |
+| S11 | #11 Worker のデプロイ実体を検査せず、`wrangler.jsonc` の記述で通る | 📣 | 🔓 | 未実行: S9 と同一スクリプト・同一理由。実体確認には Workers API 読取権限が要る |
+| S16 | #16 本番 smoke の CSP 判定は部分文字列照合で、`connect-src` を丸ごと削除しても通る | 🔬 | 🔒 | 契約準拠 CSP から `connect-src` を除いたヘッダを `requireCspContract()` に与え、不合格になることを確認する。併せて**契約準拠 CSP が合格すること**も確認する（基準がずれて全部落ちている状態を「検知できた」と読み違えないための対照） |
+| SB7 | 採番外（§2.2 の注記）: deploy スクリプトが証跡値を自分で供給していた | 🔬 | 🔒 | env を空にして `resolveEvidenceEnv()` を呼び、例外で停止することを確認する。旧実装は8変数すべてを既定値で埋めて deploy を続行していた |
+
+> 📌 **是正済みと書いたら、ここに行を足すこと。** §2 のゲート行で是正案セルに「是正済み」と書かれたものは、本節に対応行を持つことをテストが強制する。文言だけ直して監査記録の見た目を整える経路を塞ぐための規則であり、実行検査が難しければ 📣 宣言として理由を書けばよい。**要件は「実測か宣言か」が読み手に伝わることであって、全項目を実行検査することではない。**
 
 ---
 
@@ -139,7 +173,7 @@ Issue #127 でこの構造は撤去した。既定値を削除し、`--restore-d
 | ---: | --- | --- |
 | 1 | #2 `restoreDrillStatus` | 調査時点では失敗し得ない構造だった。**復旧可能性という最も重い主張**を検証なしで肯定していた。Issue #127 で fail-closed 化したが、申告依存であることは変わらない |
 | 2 | #4 `lastRestoreDrillAt` | 訓練の実施そのものを自己申告に依存。#2 と組み合わさると「訓練を一度もせずに常時グリーン」が成立していた（Issue #127 以降は無申告なら失敗するため成立しない） |
-| 3 | #7 monitoring evidence 7項目 | 2文字の文字列で7つの readiness check が通る。障害検知体制の主張が空洞化する。**是正未着手（Issue #128）** |
+| 3 | #7 monitoring evidence 7項目 | 2文字の文字列で7つの readiness check が通る。障害検知体制の主張が空洞化する。**是正済み（Issue #128）** — 形式を固定し、2文字では通らない（§2.5 S7 が実行検査）。ただし供給元は `vars.*` のままで、**形式が正しい嘘は依然書ける**ため順位そのものは下げない |
 | 4 | #1 `historyWindowHours` | Issue #126 で Neon API 実測へ是正済み。実測できない場合は証跡を書かずに失敗する |
 | 5 | #10 認証方式の宣言 | 宣言と実効設定の乖離を検知しない。ただし Access 経由の実挙動は別途確認済み |
 
@@ -163,7 +197,10 @@ Issue #127 でこの構造は撤去した。既定値を削除し、`--restore-d
 | #1 の是正（Neon API 実測） | backend | **完了**（Issue #126 / T-B4）。⚠️ 稼働には Neon control-plane の読み取り鍵登録が必要で、これは §17 の人間承認事項 |
 | #2 / #3 の既定値 `"success"` 削除 | backend | **完了**（Issue #127 / T-B4）。#3 は artifact 実測へ、#2 は fail-closed な申告へ |
 | #4 の訓練証跡連携 | backend + ReleaseManager | 記録様式は [`restore-drill-record.md`](../runbooks/restore-drill-record.md) として新設（Issue #127）。**訓練の実施そのものは未実施**（台帳の唯一の行が `not-run`）。run ID を機械的に供給する経路は未整備 |
-| #7 / #8 の evidence 変数の形式限定 | backend | 未着手（**Issue #128**） |
+| #7 / #8 の evidence 変数の形式限定 | backend | **完了**（Issue #128）。`EVIDENCE_FORMATS` で変数ごとに形を固定。現況は §2.5 S7 / S8 が実行検査する |
+| #16 の CSP 判定を契約突合へ | backend | **完了**（Issue #129）。`csp-contract.js` の `PINNED_DIRECTIVES` と突合。現況は §2.5 S16 |
+| deploy スクリプトの証跡既定値の全廃 | backend | **完了**（T-B7）。§2.2 の注記を参照。現況は §2.5 SB7。⚠️ 稼働には 8 変数の登録が必要で、未登録なら deploy は Neon 読取の前に停止する |
+| #9 / #10 / #11 の実行検査（§2.5 の 📣 を 🔬 へ） | backend | 未着手。`validate-production-target-env.js` を import 可能な形へ分離しないと、再現に production 相当の env 一式（proxy secret を含む）が要る。テストへ秘密相当のリテラルを置かない方針を優先し、宣言のまま残している |
 | 是正で追加された判定行の採番・再監査 | QA | 未着手。§2.1 の 🔍 注記に分類のみ記載。総数 26 を維持するため本表への追加は QA の判断に委ねる |
 | #9 / #10 の実設定突合 | backend + Infra | 未着手。Cloudflare API 読取権限が必要 |
 | #17 のデプロイ成果物突合 | Infra | 未着手 |
@@ -197,6 +234,17 @@ grep -nE '(pgDumpStatus|restoreDrillStatus):\s*"success"' scripts/tools/create-n
 ```
 
 ドリフト検出テストは `tests/unit/evidence-gate-audit-contract.test.ts` に追加した。本ファイルの 🔴 / 🟡 行が供給元の根拠（`ファイル名:行番号`）を欠いた場合と、是正実装後に本ファイルの記述が古くなった場合に失敗する。
+
+🔬 これに加えて、`tests/unit/evidence-gate-audit-scenarios.test.ts`（§2.5）が**文書の主張を実コードに対して実行して**検算する。両者の違いは次のとおりで、片方だけでは足りない。
+
+| | `…-contract.test.ts`（QA 所有） | `…-scenarios.test.ts`（backend 所有 / §2.5） |
+| --- | --- | --- |
+| 見るもの | 文書の**構造**（分類記号・件数の整合・根拠引用の有無・秘密混入） | 文書の**主張の真偽**（偽陰性が今も再現するか） |
+| 判定方法 | 実装ソースを正規表現で読む**代理指標** | 実装を import して**実行** |
+| 強み | 実行できない主張にも効く。全行を機械的に走査できる | 是正の実装方法に依存しない。代理指標が先読みを外しても検知する |
+| 弱み | 是正が代理指標の外側で行われると、緑のまま主張だけ偽になる（#128 で実際に起きた） | 実行可能な経路にしか置けない（§2.5 の 📣 行がその境界） |
+
+> 📌 §2.5 の追加後も、`…-contract.test.ts` の #7 に関する代理指標（`evidenceState` 本体に外部呼び出しが現れるか）はそのまま残っている。この指標は Issue #128 の是正では動かず、現在も「外部呼び出しなし」を観測し続ける。**代理指標を実行検査へ置き換えるかどうかは QA の判断**であり、backend は当該ファイルを編集していない。
 
 > 🔢 このテストの件数は固定ではない。引用検査が `it.each` で **🔴 / 🟡 行の数だけ動的に生成される**ため、分類が変われば総数も変わる。T-Q3（是正前・🔴 12 / 🟡 3）では 42件、T-B4 是正後（🔴 10 / 🟡 3）では **40件**である。件数の変化そのものが分類状態のシグナルであり、減少は「🔴 が 🟢 へ移った」ことを意味する。
 
