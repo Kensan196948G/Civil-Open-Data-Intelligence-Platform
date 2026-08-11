@@ -1,7 +1,7 @@
 # 改善後再評価（Post-Improvement Assessment）
 
-> 2026-08-12 更新（第3サイクル）｜ 改善PR: 統合セキュリティ改善（#126/#127/#128/#129/#132/#133/#134、`claudeos/backend` 統合PR）＋#131/#135/#136 レビュー済み
-> main: `5f0cefb` ｜ 単体テスト: 64ファイル 715件 pass（統合ブランチ実測）｜ 本番: Worker `codip-production`（継続稼働・smoke green）
+> 2026-08-12 更新（第3サイクル・完了）｜ 改善PR: **#137 マージ済み**（#126〜#129・#132〜#134・#90）／ #131/#135/#136 は包含・クローズ推奨
+> main: `7f72626`（PR #137） ｜ 単体テスト: 64ファイル 720件 pass ｜ 本番: Worker `codip-production`（継続稼働・smoke green）
 
 > 2026-08-11 更新 ｜ 改善PR: #114（Phase 0基盤） + #116-#121（Phase 0〜1継続改善）
 > main: `132c7ba`（PR #121 merge） ｜ 単体テスト: 59ファイル 498件 pass ｜ 本番: Worker `codip-production` Version `71fdfb11`
@@ -35,7 +35,7 @@
 | 14 | 監視アラートポリシー作成 | Cloudflare `CODIP Worker Error Alert` 作成＋テスト送信済み。GitHub/Neon通知は手順書どおり設定待ち | PR #119 |
 | 15 | 本番運用証跡の統合 | production-target-env success（run 31333706566）、Alert policy証跡、全gateのRECALC結果 | PR #119/#121 |
 
-### Phase 0 セキュリティ証跡ゲート改善（2026-08-12・`claudeos/backend` 統合ブランチ、マージ承認待ち）
+### Phase 0 セキュリティ証跡ゲート改善（2026-08-12・PR #137 マージ済み）
 
 QA監査（`docs/security/evidence-gate-audit.md`）が検出した「証跡ゲートの自己認証・検知不能」系列7件を実装・検証した。
 
@@ -67,7 +67,7 @@ QA監査（`docs/security/evidence-gate-audit.md`）が検出した「証跡ゲ�
 | 8 | コード品質 | 78 | 82 | 83 | 85 | +7 | 変異検査付きゲート、lint/typecheck 0、テスト715件 |
 | 9 | 性能・拡張性 | 55 | 55 | 55 | 55 | — | ロードテスト未実施 |
 | 10 | セキュリティ | 80 | 80 | 83 | 86 | +6 | 証跡ゲート実測化（#126/#127/#128/#129）、CodeQL失敗可能化（#132）、SHA検査6/6（#133）、監査実測（#134） |
-| 11 | 可用性・バックアップ | 72 | 75 | 78 | 80 | +8 | PITR実測ゲート＋restore drill記録様式。実訓練は人間承認待ち |
+| 11 | 可用性・バックアップ | 72 | 75 | 78 | 80 | +8 | PITR実測ゲート＋restore drill記録様式＋**実訓練実施済み（2026-08-12）** |
 | 12 | 監視・障害対応 | 55 | 60 | 67 | 72 | +17 | smoke失敗→incident Issue自動起票・連続失敗P1昇格。受信テストは未実施 |
 | 13 | テスト | 70 | 80 | 83 | 86 | +16 | 単体715件、CSP契約変異検査、console error検知、監査失敗系2件 |
 | 14 | CI/CD・リリース | 80 | 82 | 84 | 86 | +6 | workflow pin検査6/6、CodeQLゲート復元、production-target-env success |
@@ -77,7 +77,7 @@ QA監査（`docs/security/evidence-gate-audit.md`）が検出した「証跡ゲ�
 | 18 | 競合代替性 | 55 | 55 | 57 | 58 | +3 | 監視・運用成熟度が向上。業務機能の代替範囲は不変 |
 | **平均** | — | **67.1** | **69.6** | **72.7** | **73.3** | **+6.2** | — |
 
-> 第3サイクルの点数は統合ブランチ `claudeos/backend`（main `5f0cefb` + セキュリティ改善群）で実測したテスト715件・lint/typecheck 0・契約ゲート全passに基づく。PRマージ前のため「実装・検証済み、マージ承認待ち」として評価する。
+> 第3サイクルの点数は統合ブランチ（main `7f72626` = PR #137 マージ後）で実測したテスト720件・lint/typecheck 0・契約ゲート全pass・復旧訓練成功に基づく。
 
 ---
 
@@ -117,9 +117,9 @@ QA監査（`docs/security/evidence-gate-audit.md`）が検出した「証跡ゲ�
 
 | リスク | 影響度 | 状態 | 対応 |
 | --- | --- | --- | --- |
-| 監視アラート通知先・受信テスト | 重大 | incident Issue自動起票は実装済み（PR待ち）。メール/Teams/当番の設定と受信確認は人間作業 | P0・人間承認 |
-| 復旧訓練の実施と記録 | 重大 | 記録様式は新設済み。実訓練の実施・記録は人間操作（本番Neon操作） | P0・人間承認 |
-| Code scanning無効（#139） | 高 | #132修正でSARIFアップロード失敗が可視化。解析は成功、設定のみ無効 | P0・repo adminが有効化 |
+| 監視アラート通知先・受信テスト | 重大 | incident Issue自動起票は**マージ済み**。メール/Teams/当番の受信確認は人間作業 | P0・人間承認 |
+| 復旧訓練の定期化 | 中 | **初回訓練は実施・記録済み**（2026-08-12）。次回は2026-11-11 | 四半期ルーチン |
+| CodeQLアラート管理UI | 中 | ローカル解析＋SARIF artifact方式でゲート成立。Security tabはGHAS導入時（ADR 0003） | 将来判断 |
 | RBAC未実装 | 高 | 計画済み。Access proxy認証は稼働 | Phase 1（3か月） |
 | PDF/Excel出力未実装 | 高 | CSV/Markdown出力のみ。帳票実務には不十分 | Phase 1（3か月） |
 | 実データ収集20ジョブ規模 | 高 | 50種目標に未達。XML/公式JSONコネクタ追加で拡張中 | Phase 1で50種 |
@@ -132,7 +132,7 @@ QA監査（`docs/security/evidence-gate-audit.md`）が検出した「証跡ゲ�
 
 **解決済み**（初期評価からの改善）:
 
-- ~~証跡ゲートの自己認証（#126/#127/#128/#129）~~ → 統合ブランチで実測化・fail-closed化・形式検証化（マージ承認待ち）
+- ~~証跡ゲートの自己認証（#126/#127/#128/#129）~~ → 実測化・fail-closed化・形式検証化・**マージ済み（#137）**
 - ~~CodeQLが構造的に失敗しない（#132）~~ → `continue-on-error` 除去＋不在側を契約で固定
 - ~~Actions SHA検査が4/6ファイル（#133）~~ → ディレクトリ導出で6/6・0件fail-closed
 - ~~監査契約が実挙動を検証しない（#134）~~ → 監査INSERT失敗系2件の実測テスト追加
@@ -149,12 +149,12 @@ QA監査（`docs/security/evidence-gate-audit.md`）が検出した「証跡ゲ�
 
 **P0（人間操作・承認待ち）**:
 
-1. 統合セキュリティ改善PR（`claudeos/backend`）のレビューとマージ承認（#126〜#129・#132〜#134・#90相当を1本に集約）
-2. サブセットPR #131/#135/#136 のクローズ判断（統合PRへ包含済み）
-3. 通知先メールアドレス/当番の設定と受信テスト（incident Issueのwatcher設定含む）
-4. 復旧訓練（Neon restore drill）の実施と `docs/runbooks/restore-drill-record.md` への記録
-5. `CODIP_NEON_API_KEY`（read-only）とproduction evidence 8変数のGitHub登録
-6. GitHub Actions production environmentへのSecrets最終登録確認
+1. ~~統合セキュリティPRのマージ~~ → **完了（#137 merged、main `7f72626`）**。サブセット #131/#135/#136 はクローズ推奨
+2. ~~復旧訓練~~ → **完了（2026-08-12、`restore-drill-record.md` 記録・Variables反映済み）**
+3. ~~production evidence 8変数~~ → **完了（形式検証済み値で登録・strict検証✅）**
+4. 通知先メールアドレス/当番の設定と受信テスト（incident Issueのwatcher設定含む）— 人間操作
+5. `CODIP_NEON_API_KEY`（read-only）のGitHub Actions Secret登録 — 人間判断（認証情報投入）
+6. GitHub Actions production environmentへのSecrets最終登録確認 — 人間操作
 
 **Phase 1（次サイクル・3か月以内）**:
 
@@ -168,7 +168,7 @@ QA監査（`docs/security/evidence-gate-audit.md`）が検出した「証跡ゲ�
 
 **ロードマップ**:
 
-- Phase 0（重大問題・セキュリティ）: **実装・検証完了（2026-08-12）。マージ承認・Secrets設定・実訓練の3点が残る**
+- Phase 0（重大問題・セキュリティ）: **完了（2026-08-12、PR #137 merged）。残りは通知受信テスト・Secret登録の人間操作**
 - Phase 1（中核業務完成）: 2026-08〜10
 - Phase 2（競合製品80%代替）: 2026-10〜2027-01
 - Phase 3（AI・モバイル・外部連携）: 2027-01〜04
