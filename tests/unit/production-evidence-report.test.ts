@@ -261,6 +261,51 @@ describe("evidence format registration is exhaustive (Issue #128)", () => {
   });
 });
 
+describe("documented output strings match what the checker returns", () => {
+  // CodeRabbit found docs/security/production-evidence-format.md §3 naming
+  // `⚠️ missing` / `⚠️ placeholder`, while the checker returns `⚠️ unset` /
+  // `⚠️ placeholder-like`. `⚠️ missing` does exist in the script, but for the
+  // unrelated wrangler.jsonc row — so an operator following the document would
+  // search for a status the evidence rows never emit, and would find a
+  // same-named status belonging to something else.
+  //
+  // The literals are collected by CALLING the checker, not by grepping the
+  // script. A source-text comparison passes as long as the string is written
+  // somewhere, even in a branch nothing can reach.
+  const now = new Date("2026-08-12T00:00:00Z");
+  const reachableStates = new Set([
+    evidenceModule.evidenceFormatState("CODIP_ROLLBACK_OWNER", "", now),
+    evidenceModule.evidenceFormatState("CODIP_ROLLBACK_OWNER", "example", now),
+    evidenceModule.evidenceFormatState("CODIP_ROLLBACK_OWNER", "release-manager", now),
+  ]);
+
+  it("names only statuses the evidence rows can actually emit", () => {
+    const doc = fs.readFileSync(
+      path.join(repoRoot, "docs/security/production-evidence-format.md"),
+      "utf8",
+    );
+    const section = doc.split(/^## /m).find((part) => part.startsWith("3. 出力の読み方"));
+    expect(section).toBeDefined();
+
+    const documented = [...(section ?? "").matchAll(/`([⚠✅][^`]*)`/gu)]
+      .map((match) => match[1])
+      // Rows written as templates (`⚠️ <要件>`) describe a shape, not a literal.
+      .filter((literal) => !literal.includes("<"));
+
+    expect(documented.length).toBeGreaterThan(0);
+    expect(documented.filter((literal) => !reachableStates.has(literal))).toEqual([]);
+  });
+
+  it("keeps the unset and placeholder statuses distinct from each other", () => {
+    // Collapsing these two would hide which of the two operator actions is
+    // needed: set the variable at all, versus replace a sample value.
+    expect(evidenceModule.evidenceFormatState("CODIP_ROLLBACK_OWNER", "", now)).toBe("⚠️ unset");
+    expect(evidenceModule.evidenceFormatState("CODIP_ROLLBACK_OWNER", "example", now)).toBe(
+      "⚠️ placeholder-like",
+    );
+  });
+});
+
 describe("production evidence format requirements (Issue #128)", () => {
   it("rejects the two characters that used to satisfy all eight checks", () => {
     // This is the defect verbatim from Issue #128: `ok` is non-empty and matches

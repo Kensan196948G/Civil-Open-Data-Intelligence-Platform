@@ -67,7 +67,7 @@ CI で ⚠️ が出た運用者が、このドキュメントを開かずとも
 | --- | --- |
 | `✅ set (recorded, format checked)` | 記録があり、形式要件も満たしている。readiness チェックが ✅ になるのはこの場合のみ |
 | `⚠️ <要件>` | 記録はあるが形式が要件を満たしていない。満たすべき要件が併記される |
-| `⚠️ missing` / `⚠️ placeholder` | 未設定、または placeholder 文字列 |
+| `⚠️ unset` / `⚠️ placeholder-like` | 未設定、または placeholder 文字列。**形式検査以前に落ちている** |
 | `⚠️ no format requirement registered (add <KEY> to EVIDENCE_FORMATS)` | 証跡キーとして検査対象なのに形式要件が未登録。**値の問題ではなく実装側の登録漏れ**（§4.1） |
 
 証跡の値そのものは、合格時も不合格時もレポートに印字しない。連絡先や運用上の記述を含むためである。
