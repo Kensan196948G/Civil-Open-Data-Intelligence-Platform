@@ -70,6 +70,13 @@ RangeError: WebAssembly.Instance(): Out of memory:
 **`japanese` subset が存在しない。** Google は CJK フォントを名前付きサブセットではなく、
 名前のない多数の `unicode-range` チャンクとして CSS API 経由でのみ配信するためである。
 
+これは当該 2 ファミリー固有の欠落ではなく `next/font/google` の構造的制約である。
+`font-data.json` 収録 **1862 ファミリー全件**を走査した結果、`subsets` に `japanese` を含むものは
+**0 件**であった（`Noto Sans JP` ですら `["cyrillic","latin","latin-ext","vietnamese"]`）。
+subset 名の語彙自体にも `japanese` / `chinese` / `korean` は存在せず、CJK 関連は
+`kana-extended`（仮名拡張ブロック。本文用ではない）のみである。
+したがって**別の日本語フォントへ差し替えても案Aは成立しない。**
+
 したがって案Aを採用すると日本語グリフは self-host されず、本文の大半が
 `system-ui` / `Hiragino Kaku Gothic ProN` / `Meiryo` へフォールバックする。
 本アプリの UI テキストはほぼ全て日本語であり、デザイン正本からの明確な乖離となる。
