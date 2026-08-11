@@ -31,6 +31,8 @@
 
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { realpathSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import {
   WORKER_ROUTE_PLACEHOLDER_CONTENT,
   WORKER_ROUTE_PLACEHOLDER_TYPE,
@@ -50,13 +52,90 @@ const withSecrets = process.argv.includes("--with-secrets");
 const skipDeploy = process.argv.includes("--skip-deploy");
 const wranglerDirect = process.argv.includes("--wrangler-direct");
 
-function requiredEnv(name) {
-  const value = process.env[name]?.trim();
-  if (!value) {
-    console.error(`[deploy-production] missing required env: ${name}`);
-    process.exit(1);
-  }
+/**
+ * Any string map, not specifically `process.env`.
+ *
+ * Without this annotation TypeScript infers the parameter type from the
+ * `= process.env` default, i.e. `NodeJS.ProcessEnv` — which this project's
+ * Next.js types augment with a *required* NODE_ENV. Callers that pass a plain
+ * object (the fail-closed tests) would then be rejected for a property these
+ * functions never read.
+ *
+ * @typedef {Record<string, string | undefined>} EnvMap
+ */
+
+/**
+ * @param {EnvMap} env
+ * @param {string} name
+ */
+function envValue(env, name) {
+  return env[name]?.trim() ?? "";
+}
+
+// Throws instead of calling process.exit so the fail-closed behaviour can be
+// tested. Every call site is inside main(), which is wrapped by the catch at
+// the bottom of this file, so the operator still sees
+// `[deploy-production] missing required env: X` and an exit code of 1.
+/**
+ * @param {string} name
+ * @param {EnvMap} [env]
+ */
+function requiredEnv(name, env = process.env) {
+  const value = envValue(env, name);
+  if (!value) throw new Error(`missing required env: ${name}`);
   return value;
+}
+
+// --- Production evidence variables (fail-closed) ---------------------------
+//
+// These eight values are claims about the real world: who is on call, which
+// alert policy exists, when the last restore drill ran. Nothing in this repo
+// can derive them, and production-evidence-report.js turns them directly into
+// the ✅/❌ rows of the release evidence report.
+//
+// This script used to carry a default for each one, so an operator who set
+// nothing still got a full set of ✅ rows. The default for
+// CODIP_CLOUDFLARE_ACCESS_EVIDENCE literally read "Cloudflare Access未設定"
+// while the gate it fed reported success — the gate was inverted. An evidence
+// gate whose value comes from the actor it audits gives no assurance; one that
+// supplies the value to itself is worse, because it manufactures an audit
+// record that looks correct.
+//
+// So: no defaults. An unset variable stops the deploy. The values belong in
+// GitHub Repository Variables (docs/runbooks/cloudflare-production.md); their
+// required shape is pinned in production-evidence-report.js (EVIDENCE_FORMATS)
+// and documented in docs/security/production-evidence-format.md.
+export const EVIDENCE_ENV_KEYS = Object.freeze([
+  "CODIP_CLOUDFLARE_ACCESS_EVIDENCE",
+  "CODIP_MONITORING_CONTACTS",
+  "CODIP_CLOUDFLARE_ALERT_POLICY",
+  "CODIP_CLOUDFLARE_LOGS_EVIDENCE",
+  "CODIP_NEON_MONITORING_EVIDENCE",
+  "CODIP_SMOKE_MONITORING_SCHEDULE",
+  "CODIP_ROLLBACK_OWNER",
+  "CODIP_BACKUP_RESTORE_EVIDENCE",
+]);
+
+// Reports every missing key at once. This is a manually run deploy; failing one
+// variable per attempt would cost the operator eight round trips.
+/**
+ * @param {EnvMap} [env]
+ * @returns {Record<string, string>}
+ */
+export function resolveEvidenceEnv(env = process.env) {
+  const missing = EVIDENCE_ENV_KEYS.filter((key) => !envValue(env, key));
+  if (missing.length > 0) {
+    throw new Error(
+      `missing required production evidence env: ${missing.join(", ")}\n` +
+        "  These are attestations about monitoring, rollback and restore posture.\n" +
+        "  This script must not supply them: a value it invents would be recorded\n" +
+        "  as verified evidence in the release report.\n" +
+        "  Set them as GitHub Repository Variables or in the deploy shell.\n" +
+        "  Required shape: docs/security/production-evidence-format.md\n" +
+        "  Registration:   docs/runbooks/cloudflare-production.md",
+    );
+  }
+  return Object.fromEntries(EVIDENCE_ENV_KEYS.map((key) => [key, requiredEnv(key, env)]));
 }
 
 function step(title) {
@@ -170,6 +249,12 @@ async function main() {
   const cfToken = requiredEnv("CLOUDFLARE_API_TOKEN");
   requiredEnv("CLOUDFLARE_ACCOUNT_ID");
 
+  // Checked before any remote call or mutation (Neon reads, DNS record
+  // creation): a deploy that cannot produce its evidence must stop before it
+  // leaves half-applied state, not after. --skip-deploy returns before
+  // cf:deploy:production and produces no evidence report, so it needs none.
+  const evidenceEnv = skipDeploy ? {} : resolveEvidenceEnv();
+
   step("resolve Neon connection targets (in-process)");
   const neon = await resolveNeonUris(neonKey);
   console.log(`[deploy-production] Neon project=${NEON_PROJECT_ID} branch=${neon.branchName}`);
@@ -199,33 +284,14 @@ async function main() {
       ? "release gates + wrangler deploy --env production (workerd-free path)"
       : "cf:deploy:production (validate-env -> evidence -> placeholders -> build -> artifact check -> deploy)",
   );
-  const evidenceDefaults = {
-    CODIP_CLOUDFLARE_ACCESS_EVIDENCE:
-      "Cloudflare Access未設定 (ユーザー手動設定を予定)。管理系はCODIP_TRUST_PROXY_SECRET必須のfail-closed全拒否で公開。Access設定後にsecret rotationを実施",
-    CODIP_MONITORING_CONTACTS: "GitHub owner Kensan196948G (repo issues / registered email)",
-    CODIP_CLOUDFLARE_ALERT_POLICY:
-      "初期リリースはWorkers observability (wrangler.jsonc enabled=true) のみ。専用alert policyは未設定でIssue #63系で追跡",
-    CODIP_CLOUDFLARE_LOGS_EVIDENCE:
-      "Workers observability enabled=true。query_worker_observability (MCP) で照会可能",
-    CODIP_NEON_MONITORING_EVIDENCE:
-      "Neon console monitoring + MCP list_slow_queries。history retention 24h (Issue #63で拡張検討)",
-    CODIP_SMOKE_MONITORING_SCHEDULE:
-      "release:post-release-status をリリース直後 + 月-土の自律セッションで実行",
-    CODIP_ROLLBACK_OWNER:
-      "human: kensan (AIによる自動rollback禁止 — docs/runbooks/rollback.md)",
-    CODIP_BACKUP_RESTORE_EVIDENCE:
-      "Neon backup branch backup-prerelease-v0.1.0-20260720 (br-shiny-pond-afwbww1h, LSN 0/24D2000)",
-    CODIP_NEON_BRANCH: `production (default branch of ${NEON_PROJECT_ID})`,
-  };
-  const evidenceEnv = Object.fromEntries(
-    Object.entries(evidenceDefaults).map(([key, fallback]) => [
-      key,
-      process.env[key]?.trim() || fallback,
-    ]),
-  );
-
   const deployEnv = {
     ...evidenceEnv,
+    // Measured, not declared: resolveNeonUris() already asked the Neon API
+    // which branch is the default one. The former default asserted
+    // "production (default branch of <project>)" without checking, so a
+    // renamed or re-pointed default branch would have been reported as
+    // production regardless of the truth.
+    CODIP_NEON_BRANCH: neon.branchName,
     CODIP_DEPLOY_TARGET: "production",
     CODIP_ENV_MODE: "production",
     CODIP_BASE_URL: BASE_URL,
@@ -285,7 +351,24 @@ async function main() {
   console.log("\n[deploy-production] done. Next: release:smoke --read-only against production.");
 }
 
-main().catch((error) => {
-  console.error(`[deploy-production] ${error.message}`);
-  process.exit(1);
-});
+// Only run when this file is the entrypoint. tests/unit/deploy-production-evidence.test.ts
+// imports resolveEvidenceEnv from here to prove the fail-closed behaviour;
+// without the guard, importing the module would start a real production deploy.
+function invokedAsScript() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    // realpath because Node resolves module URLs through symlinks, so a bare
+    // pathToFileURL(argv[1]) would not match import.meta.url via a symlinked bin.
+    return import.meta.url === pathToFileURL(realpathSync(entry)).href;
+  } catch {
+    return false;
+  }
+}
+
+if (invokedAsScript()) {
+  main().catch((error) => {
+    console.error(`[deploy-production] ${error.message}`);
+    process.exit(1);
+  });
+}
