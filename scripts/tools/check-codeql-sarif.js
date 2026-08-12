@@ -79,6 +79,13 @@
  * 変える: full run では不足＝陳腐化として落とすが、diff-informed run では差分外を
  * 見ていない以上、不足は陳腐化の証拠にならないので落とさない。**超過は両方で落とす**
  * (見えている以上、多いことは確実に言える)。非対称なのは、片側だけが観測可能だからである。
+ *
+ * この緩和は**肯定形**で与える (`KNOWN_DIFF_INFORMED_REGIMES` に有ること)。かつ
+ * **全 run が** diff-informed のときだけである。否定形 (`full でないこと`) にすると
+ * 語彙外の値が全部緩い側へ落ち、`some` にすると full run が混ざっていても緩む。
+ * どちらも「陳腐化を検出する検査」を「陳腐化を素通しする検査」へ静かに反転させる。
+ * 語彙外のレジームは structural problem として落とす — 差分を絞っていないと言える
+ * 根拠が無いものを、根拠が有る側へ倒してはならない。
  */
 
 const fs = require("node:fs");
@@ -129,8 +136,26 @@ const MAX_ACCEPTED_SUPPRESSIONS = 0;
 const DEFAULT_ALLOWLIST_FILE = path.join(__dirname, "..", "..", "docs", "security", "codeql-accepted-findings.json");
 // SARIF の artifactLocation.uri は percent-encoded で来る (実測:
 // `data/Civil%20Open%20Data%20Intelligence%20Platform%20(1).html`)。受容記録には人が
-// 読める形で書けるべきなので、両辺を復号して突き合わせる。
+// 読める形で書けるべきなので、両辺を復号して突き合わせる (`normalizePath`)。
+
+// 解析レジームの語彙。緩和 (不足を落とさない) は**既知の diff-informed であること**の
+// 肯定形でのみ与える。`!== "full"` の否定形にすると、語彙外の値がすべて緩い側へ落ちる:
+// CodeQL が将来 push run にも別の値を付け始めた瞬間、`main` の full run が誰にも
+// 気づかれずに陳腐化検査をやめる。allowlist を置いた目的そのものが反転する。
+// `level` を語彙外で structural にしている (`ACCEPTED_LEVELS`) のと同じ扱いを、
+// レジーム側にも与える。
 const ALLOWLIST_REGIME_FULL = "full";
+// 番兵と実データ値の分離。`incrementalMode` の**欠落**から full と読むのは推定で、
+// run が `"full"` と**宣言**したのは主張である。同じ文字列で出すと、ログを読む人は
+// この二つを区別できない。素の名前は強いほう (宣言) に割り当て、推定へ注記を付ける。
+const REGIME_LABEL_ASSUMED_FULL = `${ALLOWLIST_REGIME_FULL}(assumed)`;
+const KNOWN_DIFF_INFORMED_REGIMES = new Set(["diff-informed"]);
+const REGIME_CLASS_FULL = "full";
+const REGIME_CLASS_DIFF_INFORMED = "diff-informed";
+const REGIME_CLASS_UNRECOGNISED = "unrecognised";
+// 語彙外の値をそのままログへ流さないための上限。SARIF の文字列は解析対象由来で、
+// 長さも中身も保証が無い。
+const REGIME_LABEL_MAX_LENGTH = 40;
 
 const problems = [];
 const failingResults = [];
@@ -138,6 +163,7 @@ const acceptedSuppressions = [];
 const allowlist = [];
 const allowlistHits = [];
 const regimes = new Set();
+const regimeClasses = new Set();
 let allowlistSource = DEFAULT_ALLOWLIST_FILE;
 let acceptedResults = 0;
 
@@ -487,6 +513,31 @@ function evaluateLevel(where, at, result, rule) {
   return { level: DEFAULT_LEVEL };
 }
 
+/**
+ * `runs[].properties.incrementalMode` を「表示ラベル」と「判定クラス」へ写す。
+ *
+ * 判定クラスは 3 つだけで、緩和を与えるのは `diff-informed` **のみ**である。分類を
+ * 値そのものから切り離すのは、表示 (人が読む) と判定 (ゲートが使う) で必要な粒度が
+ * 違うためで、`full` と `full(assumed)` は別々に見せながら同じクラスへ落ちる。
+ */
+function classifyRegime(incrementalMode) {
+  if (typeof incrementalMode !== "string" || incrementalMode.trim() === "") {
+    return { label: REGIME_LABEL_ASSUMED_FULL, regimeClass: REGIME_CLASS_FULL };
+  }
+  const value = incrementalMode.trim();
+  if (value === ALLOWLIST_REGIME_FULL) {
+    return { label: value, regimeClass: REGIME_CLASS_FULL };
+  }
+  if (KNOWN_DIFF_INFORMED_REGIMES.has(value)) {
+    return { label: value, regimeClass: REGIME_CLASS_DIFF_INFORMED };
+  }
+  const shown = value.length > REGIME_LABEL_MAX_LENGTH ? `${value.slice(0, REGIME_LABEL_MAX_LENGTH)}…` : value;
+  return {
+    label: `${REGIME_CLASS_UNRECOGNISED}(${JSON.stringify(shown)})`,
+    regimeClass: REGIME_CLASS_UNRECOGNISED,
+  };
+}
+
 function checkRun(file, run, runIndex) {
   const where = `${file} runs[${runIndex}]`;
 
@@ -494,8 +545,19 @@ function checkRun(file, run, runIndex) {
   // (= full) と読む。ここを「不明」として別扱いにしないのは、判定に使うのが
   // 「差分の外を見ていない可能性があるか」だけで、full と断定できない run を
   // full 側に倒すと**不足を陳腐化として落とす**厳しい側に入るためである。
-  const incrementalMode = run.properties?.incrementalMode;
-  regimes.add(typeof incrementalMode === "string" && incrementalMode.trim() !== "" ? incrementalMode : ALLOWLIST_REGIME_FULL);
+  // 逆に、値が有って**語彙外**の場合は full 側へ倒せない: それが差分を絞ったもので
+  // ないと言える根拠が無い。緩い側へ黙って倒すと陳腐化検査が止まるので、structural
+  // problem として落とす。是正は語彙へ 1 行足すことで、その追加はレビューに乗る。
+  const { label, regimeClass } = classifyRegime(run.properties?.incrementalMode);
+  regimes.add(label);
+  regimeClasses.add(regimeClass);
+  if (regimeClass === REGIME_CLASS_UNRECOGNISED) {
+    problems.push(
+      `${where}: analysis regime ${label} is outside the known vocabulary ` +
+        `${[ALLOWLIST_REGIME_FULL, ...KNOWN_DIFF_INFORMED_REGIMES].join("/")}; the gate cannot tell ` +
+        `whether findings outside the diff were reported`,
+    );
+  }
 
   const driverName = run.tool?.driver?.name;
   if (typeof driverName !== "string" || driverName.trim() === "") {
@@ -619,7 +681,14 @@ function main() {
   // full run の「finding 0 件」と同じ文字列で出て、読んだ人は**見ていない範囲がある**
   // ことを知りようがない。
   const regimeList = regimes.size > 0 ? [...regimes].sort().join(", ") : "(no run analysed)";
-  const diffInformed = [...regimes].some((regime) => regime !== ALLOWLIST_REGIME_FULL);
+  // 緩和は**全 run が既知の diff-informed だったとき**だけ。`some(非 full)` にすると
+  // 二重に緩い: (a) 語彙外の値が緩和を与え、(b) full run と diff-informed run が
+  // 混在したときにも緩和する。(b) は誤りで、full run が 1 本でもあれば結果の和集合は
+  // 全体を含むから、不足は「見ていない」ではなく本物のドリフトである。
+  // `regimeClasses` が空 (run を 1 つも解析していない) のときに `every` が真になる
+  // 空虚な真を踏まないよう、サイズを先に見る。
+  const diffInformed =
+    regimeClasses.size > 0 && [...regimeClasses].every((regimeClass) => regimeClass === REGIME_CLASS_DIFF_INFORMED);
   console.log(`[codeql-sarif] analysis regime: ${regimeList}`);
 
   reconcileAllowlist(diffInformed);
@@ -678,6 +747,12 @@ module.exports = {
   FAILING_LEVELS,
   DEFAULT_ALLOWLIST_FILE,
   ALLOWLIST_REGIME_FULL,
+  // レジーム語彙を出すのは、テストが「既知の値」を写経せずに**実装の語彙から**
+  // 探査ケースを組み立てられるようにするため。写経すると、語彙外こそが危険な入力
+  // なのに、テストは語彙内しか試さなくなる (T-B18 / T-B19 と同じ失敗の形)。
+  REGIME_LABEL_ASSUMED_FULL,
+  KNOWN_DIFF_INFORMED_REGIMES,
+  classifyRegime,
   // テストが受容記録の中身を写経せず、実物から読めるようにする。写経すると、記録を
   // 更新したときにテストは「更新後の実装」ではなく「更新前の期待値」を測り続ける。
   normalizePath,

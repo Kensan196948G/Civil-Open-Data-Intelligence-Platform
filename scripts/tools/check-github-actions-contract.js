@@ -312,11 +312,18 @@ requireStepText(
 // upload: never の下では analyze は「アナライザが失敗したとき」しか落ちず、検出結果では
 // 落ちない。findings を判定する step が無ければ、この security scan は presence-only
 // (等級3) のままになる。step へ束縛して、名前を変えただけで検査が消えないようにする。
-requireStepText(
+//
+// **行全体一致**で見る。部分一致だと引数を*足す*変更が通ってしまう。実測 (#143 head
+// fc54702 に対する変異): `… sarif-results` を `… sarif-results docs/security/permissive.json`
+// へ変えても `includes` は真で exit 0 だった。スクリプトは argv[3] を受容記録のパスとして
+// 受け取るので、CI 側で寛容な記録を差すことができ、契約はそれを見逃していた。
+// argv[3] 自体は残す (テストが一時ファイルを渡すため必要で、パス上書きは justification 必須・
+// 解決パス出力ありなので**記録の無い免除**を作らない)。閉じるべきは CI 側の経路だけである。
+requireStepLine(
   "CodeQL workflow",
   codeql,
   "name: Fail on CodeQL findings",
-  "node scripts/tools/check-codeql-sarif.js sarif-results",
+  "run: node scripts/tools/check-codeql-sarif.js sarif-results",
 );
 // 判定コマンドを step へ束縛しても、**ジョブが走らなければ**このスキャンは何も測らない。
 // `codeql-findings` は analyze とは別ジョブなので、結線は3箇所で切れる。

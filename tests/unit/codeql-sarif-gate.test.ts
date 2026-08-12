@@ -41,6 +41,9 @@ const {
   FAILING_LEVELS,
   DEFAULT_ALLOWLIST_FILE,
   ALLOWLIST_REGIME_FULL,
+  REGIME_LABEL_ASSUMED_FULL,
+  KNOWN_DIFF_INFORMED_REGIMES,
+  classifyRegime,
   normalizePath,
   parseAllowlist,
   loadAllowlist,
@@ -53,6 +56,9 @@ const {
   FAILING_LEVELS: Set<string>;
   DEFAULT_ALLOWLIST_FILE: string;
   ALLOWLIST_REGIME_FULL: string;
+  REGIME_LABEL_ASSUMED_FULL: string;
+  KNOWN_DIFF_INFORMED_REGIMES: Set<string>;
+  classifyRegime: (incrementalMode: unknown) => { label: string; regimeClass: string };
   normalizePath: (uri: unknown) => string;
   parseAllowlist: (raw: string, source: string) => { entries: AllowlistEntry[]; problems: string[] };
   loadAllowlist: (file: string, explicit: boolean) => { entries: AllowlistEntry[]; problems: string[] };
@@ -884,7 +890,9 @@ describe("CodeQL SARIF acceptance record", () => {
   });
 
   it.each([
-    ["a full run", undefined, ALLOWLIST_REGIME_FULL],
+    // `incrementalMode` 欠落は full と**見なす**だけなので、ラベルは宣言された "full" と
+    // 別の文字列で出る。同じ文字列にすると、ログ上で推定と宣言が区別できない。
+    ["a full run", undefined, REGIME_LABEL_ASSUMED_FULL],
     ["a diff-informed run", DIFF_INFORMED, DIFF_INFORMED],
   ])("fails %s when more findings match than were accepted", (_label, regime, printed) => {
     const outcome = runGate(
@@ -1007,7 +1015,8 @@ describe("CodeQL SARIF acceptance record", () => {
   });
 
   it.each([
-    ["a run without incrementalMode", undefined, ALLOWLIST_REGIME_FULL],
+    ["a run without incrementalMode", undefined, REGIME_LABEL_ASSUMED_FULL],
+    ["a run declaring full", ALLOWLIST_REGIME_FULL, ALLOWLIST_REGIME_FULL],
     ["a diff-informed run", DIFF_INFORMED, DIFF_INFORMED],
   ])("prints the regime and a zero acceptance count for %s", (_label, regime, printed) => {
     const outcome = runGate(withSarif(findingsSarif([], regime)));
@@ -1018,6 +1027,75 @@ describe("CodeQL SARIF acceptance record", () => {
     expect(outcome.stdout).toContain(`[regime: ${printed}]`);
     // 0 件でも必ず出す。出さないと「受容が無い」と「受容の手段が無い」が区別できない。
     expect(outcome.stdout).toContain("0 accepted (allowlist)");
+  });
+
+  describe("analysis regime vocabulary", () => {
+    // 緩和を与える語彙は**実装から読む**。ここへ "diff-informed" と書き写すと、探査
+    // ケースが「正しい値の集合」から導出され、語彙外こそが危険な入力なのにテストは
+    // 語彙内しか試さなくなる。実測値としての "diff-informed" は下の 1 本で固定する。
+    const OUTSIDE_VOCABULARY = ["overlay", "none", "Diff-Informed"].filter(
+      (value) => value !== ALLOWLIST_REGIME_FULL && !KNOWN_DIFF_INFORMED_REGIMES.has(value),
+    );
+
+    it("keeps the measured value in the vocabulary and the sentinel out of it", () => {
+      // 実測: `pull_request` の run は "diff-informed"。語彙がこれを失ったら、本番の
+      // PR run が語彙外として落ちる。逆に "full" が語彙へ入ったら、full run が緩和を
+      // 受け取る側へ移り、陳腐化検査が消える。両方向を固定する。
+      expect(KNOWN_DIFF_INFORMED_REGIMES.has(DIFF_INFORMED)).toBe(true);
+      expect(KNOWN_DIFF_INFORMED_REGIMES.has(ALLOWLIST_REGIME_FULL)).toBe(false);
+      // 番兵と実データ値の分離。同一文字列だと、推定 (欠落) と宣言が出力で区別できない。
+      expect(REGIME_LABEL_ASSUMED_FULL).not.toBe(ALLOWLIST_REGIME_FULL);
+      // 探査ケースが語彙の成長で黙って縮まないようにする。3 本のうち 1 本でも語彙へ
+      // 入ったなら、それは意図的な緩和であり、ここで気づく必要がある。
+      expect(OUTSIDE_VOCABULARY).toHaveLength(3);
+    });
+
+    it.each(OUTSIDE_VOCABULARY)(
+      "treats regime %s as a structural problem instead of granting leniency",
+      (regime) => {
+        // 緩和を否定形 (`full でない`) で与えると、未知の値が全部緩い側へ落ちる。
+        // CodeQL が push run にも値を付け始めた日に、main の full run が誰にも
+        // 気づかれずに陳腐化検査をやめる。肯定形なら、その日は赤で知らされる。
+        const outcome = runGate(
+          withSarif(findingsSarif([{ path: HTML, ruleId: RULE, found: 1 }], regime)),
+          record([{ path: HTML, ruleId: RULE, count: 2, justification: WHY }]),
+        );
+
+        expect(outcome.status).toBe(1);
+        expect(outcome.stderr).toContain("outside the known vocabulary");
+        // 陳腐化判定そのものも緩まないこと。structural problem だけ立てて不足を
+        // 見逃すなら、緩和が消えていない。
+        expect(outcome.stderr).toContain("stale");
+        expect(outcome.stdout).toContain(`analysis regime: unrecognised(${JSON.stringify(regime)})`);
+      },
+    );
+
+    it("does not grant leniency when a full run is mixed with a diff-informed run", () => {
+      // `some(full でない)` は混在でも緩和していた。誤りである: full run が 1 本でも
+      // あれば結果の和集合は全体を含むので、不足は「見ていない」ではなく本物の
+      // ドリフトになる。緩和は**全 run が diff-informed のとき**だけ。
+      const fullRun = findingsSarif([{ path: HTML, ruleId: RULE, found: 1 }]) as { runs: unknown[] };
+      const diffRun = findingsSarif([{ path: HTML, ruleId: RULE, found: 0 }], DIFF_INFORMED) as {
+        runs: unknown[];
+      };
+      const outcome = runGate(
+        withSarif({ version: "2.1.0", runs: [...fullRun.runs, ...diffRun.runs] }),
+        record([{ path: HTML, ruleId: RULE, count: 2, justification: WHY }]),
+      );
+
+      expect(outcome.status).toBe(1);
+      expect(outcome.stderr).toContain("stale");
+      expect(outcome.stdout).toContain(`analysis regime: ${DIFF_INFORMED}, ${REGIME_LABEL_ASSUMED_FULL}`);
+    });
+
+    it("does not echo an unbounded regime string into the log", () => {
+      // レジーム値は解析対象由来で、長さも中身も保証が無い。CI ログへそのまま流さない。
+      const long = "x".repeat(500);
+      const { label, regimeClass } = classifyRegime(long);
+      expect(regimeClass).toBe("unrecognised");
+      expect(label.length).toBeLessThan(80);
+      expect(label).toContain("…");
+    });
   });
 });
 
