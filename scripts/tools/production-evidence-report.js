@@ -519,4 +519,8 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { buildReport, evidenceFormatState, EVIDENCE_FORMATS };
+// evidenceState is exported so the audit-scenario tests can observe the
+// pre-#128 presence-only judgement directly. They used to reach it by handing
+// evidenceFormatState a key with no spec, which made a probe out of a defect:
+// hardening that fallthrough would have broken the probe.
+module.exports = { buildReport, evidenceState, evidenceFormatState, EVIDENCE_FORMATS };

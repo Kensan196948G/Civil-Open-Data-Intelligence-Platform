@@ -21,6 +21,7 @@ import {
 import {
   EVIDENCE_FORMATS,
   evidenceFormatState,
+  evidenceState,
 } from "../../scripts/tools/production-evidence-report.js";
 import { requireCspContract } from "../../scripts/tools/release-smoke.js";
 
@@ -50,24 +51,32 @@ const REPO_ROOT = path.resolve(__dirname, "../..");
 const AUDIT_PATH = "docs/security/evidence-gate-audit.md";
 const SCENARIOS_TEST_PATH = "tests/unit/evidence-gate-audit-scenarios.test.ts";
 const CONTRACT_TEST_PATH = "tests/unit/evidence-gate-audit-contract.test.ts";
+const REPORT_SCRIPT_PATH = "scripts/tools/production-evidence-report.js";
+const CI_WORKFLOW_PATH = ".github/workflows/ci.yml";
+const EVIDENCE_JOB = "production-target-env";
+
 const auditDoc = readFileSync(path.join(REPO_ROOT, AUDIT_PATH), "utf8");
+const reportSource = readFileSync(path.join(REPO_ROOT, REPORT_SCRIPT_PATH), "utf8");
+const ciWorkflow = readFileSync(path.join(REPO_ROOT, CI_WORKFLOW_PATH), "utf8");
 
 /** 判定に日付が絡む形式 (ISO 8601 の未来日チェックなど) があるため固定する。 */
 const NOW = new Date("2026-08-12T00:00:00Z");
 
 /**
- * #128 以前の `evidenceState()` の判定を、実コードから取り出す。
+ * #128 以前の判定 = `evidenceState()`。named export をそのまま呼ぶ。
  *
- * `evidenceFormatState` は `EVIDENCE_FORMATS` に spec が無い鍵に対しては
- * presence 判定 (非空 + placeholder 正規表現) の結果をそのまま返す
- * (`production-evidence-report.js:268-269`)。つまり未知の鍵を渡せば、旧判定が
- * そのまま観測できる。テスト内へ placeholder 正規表現を写経するより退行に強い。
+ * 「legacy」は死んだコードという意味ではない。`evidenceState` は今も
+ * `evidenceFormatState` の第1段 (presence) として生きており、#128 が足したのは
+ * その後段の形式検査である。つまりここで観測しているのは、**形式検査を外したら
+ * 何が通るか**であって、掘り起こした過去の実装ではない。
  *
- * ⚠ 未知の鍵が将来 fail-closed になったら、下の「前提の確認」が落ちて
- *   この probe が無効になったことを知らせる。そのときは probe を作り直すこと。
+ * 以前はこの probe を「`EVIDENCE_FORMATS` に spec の無い鍵を `evidenceFormatState`
+ * へ渡すと presence 判定がそのまま返る」という素通りを使って作っていた。
+ * 欠陥を観測装置に流用していたので、その素通りを塞ぐ是正が probe を壊す関係にあった。
+ * named export にしたことで、probe は是正の対象から独立した。
  */
-function legacyEvidenceState(value: string): string {
-  return evidenceFormatState("__UNSPECIFIED_PROBE_KEY__", value, NOW);
+function legacyEvidenceState(value: string | undefined): string {
+  return evidenceState(value);
 }
 
 function acceptsAsEvidence(state: string): boolean {
@@ -96,6 +105,82 @@ const ALL_EVIDENCE_KEYS: readonly string[] = [
 
 /** 文書が偽陰性の実例として挙げている 2 文字。 */
 const TWO_CHAR_EVIDENCE = "ok";
+
+/**
+ * probe のケース表。軸は **入力空間**であって「妥当な値の集合」ではない。
+ *
+ * 妥当な値から生成すると、語彙外の入力 — 空白のみ、`undefined`、一見まともだが
+ * placeholder 正規表現に当たる文字列 — が定義上ケース表に現れなくなる。
+ * T-B18・B19・B22 はいずれも「検査対象を期待値の側から導出したせいで、期待の外に
+ * あるものが構造的に見えなくなった」事例だった。ここでは `evidenceState` が
+ * 分岐している 3 経路 (trim 後が空 / placeholder 一致 / それ以外) を軸に取り、
+ * 各経路へ**期待の外から**入力を置く。
+ *
+ * `ci-2026-08-12` は「日付入りの、人間には妥当に見える値」だが
+ * `PLACEHOLDER_PATTERNS` の `/ci[-_]/i` に当たって弾かれる。
+ * 妥当な値の集合からは決して出てこない種類のケースであり、この表の軸が
+ * 入力空間であることの実例になっている。
+ */
+const LEGACY_PROBE_CASES: ReadonlyArray<{
+  label: string;
+  value: string | undefined;
+  state: string;
+  accepted: boolean;
+}> = [
+  { label: "undefined (変数が存在しない)", value: undefined, state: "⚠️ unset", accepted: false },
+  { label: "空文字", value: "", state: "⚠️ unset", accepted: false },
+  { label: "空白と改行のみ", value: "  \t\n ", state: "⚠️ unset", accepted: false },
+  {
+    label: "placeholder 語をそのまま含む",
+    value: "REPLACE_ME",
+    state: "⚠️ placeholder-like",
+    accepted: false,
+  },
+  {
+    label: "日付入りで一見まともだが ci- 接頭辞に当たる",
+    value: "ci-2026-08-12",
+    state: "⚠️ placeholder-like",
+    accepted: false,
+  },
+  {
+    label: "文書が偽陰性の実例に挙げる 2 文字",
+    value: TWO_CHAR_EVIDENCE,
+    state: "✅ set (recorded)",
+    accepted: true,
+  },
+  {
+    label: "長いだけで意味の無い値",
+    value: "--------------------------------",
+    state: "✅ set (recorded)",
+    accepted: true,
+  },
+  {
+    label: "実際に証跡として妥当な値",
+    value: "2026-08-11 / platform-ops / drill #4",
+    state: "✅ set (recorded)",
+    accepted: true,
+  },
+];
+
+/**
+ * `evidenceState` の本体から、返しうる文字列リテラルを**実装から**取り出す。
+ *
+ * これが無いと、ケース表は「3 経路を踏んでいるつもり」を自己申告するだけになる。
+ * `evidenceState` に 4 つめの分岐が増えたとき、表を更新し忘れたことに気づく術が
+ * ケース表自身の中には無い。取れなければ throw する (空集合は等しくなるため)。
+ */
+function evidenceStateOutcomes(source: string): string[] {
+  const anchor = "function evidenceState(value) {";
+  if (source.split(anchor).length - 1 !== 1) {
+    throw new Error("evidenceState の定義が一意に見つからない");
+  }
+  const body = source.slice(source.indexOf(anchor) + anchor.length);
+  const end = body.indexOf("\n}");
+  if (end === -1) throw new Error("evidenceState の本体末尾が見つからない");
+  const literals = [...body.slice(0, end).matchAll(/return "([^"]+)"/g)].map((m) => m[1]);
+  if (literals.length === 0) throw new Error("evidenceState の返り値リテラルを抽出できなかった");
+  return [...new Set(literals)];
+}
 
 // --- CSP: 期待値は契約モジュールから組み立てる (リテラルを二重に持たない) -----
 
@@ -347,10 +432,20 @@ describe("監査文書の偽陰性シナリオを実コードで検算する (�
     expect(gateRows.length).toBeGreaterThanOrEqual(20);
   });
 
-  it("前提の確認: #128 以前の判定は 2 文字を証跡として受理していた", () => {
-    // この probe が壊れたら S7 / S8 の「旧実装との差」の主張が根拠を失う。
-    expect(acceptsAsEvidence(legacyEvidenceState(TWO_CHAR_EVIDENCE))).toBe(true);
-    expect(acceptsAsEvidence(legacyEvidenceState(""))).toBe(false);
+  // この probe が壊れたら S7 / S8 の「旧実装との差」の主張が根拠を失う。
+  it.each(LEGACY_PROBE_CASES)(
+    "前提の確認: #128 以前の判定 — $label",
+    ({ value, state, accepted }) => {
+      expect(legacyEvidenceState(value)).toBe(state);
+      expect(acceptsAsEvidence(legacyEvidenceState(value))).toBe(accepted);
+    },
+  );
+
+  it("前提の確認: ケース表は evidenceState の返り値経路をすべて踏んでいる", () => {
+    // 表の網羅性を、表自身ではなく実装の側から測る。分岐が増えれば落ちる。
+    const declared = evidenceStateOutcomes(reportSource).sort();
+    const observed = [...new Set(LEGACY_PROBE_CASES.map((c) => legacyEvidenceState(c.value)))].sort();
+    expect(observed).toEqual(declared);
   });
 
   it("前提の確認: #129 以前の判定は契約準拠 CSP を合格させていた", () => {
@@ -500,13 +595,6 @@ describe("監査文書の偽陰性シナリオを実コードで検算する (�
  * 残しているのは意図的である。4 箇所すべてから同時に消す変更は、互いの比較では
  * 全会一致で通ってしまう。証跡項目を減らすなら、テストの台帳も明示的に減らす。
  */
-
-const REPORT_SCRIPT_PATH = "scripts/tools/production-evidence-report.js";
-const CI_WORKFLOW_PATH = ".github/workflows/ci.yml";
-const EVIDENCE_JOB = "production-target-env";
-
-const reportSource = readFileSync(path.join(REPO_ROOT, REPORT_SCRIPT_PATH), "utf8");
-const ciWorkflow = readFileSync(path.join(REPO_ROOT, CI_WORKFLOW_PATH), "utf8");
 
 /** `const NAME = [ ... ];` の中の文字列リテラルを返す。取れなければ throw。 */
 function arrayLiteralKeys(source: string, constName: string): string[] {
