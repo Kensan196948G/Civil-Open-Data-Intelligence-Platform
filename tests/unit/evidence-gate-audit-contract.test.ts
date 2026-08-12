@@ -198,35 +198,18 @@ describe("production evidence variables match the audited list", () => {
     expect(auditDoc).toContain(`Monitoring evidence ${monitoringKeys.length}項目`);
   });
 
-  it("keeps the leniency claim true while evidenceState only inspects strings", () => {
-    const evidenceState = productionEvidenceReport.match(
-      /function evidenceState\(value\)\s*\{([\s\S]*?)\n\}/,
-    )?.[1];
-    expect(evidenceState).toBeDefined();
-
-    const performsExternalCheck = /fetch\(|spawnSync|execSync|https?:\/\//.test(evidenceState ?? "");
-    const docSaysStringOnly = auditDoc.includes(
-      "GitHub Variables に `ok` の2文字を入れれば7項目すべてが ✅ になる",
-    );
-
-    expect(performsExternalCheck).toBe(!docSaysStringOnly);
-  });
-
   /**
    * Row #7's leniency claim must track what the monitoring rows actually go
    * through, not what one named function contains.
    *
-   * The test just above probes `evidenceState` for an external call and requires
-   * the doc to keep the `ok` claim while none is found. That proxy is wrong in a
-   * way backend's remediation exposed: 7f72626 (PR #137, Issue #128) keeps
-   * `evidenceState` as a deliberate presence check and moves the rows onto a
-   * per-key format validator. No external call is ever added, so the proxy pins
-   * the document to a claim that has become false — and it stays green while
-   * doing so. The three tests below measure the row path instead.
-   *
-   * Both live here on purpose. Removing the proxy is a separate judgement
-   * ("is it in fact only accidentally green?") and is proposed on its own so it
-   * can be accepted or refused without touching this inventory.
+   * The removed predecessor probed `evidenceState` for an external call and
+   * required the doc to keep the `ok` claim while none was found. That proxy is
+   * wrong in a way backend's remediation exposed: 7f72626 (PR #137, Issue #128)
+   * keeps `evidenceState` as a deliberate presence check and moves the rows onto
+   * a per-key format validator. No external call is ever added, so the proxy
+   * pinned the document to a claim that had become false — and stayed green
+   * while doing so. Removing the wording (i.e. correcting the document) was the
+   * only way to turn it red. The three tests below measure the row path instead.
    */
   const monitoringRowChecker = () => {
     const rowLine = productionEvidenceReport.match(/const monitoringRows = [\s\S]*?\n/)?.[0] ?? "";
