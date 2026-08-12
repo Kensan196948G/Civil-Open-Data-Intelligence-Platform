@@ -97,7 +97,7 @@ flowchart LR
 | Teams Webhook | テスト投稿 | 共有チャネルで受信確認 |
 | Cloudflare Policy | Send test notification | 受信確認 |
 | Neon Alert | テストアラート | 受信確認 |
-| GitHub Actions | 意図的失敗run | 受信確認 |
+| GitHub Actions | `run_notification_test=true` のdispatch専用経路（本番probeを故意に落とす旧方式は廃止済み） | 受信確認 |
 
 実施後は、`CODIP_CLOUDFLARE_ALERT_POLICY` と `CODIP_MONITORING_CONTACTS` の証跡変数を更新し、運用台帳「実行記録」へ追記する。
 

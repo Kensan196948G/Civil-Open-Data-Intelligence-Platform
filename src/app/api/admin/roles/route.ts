@@ -3,9 +3,12 @@ import { prisma } from "@/lib/db";
 import { requireAdminRequest } from "@/lib/admin-auth";
 import { auditLogCreateData } from "@/lib/audit";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
-import { normalizeEmail, ROLE_NAMES } from "@/lib/rbac";
+import { invalidateRoleCache, normalizeEmail, ROLE_NAMES } from "@/lib/rbac";
 
 const SCOPE_PATTERN = /^(global|[a-z][a-z0-9-]*(?::[a-z0-9-]+)?)$/;
+// 実行者はクライアント入力ではなくサーバー固定（認証コンテキストは現状
+// proxy 検証のみのため、監査主体は固定識別子で記録する）。
+const GRANTED_BY = "admin";
 
 export async function GET(request: NextRequest) {
   const authError = requireAdminRequest(request);
@@ -14,7 +17,10 @@ export async function GET(request: NextRequest) {
   if (!rate.allowed) return rateLimitResponse(rate);
 
   const assignments = await prisma.roleAssignment.findMany({
-    where: { revokedAt: null },
+    where: {
+      revokedAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    },
     include: { role: { select: { name: true, priority: true } } },
     orderBy: { createdAt: "desc" },
   });
@@ -45,10 +51,6 @@ export async function POST(request: NextRequest) {
   const email = typeof body?.userEmail === "string" ? normalizeEmail(body.userEmail) : "";
   const roleName = typeof body?.role === "string" ? body.role : "";
   const scope = typeof body?.scope === "string" && body.scope ? body.scope : "global";
-  const grantedBy =
-    typeof body?.grantedBy === "string" && body.grantedBy.trim()
-      ? body.grantedBy.trim().slice(0, 200)
-      : "admin";
   let expiresAt: Date | null = null;
   if (body?.expiresAt != null) {
     const parsed = new Date(String(body.expiresAt));
@@ -87,8 +89,26 @@ export async function POST(request: NextRequest) {
       { status: 409 },
     );
   }
+  const now = new Date();
+  // 期限切れの有効割当は失効させてから再付与できるようにする。
+  await prisma.roleAssignment.updateMany({
+    where: {
+      userEmail: email,
+      roleId: role.id,
+      scope,
+      revokedAt: null,
+      expiresAt: { lte: now },
+    },
+    data: { revokedAt: now },
+  });
   const active = await prisma.roleAssignment.findFirst({
-    where: { userEmail: email, roleId: role.id, scope, revokedAt: null },
+    where: {
+      userEmail: email,
+      roleId: role.id,
+      scope,
+      revokedAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
   });
   if (active) {
     return NextResponse.json(
@@ -97,24 +117,44 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const assignment = await prisma.$transaction(async (tx) => {
-    const row = await tx.roleAssignment.create({
-      data: { userEmail: email, roleId: role.id, scope, grantedBy, expiresAt },
+  try {
+    const assignment = await prisma.$transaction(async (tx) => {
+      const row = await tx.roleAssignment.create({
+        data: { userEmail: email, roleId: role.id, scope, grantedBy: GRANTED_BY, expiresAt },
+      });
+      await tx.auditLog.create({
+        data: auditLogCreateData({
+          actor: "管理者",
+          action: "role.assign",
+          target: email,
+          detail: `role=${roleName} scope=${scope}${expiresAt ? ` expiresAt=${expiresAt.toISOString()}` : ""} grantedBy=${GRANTED_BY}`,
+          level: "warning",
+        }),
+      });
+      return row;
     });
-    await tx.auditLog.create({
-      data: auditLogCreateData({
-        actor: "管理者",
-        action: "role.assign",
-        target: email,
-        detail: `role=${roleName} scope=${scope}${expiresAt ? ` expiresAt=${expiresAt.toISOString()}` : ""} grantedBy=${grantedBy}`,
-        level: "warning",
-      }),
-    });
-    return row;
-  });
+    invalidateRoleCache(email, scope);
+    return NextResponse.json(
+      { data: { assignment: { id: assignment.id, userEmail: email, role: roleName, scope } } },
+      { status: 201 },
+    );
+  } catch (error) {
+    // 部分一意インデックス（revokedAt IS NULL）違反 = 並行付与による競合。
+    if (isUniqueConstraintError(error)) {
+      return NextResponse.json(
+        { error: { code: "duplicate", message: `${email} への ${roleName} (${scope}) 付与が競合しました` } },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
+}
 
-  return NextResponse.json(
-    { data: { assignment: { id: assignment.id, userEmail: email, role: roleName, scope } } },
-    { status: 201 },
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code: string }).code === "P2002"
   );
 }

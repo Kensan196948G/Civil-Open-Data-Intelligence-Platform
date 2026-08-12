@@ -282,6 +282,8 @@ describe("dispatch-only notification test path", () => {
   it("documents the dispatch-only test method in the runbooks", () => {
     expect(alertsRunbook).toContain("run_notification_test=true");
     expect(notificationRecord).toContain("run_notification_test=true");
+    // 本番probeを故意に落とす旧方式が現行手順として残っていないこと
+    expect(alertsRunbook).not.toContain("意図的失敗run");
   });
 });
 

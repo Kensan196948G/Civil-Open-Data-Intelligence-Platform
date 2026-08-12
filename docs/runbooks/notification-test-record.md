@@ -16,7 +16,7 @@
 | --- | :---: | --- | --- |
 | `実施日時 (UTC)` | ✅ | 通知テストを送信した時刻。ISO 8601 | `2026-08-11T04:15:00Z` |
 | `対象経路` | ✅ | 通知経路の識別名 | `github-actions-failure` / `cloudflare-alert-policy` / `neon-alert` |
-| `テスト方法` | ✅ | どう発火させたか | `workflow_dispatch で意図的失敗run` / `Dashboard Send test notification` |
+| `テスト方法` | ✅ | どう発火させたか | `production-smoke.yml を run_notification_test=true でdispatch` / `Dashboard Send test notification` |
 | `送信結果` | ✅ | 送信API・UIの応答 | `success` / `error` / `不明` |
 | `受信確認者` | ✅ | 受信を確認した**人間**のロール名 | `ReleaseManager` / `DevOps当番` |
 | `受信時刻 (UTC)` | ✅ | 受信者が実際に通知を目視した時刻。未受信なら `未受信` | `2026-08-11T04:17:00Z` |
@@ -71,7 +71,8 @@
 | 2026-08-10（時刻未記録） | cloudflare-alert-policy | Notifications API テスト送信 | success | 未記録 | 未記録 | - | `NOT RUN`（受信記録なし） | `alerts-and-notifications.md` §「2026-08-10 実施済み」。送信APIの成功のみが記録され、受信時刻・受信確認者が残っていない。QAはNotifications read権限が無く独立検証不能 | 権限付与後に再実施 |
 | - | github-actions-failure | - | - | - | - | - | `BLOCKED` | 通知先が未確定（`alerts-and-notifications.md` §3.1 step1 が人間承認待ち）。`production-smoke.yml` に通知stepが存在しない | 通知先確定後 |
 | - | neon-alert | - | - | - | - | - | `BLOCKED` | Neon Alerts 未設定（`alerts-and-notifications.md` §1） | 設定後 |
-| 2026-08-12T00:52:12Z | github-actions-failure | `production-smoke.yml` を `workflow_dispatch` で `run_notification_test=true` 実行（本番probeは通常どおり成功） | success（job結論 success・テスト専用incident Issue作成） | CTO代行（kensan環境。Issue #152をAPI経由で確認・クローズ。GitHubメール通知の人間目視はユーザー設定に依存） | 2026-08-12T00:52:14Z | 2秒（Issue作成時刻 - 検知時刻） | `PASS` | run 31551646341 / Issue #152（`[TEST] [P2] production smoke failure`、`production-smoke-test` label、本文に種別明記） | 2026-09-11 |
+| 2026-08-12T00:52:12Z | github-actions-failure | `production-smoke.yml` を `workflow_dispatch` で `run_notification_test=true` 実行（本番probeは通常どおり成功） | success（job結論 success・テスト専用incident Issue作成） | CTO代行（kensan環境）※**Issue作成＝検知記録であり、人間のメール受信確認ではない** | 2026-08-12T00:52:14Z | 2秒（Issue作成時刻 - 検知時刻） | `PASS`（**Issue起票経路の実測**。人間の受信確認は次行で別管理） | run 31551646341 / Issue #152（`[TEST] [P2] production smoke failure`、`production-smoke-test` label、本文に種別明記） | 2026-09-11 |
+| - | github-actions-failure（人間の受信確認） | GitHubメール/通知の目視 | - | 未確認（当番・通知先設定は人間作業） | 未受信 | - | `NOT RUN` | 通知先のメール設定と当番の登録が完了したら実施（`alerts-and-notifications.md` §3.1） | 通知先確定後 |
 
 <!-- 新しい記録は上の表へ1行ずつ追記する。過去行は書き換えない。 -->
 

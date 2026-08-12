@@ -37,6 +37,9 @@ function escapeHtml(value: unknown): string {
 
 function escapeXml(value: unknown): string {
   return escapeHtml(value)
+    // XML 1.0 で禁止されている制御文字（U+0000, U+000B, U+000C, U+000E–U+001F）は
+    // 実体参照でも表現できないため、置換文字（U+FFFD）へ置き換える。
+    .replace(/[\u0000\u000B\u000C\u000E-\u001F]/g, "\uFFFD")
     .replace(/\r/g, "&#13;")
     .replace(/\n/g, "&#10;");
 }

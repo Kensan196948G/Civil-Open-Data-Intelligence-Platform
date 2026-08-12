@@ -58,6 +58,15 @@ describe("report export formats", () => {
     expect(sheet).not.toContain("<script");
   });
 
+  it("strips XML 1.0 forbidden control characters from xlsx cells", () => {
+    const bytes = xlsxWorkbook(["note"], [["bad\u0000\u000B\u000C\u000E\u001Fok"]]);
+    const sheet = strFromU8(unzipSync(bytes)["xl/worksheets/sheet1.xml"]);
+    // 禁止制御文字は U+FFFD へ置換され、その他の文字は残る
+    expect(sheet).toContain("bad\uFFFD\uFFFD\uFFFD\uFFFD\uFFFDok");
+    expect(sheet).not.toContain("\u0000");
+    expect(sheet).not.toContain("\u000B");
+  });
+
   it("renders print HTML with escaping and a print button", () => {
     const body = printHtml(HEADERS, ROWS, "daily", "site-1");
     expect(body).toContain("<!doctype html>");

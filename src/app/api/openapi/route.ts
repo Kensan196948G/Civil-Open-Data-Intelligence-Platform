@@ -194,6 +194,15 @@ const openApiDocument = {
       delete: {
         tags: ["admin"],
         summary: "ロール割当を失効させる（監査ログ記録）",
+        parameters: [
+          {
+            in: "path",
+            name: "id",
+            required: true,
+            schema: { type: "string" },
+            description: "RoleAssignment ID",
+          },
+        ],
         security: adminSecurity,
         responses: {
           "200": { description: "失効成功" },

@@ -81,6 +81,10 @@ jobs:
       - name: Report production smoke failure as an incident issue
         if: failure() || github.event.inputs.run_notification_test == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          # 通知テストか実障害かを、probeの実結果と組み合わせて判定する
+          # （実障害中にテストdispatchが重なっても誤分類しない）。
+          PROBE_OUTCOME: ${{ steps.production-status.outcome }}
         with:
           script: |
             const WORKFLOW_FILE = "production-smoke.yml";
@@ -88,41 +92,54 @@ jobs:
             const HISTORY_DEPTH = 10;
             // 通知受信テスト（workflow_dispatch input）の場合は、実障害と区別できる
             // 別ラベル・タイトル接頭辞を使い、既存の実incidentへ追記しない。
+            // probeが失敗している場合は実障害として扱う（テスト分類しない）。
             const isNotificationTest =
-              String(context.payload?.inputs?.run_notification_test ?? "false") === "true";
+              String(context.payload?.inputs?.run_notification_test ?? "false") === "true" &&
+              process.env.PROBE_OUTCOME === "success";
             const dedupeLabel = isNotificationTest ? "production-smoke-test" : DEDUPE_LABEL;
             const { owner, repo } = context.repo;
 
-            // 連続失敗の判定はGitHubのrun履歴を単一の真実とする (案B)。
+            // 通知テストは実障害の連続失敗判定に混ぜない。
+            // 実障害の場合のみ、GitHubのrun履歴を単一の真実として連続失敗を数える (案B)。
             // workflow側に状態を持たせる案Aは、run がキャンセル/タイムアウトすると
             // 書き込まれないまま次のrunが読むため、状態が静かに腐敗する。
             //
             // この履歴参照は補助情報にすぎない。通知そのものが安全網なので、
             // 履歴が取れなくてもIssue起票は必ず行う (fail-open)。
             let consecutiveFailures = isNotificationTest ? 1 : null;
-            try {
-              const { data: history } = await github.rest.actions.listWorkflowRuns({
-                owner,
-                repo,
-                workflow_id: WORKFLOW_FILE,
-                status: "completed",
-                per_page: HISTORY_DEPTH,
-              });
-              // このstepは failure() でのみ動くので、現runは失敗として1から数える。
-              consecutiveFailures = 1;
-              for (const run of history.workflow_runs.filter((r) => r.id !== context.runId)) {
-                if (run.conclusion !== "failure") break;
-                consecutiveFailures += 1;
+            if (!isNotificationTest) {
+              try {
+                const { data: history } = await github.rest.actions.listWorkflowRuns({
+                  owner,
+                  repo,
+                  workflow_id: WORKFLOW_FILE,
+                  status: "completed",
+                  per_page: HISTORY_DEPTH,
+                });
+                // このstepは failure() でのみ動くので、現runは失敗として1から数える。
+                consecutiveFailures = 1;
+                for (const run of history.workflow_runs.filter((r) => r.id !== context.runId)) {
+                  if (run.conclusion !== "failure") break;
+                  consecutiveFailures += 1;
+                }
+              } catch (error) {
+                core.warning(`Could not read run history; reporting without a streak count: ${error.message}`);
               }
-            } catch (error) {
-              core.warning(`Could not read run history; reporting without a streak count: ${error.message}`);
             }
 
             // runbook §1 の異常判定「連続2回以上」に対応させる。
             // 回数不明時はP1へ倒さない (誤ったP1は当番の信頼を損なう)。
-            const severity = consecutiveFailures !== null && consecutiveFailures >= 2 ? "P1" : "P2";
+            const severity = isNotificationTest
+              ? "P2"
+              : consecutiveFailures !== null && consecutiveFailures >= 2
+                ? "P1"
+                : "P2";
             const streakLabel =
-              consecutiveFailures === null ? "不明 (run履歴取得に失敗)" : `${consecutiveFailures} (直近${HISTORY_DEPTH}run参照)`;
+              isNotificationTest
+                ? "テスト（実障害なし）"
+                : consecutiveFailures === null
+                  ? "不明 (run履歴取得に失敗)"
+                  : `${consecutiveFailures} (直近${HISTORY_DEPTH}run参照)`;
             const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
 
             // 本文にはrunへの参照だけを書く。probe出力は redacted artifact 側に置き、

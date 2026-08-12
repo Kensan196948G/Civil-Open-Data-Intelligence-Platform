@@ -20,6 +20,8 @@ CREATE TABLE "role_assignments" (
     "revokedAt" DATETIME,
     CONSTRAINT "role_assignments_roleId_fkey" FOREIGN KEY ("roleId") REFERENCES "roles" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
-CREATE UNIQUE INDEX "role_assignments_userEmail_roleId_scope_revokedAt_key" ON "role_assignments"("userEmail", "roleId", "scope", "revokedAt");
+-- 有効な割当（revokedAt IS NULL）を一意化する部分インデックス。
+-- revokedAt を含む複合一意では NULL が重複を防がないため（SQLite/PostgreSQL共通）。
+CREATE UNIQUE INDEX "role_assignments_active_unique" ON "role_assignments"("userEmail", "roleId", "scope") WHERE "revokedAt" IS NULL;
 CREATE INDEX "role_assignments_userEmail_revokedAt_idx" ON "role_assignments"("userEmail", "revokedAt");
 CREATE INDEX "role_assignments_roleId_idx" ON "role_assignments"("roleId");

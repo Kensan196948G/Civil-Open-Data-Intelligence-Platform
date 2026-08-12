@@ -360,7 +360,9 @@ model RoleAssignment {
   createdAt DateTime  @default(now())
   revokedAt DateTime?
 
-  @@unique([userEmail, roleId, scope, revokedAt])
+  // 有効割当の一意性は部分インデックス（migration: role_assignments_active_unique,
+  // WHERE revokedAt IS NULL）で担保する。Prisma の @@unique は部分インデックスを
+  // 表現できないため、モデル側には置かない。
   @@index([userEmail, revokedAt])
   @@index([roleId])
   @@map("role_assignments")

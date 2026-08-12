@@ -1,9 +1,0 @@
-{
-  "id": "T-cb08f2d1-5591-4a10-be6b-5645ad556e3b",
-  "subject": "フェーズ1：現状検証と改善実装",
-  "description": "lint/typecheck/build実行、評価書の最新化、コード品質改善の実装、テスト追加",
-  "status": "completed",
-  "blocks": [],
-  "blockedBy": [],
-  "threadID": "ses_00fbe8f6cffexEjNVQ0r2ev4jP"
-}

@@ -135,7 +135,7 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 | 2026-08-10 | 気象庁防災情報XMLの試行 | ⚠️ エンジン対応のみ | Atom feedパース（441件抽出）は成功したが、座標・住所を含まないため標準レコード登録は全件スキップ。誤解防止のためジョブは無効化し、非空間XMLのマッピング設計を次サイクル課題とする |
 | 2026-08-10 | Cloudflare通知テスト再送 | ✅ | `POST /alerting/v3/policies/2731f30e.../test` → `success=true`（受信確認はhuman kensan） |
 | 2026-08-12 07:15 JST (22:15Z) | Neon PITR復旧訓練 | ✅ | PITR 2026-08-11T20:15:00Z → 一時branch `br-blue-wave-afeh7gyq` 作成。検証: data_sources=62（期待62）・PG 17.10・PostGIS 3.5・migrations 6・tables 23。約14分で完了。endpoint2本・branchを削除済み。記録: `docs/runbooks/restore-drill-record.md#2026-08-12` |
-| 2026-08-12 09:52 JST (00:52Z) | GitHub Actions通知受信テスト | ✅ | `run_notification_test=true` のdispatch専用経路でincident Issue #152（`[TEST]`）作成を実測。本番probeは通常どおり成功。受信確認・クローズ済み。記録: `docs/runbooks/notification-test-record.md#2026-08-12` |
+| 2026-08-12 09:52 JST (00:52Z) | GitHub Actions通知受信テスト | 🟡 | `run_notification_test=true` のdispatch専用経路でincident Issue #152（`[TEST]`）の**作成経路**を実測・内容確認・クローズ済み。本番probeは通常どおり成功。**人間のメール受信確認は別途**（当番・通知先設定待ち）。記録: `docs/runbooks/notification-test-record.md#2026-08-12` |
 | 2026-08-05 02:30Z | production smoke初回成功 | ✅ | run 30969524446（health 200 / ready 200 db=ok） |
 | 2026-08-05 | Access service token設定 | ✅ | 本台帳 §4、`docs/runbooks/cloudflare-production.md` §1.0.1 |
 | 2026-08-05 | 運用台帳・incident runbook新設 | ✅ | 本ファイル、`docs/runbooks/incident-response.md` |
