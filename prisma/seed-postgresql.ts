@@ -1,4 +1,4 @@
-import { INITIAL_TAGS, PROVIDERS, SOURCES } from "./seed-data";
+import { DEFAULT_ROLES, INITIAL_TAGS, PROVIDERS, SOURCES } from "./seed-data";
 import { seedWeatherDemo } from "./seed-weather-demo";
 
 type PgClientModule = typeof import("../node_modules/.prisma/client-postgresql");
@@ -8,6 +8,14 @@ async function main() {
   const prisma = new PrismaClient();
 
   try {
+    for (const role of DEFAULT_ROLES) {
+      await prisma.role.upsert({
+        where: { name: role.name },
+        update: { priority: role.priority, note: role.note },
+        create: role,
+      });
+    }
+
     const providerMap = new Map<string, string>();
     for (const p of PROVIDERS) {
       const provider = await prisma.provider.upsert({

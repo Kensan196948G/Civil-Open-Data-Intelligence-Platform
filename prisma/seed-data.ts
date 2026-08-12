@@ -48,6 +48,16 @@ export const INITIAL_TAGS: { name: string; color: string }[] = [
   { name: "利用条件要確認", color: "#f59e0b" },
 ];
 
+/** RBAC既定ロール（docs/design/rbac-design.md §2）。priorityは高いほど強い。 */
+export const DEFAULT_ROLES: { name: string; priority: number; note: string }[] = [
+  { name: "viewer", priority: 10, note: "閲覧者（既定）。検索・地図・地形・気象・判定結果の閲覧" },
+  { name: "engineer", priority: 20, note: "技術者。現場登録・判定実行・レポート出力・ウォッチリスト" },
+  { name: "data-steward", priority: 30, note: "データ管理者。データソース登録・収集ジョブ・品質再計算" },
+  { name: "admin", priority: 40, note: "管理者。管理API・設定・タグ・ロール管理" },
+  { name: "auditor", priority: 35, note: "監査。監査ログ・判定スナップショット・証跡の参照のみ" },
+  { name: "api-consumer", priority: 15, note: "API利用者。契約済みAPIキー経由の read / 限定 write" },
+];
+
 export const PROVIDERS: SeedProvider[] = [
   { name: "国土交通省", organizationType: "national", officialUrl: "https://www.mlit.go.jp/", country: "日本" },
   { name: "国土地理院", organizationType: "national", officialUrl: "https://www.gsi.go.jp/", country: "日本" },

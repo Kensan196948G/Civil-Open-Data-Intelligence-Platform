@@ -337,3 +337,31 @@ model TerrainAnalysisRun {
   @@index([createdAt])
   @@map("terrain_analysis_runs")
 }
+
+model Role {
+  id          String           @id @default(cuid())
+  name        String           @unique // viewer / engineer / data-steward / admin / auditor / api-consumer
+  priority    Int              @default(100)
+  note        String?
+  createdAt   DateTime         @default(now())
+  assignments RoleAssignment[]
+
+  @@map("roles")
+}
+
+model RoleAssignment {
+  id        String    @id @default(cuid())
+  userEmail String // 小文字正規化して保存
+  roleId    String
+  role      Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  scope     String    @default("global") // global / site:<id> / provider:<id>
+  grantedBy String
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  @@unique([userEmail, roleId, scope, revokedAt])
+  @@index([userEmail, revokedAt])
+  @@index([roleId])
+  @@map("role_assignments")
+}

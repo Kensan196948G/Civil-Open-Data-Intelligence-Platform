@@ -73,25 +73,13 @@ jobs:
         shell: bash
         run: exit 1
 
-      # 通知受信テスト（workflow_dispatch 専用・本番probeに影響させない）。
-      # continue-on-error で意図的な失敗を発生させ、通知stepを failure() で発火させる。
-      # これにより本番を故意に落とすことなく、incident Issue の起票経路を実測できる
-      # （docs/runbooks/alerts-and-notifications.md §3）。
-      - name: Trigger notification test (dispatch only)
-        id: notification-test-trigger
-        # boolean型のinputsは式コンテキストで boolean へ変換され 'true' 文字列と
-        # 一致しないため、workflow_dispatch の raw input（常に文字列）で判定する。
-        if: github.event.inputs.run_notification_test == 'true'
-        continue-on-error: true
-        shell: bash
-        run: |
-          echo "::notice::notification test trigger (workflow_dispatch only, production probe untouched)"
-          exit 1
-
       # 失敗を「表明」するだけでなく「伝達」する経路。exit 1 だけではGitHub既定通知
       # (各ユーザーの個人設定依存) にしか届かず、リポジトリ設定として固定されない。
+      # 通知受信テスト（workflow_dispatch の run_notification_test=true）では本番probeを
+      # 落とさずにこのstepを直接発火させる。continue-on-errorの失敗は failure() を
+      # 真にしないため、入力フラグをOR条件で明示する。
       - name: Report production smoke failure as an incident issue
-        if: failure()
+        if: failure() || github.event.inputs.run_notification_test == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
           script: |

@@ -265,10 +265,11 @@ describe("dispatch-only notification test path", () => {
   it("exposes a workflow_dispatch input instead of failing the production probe", () => {
     expect(smokeWorkflow).toContain("run_notification_test");
     expect(smokeWorkflow).toContain("workflow_dispatch:");
-    // The test trigger is a step-level intentional failure with
-    // continue-on-error, so the job itself stays green.
-    expect(smokeWorkflow).toContain("Trigger notification test (dispatch only)");
-    expect(smokeWorkflow).toContain("continue-on-error: true");
+    // The notification step fires on a real failure OR the dispatch-only test
+    // input; the production probe is never degraded for the test.
+    expect(smokeWorkflow).toContain(
+      "if: failure() || github.event.inputs.run_notification_test == 'true'",
+    );
   });
 
   it("marks test incidents so they cannot be confused with real failures", () => {

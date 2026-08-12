@@ -1,0 +1,11 @@
+{
+  "id": "T-4725e2aa-aeb7-4c43-a59f-ffdc680a51a2",
+  "subject": "改善前評価の更新（最新main状態）",
+  "description": "PR #116〜#121の改善を反映した最新の18軸再評価",
+  "status": "pending",
+  "blocks": [],
+  "blockedBy": [
+    "T-eb5d83d9-f2d0-43bc-bfc7-dcdb19f27b0f"
+  ],
+  "threadID": "ses_00fc35366ffeT8w2fjyw6hTDWQ"
+}

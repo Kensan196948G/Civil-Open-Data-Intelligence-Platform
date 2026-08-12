@@ -1,0 +1,11 @@
+{
+  "id": "T-de3c8dfc-e8ac-4f29-a1b2-6b652c6d83b2",
+  "subject": "フェーズ0：プロジェクト全体像の把握とコードベース調査",
+  "description": "プロジェクトの文書・ソース・設定・DB・API・テスト・CI/CDを包括的に調査し、現状を把握する",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": [
+    "T-6f78e1a4-dd3a-44aa-b54c-c0e1ea51a41a"
+  ],
+  "threadID": "ses_00fbe8f6cffexEjNVQ0r2ev4jP"
+}
