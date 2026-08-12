@@ -8,6 +8,21 @@ const DEFAULT_MAX_PG_DUMP_AGE_HOURS = 24;
 const DEFAULT_MAX_RESTORE_DRILL_AGE_DAYS = 30;
 const DEFAULT_MAX_HISTORY_MEASUREMENT_AGE_HOURS = 24;
 
+// The one document that counts as a restore drill record.
+//
+// Resolving the reference proves it leads somewhere; it does not prove it leads
+// *here*. Without this constant the gate accepts any file in the checkout --
+// package.json satisfied it -- so "a drill was recorded" degraded to "a file was
+// named". Deliberately not overridable from the command line: a flag that lets
+// the caller nominate the expected document would hand back exactly the freedom
+// this constant removes.
+//
+// A rename or move of the ledger makes every reference fail here rather than
+// silently pass, which is the direction to fail in. The pairing test in
+// tests/unit/neon-backup-evidence.test.ts asserts this path exists in the real
+// tree, so a move surfaces in the test suite instead of in a 03:17 JST backup run.
+const RESTORE_DRILL_LEDGER = "docs/runbooks/restore-drill-record.md";
+
 const REQUIRED_STRING_FIELDS = [
   "projectId",
   "branch",
@@ -195,14 +210,20 @@ function decodeAnchor(anchor) {
 // to be recorded as evidence: the file exists, the anchor does not, and no
 // check could tell the difference.
 //
-// An anchor-less reference is accepted on purpose. The drill ledger is an
-// append-only table whose rows carry no heading, so requiring an anchor would
-// force the ledger into a date-heading layout -- a rewrite of rows the ledger
-// itself forbids ("過去行は書き換えない"). Naming the file is the strongest
-// reference that document shape can honestly support. When an anchor *is*
-// supplied it must resolve, because an unresolvable one is a false claim of
-// precision rather than a missing convenience.
-function resolveDocumentReference(reference, repoRoot) {
+// An anchor-less reference is accepted by choice, not by necessity. An earlier
+// version of this comment claimed the ledger's shape could not support per-row
+// anchors -- that requiring one would force the append-only table into a
+// date-heading layout and so rewrite rows the ledger forbids rewriting. That is
+// false, and collectAnchors below is what falsifies it: an explicit
+// `<a id="...">` inside a table cell resolves, and adding one to each *new* row
+// leaves every past row untouched. The honest statement is that anchors are
+// available but not yet worth the recording burden they place on whoever runs a
+// drill, so they are not required today. Recording an unexercised option as an
+// impossibility is worse than the missing check itself: it retires the question.
+//
+// When an anchor *is* supplied it must resolve, because an unresolvable one is a
+// false claim of precision rather than a missing convenience.
+function resolveDocumentReference(reference, repoRoot, expectedPath) {
   const raw = String(reference ?? "").trim();
   if (!raw) return { ok: false, detail: "(not recorded)" };
 
@@ -220,6 +241,16 @@ function resolveDocumentReference(reference, repoRoot) {
   const resolved = path.resolve(root, relativePath);
   if (resolved !== root && !resolved.startsWith(root + path.sep)) {
     return { ok: false, detail: `${safeValue(relativePath)} escapes the repository root` };
+  }
+
+  // Compared after resolution rather than as a raw string so that "./a/b.md",
+  // "a//b.md" and "a/x/../b.md" are judged as the one path they name.
+  const normalized = path.relative(root, resolved).split(path.sep).join("/");
+  if (normalized !== expectedPath) {
+    return {
+      ok: false,
+      detail: `${safeValue(normalized)} is not the restore drill ledger (expected ${safeValue(expectedPath)})`,
+    };
   }
 
   let stats;
@@ -402,7 +433,16 @@ function checkEvidence(evidence, options) {
   // measured in production on 2026-08-12 proves the gap -- the file existed,
   // the anchor did not, and the presence-only note reported ✅ regardless.
   // Nothing upstream catches that, so it has to be caught here.
-  const drillRecord = resolveDocumentReference(evidence.restoreDrillRecord, options.repoRoot);
+  //
+  // Resolvability alone still under-checks: it asks whether the reference leads
+  // somewhere, not whether it leads to the drill ledger. Passing the expected
+  // path explicitly keeps that second question at the call site, where it is
+  // visible, instead of buried as a default inside the resolver.
+  const drillRecord = resolveDocumentReference(
+    evidence.restoreDrillRecord,
+    options.repoRoot,
+    RESTORE_DRILL_LEDGER,
+  );
   add("restoreDrillRecord resolves", drillRecord.ok, drillRecord.detail);
 
   return { ok: failures.length === 0, rows, failures };
@@ -446,8 +486,9 @@ function usage() {
     "Notes:",
     "  The PITR window is judged on historyRetentionSecondsMeasured (measured from the Neon API).",
     "  A missing measurement fails the gate; the self-declared historyWindowHours is never used to pass it.",
-    "  restoreDrillRecord must name a file that exists; an anchor, when supplied, must resolve to a",
-    "  heading slug or an explicit <a id>/<a name> target in that file.",
+    `  restoreDrillRecord must name ${RESTORE_DRILL_LEDGER}, which must exist in the checkout; an`,
+    "  anchor, when supplied, must resolve to a heading slug or an explicit <a id>/<a name> target",
+    "  in that file. Any other path is rejected even when it exists.",
   ].join("\n");
 }
 

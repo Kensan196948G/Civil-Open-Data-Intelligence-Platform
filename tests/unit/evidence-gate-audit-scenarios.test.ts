@@ -342,6 +342,19 @@ const SCENARIOS: Record<string, Scenario> = {
     kind: "executed",
     run: () => backupEvidenceGatePasses(`${RESOLVABLE_DRILL_RECORD}#2026-07-19`),
   },
+  // SB14: SB13 の残余。解決は「参照が何かを指しているか」だけを問い、
+  // 「台帳を指しているか」は問わなかったため、リポジトリ内の任意のファイルが
+  // 訓練の裏付けとして通っていた (CTO の総当たり実測で package.json /
+  // README.md / ADR が合格)。run() は台帳以外を指した参照が通るかを測る。
+  //
+  // package.json を選ぶのは、それが**解決に成功する**ファイルだからである。
+  // 実在しないパスを使うと SB13 の解決検査が先に落ち、同一性検査は一度も
+  // 実行されないまま run() が false を返す。塞いでいない穴を塞いだと
+  // 報告する形になり、この節が塞ごうとしている自己申告そのものになる。
+  SB14: {
+    kind: "executed",
+    run: () => backupEvidenceGatePasses("package.json"),
+  },
   // #1 / #3 は T-B4 (Issue #126 / #127) の是正で、当時この仕組みが無かった。
   // 実行検査には Neon control-plane API と pg_dump artifact の実体が要る。
   S1: { kind: "declared" },

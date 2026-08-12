@@ -236,7 +236,19 @@ describe("check-neon-backup-evidence PITR retention gate", () => {
 // distinction between "a reference was written down" and "the reference leads
 // somewhere", against a real filesystem rather than a stubbed one.
 describe("check-neon-backup-evidence restoreDrillRecord resolution", () => {
+  // The fixtures name the ledger at its real repository path. They have to: the
+  // gate compares the reference against a hard-coded path, and a fixture that
+  // used a convenient alias would only ever exercise a comparison the real
+  // workflow never makes.
+  const LEDGER_PATH = "docs/runbooks/restore-drill-record.md";
+
   let fixtureRoot = "";
+  // Separate roots because the failure being measured is a property of the tree,
+  // not of the reference string: "the ledger is missing" and "the ledger path is
+  // a directory" cannot be expressed by pointing somewhere else, now that
+  // pointing somewhere else is itself rejected.
+  let absentRoot = "";
+  let directoryRoot = "";
 
   const LEDGER = [
     "# 🗄️ 復旧訓練 実施記録テンプレート",
@@ -247,6 +259,9 @@ describe("check-neon-backup-evidence restoreDrillRecord resolution", () => {
     "",
     "| 実施日時 | 判定 |",
     "| --- | --- |",
+    // An existing row, left exactly as it was written. Anchoring the row below
+    // it required no edit here, which is the whole point of the demonstration.
+    "| 2026-08-11T00:00:00Z | success |",
     '| <a id="drill-2026-08-12"></a>2026-08-12T00:00:00Z | success |',
     "",
     "## 1. 記録様式",
@@ -260,20 +275,34 @@ describe("check-neon-backup-evidence restoreDrillRecord resolution", () => {
   beforeAll(() => {
     fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "codip-drill-ref-"));
     fs.mkdirSync(path.join(fixtureRoot, "docs/runbooks"), { recursive: true });
-    fs.writeFileSync(path.join(fixtureRoot, "docs/runbooks/ledger.md"), LEDGER, "utf8");
+    fs.writeFileSync(path.join(fixtureRoot, LEDGER_PATH), LEDGER, "utf8");
     fs.writeFileSync(path.join(fixtureRoot, "outside.md"), "# outside\n", "utf8");
+    fs.writeFileSync(path.join(fixtureRoot, "package.json"), "{}\n", "utf8");
+    fs.writeFileSync(path.join(fixtureRoot, "docs/runbooks/monitoring.md"), "# monitoring\n", "utf8");
+
+    absentRoot = fs.mkdtempSync(path.join(os.tmpdir(), "codip-drill-absent-"));
+    fs.mkdirSync(path.join(absentRoot, "docs/runbooks"), { recursive: true });
+
+    directoryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "codip-drill-dir-"));
+    fs.mkdirSync(path.join(directoryRoot, LEDGER_PATH), { recursive: true });
   });
 
   afterAll(() => {
-    if (fixtureRoot) fs.rmSync(fixtureRoot, { recursive: true, force: true });
+    for (const root of [fixtureRoot, absentRoot, directoryRoot]) {
+      if (root) fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 
+  function runAgainstRoot(root: string, restoreDrillRecord: unknown) {
+    return runGate({ ...freshEvidence, restoreDrillRecord }, ["--repo-root", root]);
+  }
+
   function runAgainstFixture(restoreDrillRecord: unknown) {
-    return runGate({ ...freshEvidence, restoreDrillRecord }, ["--repo-root", fixtureRoot]);
+    return runAgainstRoot(fixtureRoot, restoreDrillRecord);
   }
 
   it("passes for an existing file and an anchor generated from a real heading", () => {
-    const result = runAgainstFixture("docs/runbooks/ledger.md#4-記録台帳");
+    const result = runAgainstFixture("docs/runbooks/restore-drill-record.md#4-記録台帳");
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("restoreDrillRecord resolves | ✅");
@@ -281,7 +310,7 @@ describe("check-neon-backup-evidence restoreDrillRecord resolution", () => {
   });
 
   it("passes for an explicit <a id> target, which is how an append-only table row can be addressed", () => {
-    const result = runAgainstFixture("docs/runbooks/ledger.md#drill-2026-08-12");
+    const result = runAgainstFixture("docs/runbooks/restore-drill-record.md#drill-2026-08-12");
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("restoreDrillRecord resolves | ✅");
@@ -289,7 +318,7 @@ describe("check-neon-backup-evidence restoreDrillRecord resolution", () => {
 
   it("fails for an existing file with an anchor that resolves to nothing", () => {
     // The exact shape recorded in production: the file is real, the anchor is not.
-    const result = runAgainstFixture("docs/runbooks/ledger.md#2026-08-12");
+    const result = runAgainstFixture("docs/runbooks/restore-drill-record.md#2026-08-12");
 
     expect(result.status).toBe(1);
     expect(result.stdout).toContain("restoreDrillRecord resolves | ⚠️");
@@ -297,10 +326,38 @@ describe("check-neon-backup-evidence restoreDrillRecord resolution", () => {
   });
 
   it("fails for a file that does not exist in the repository", () => {
-    const result = runAgainstFixture("docs/runbooks/absent.md#4-記録台帳");
+    const result = runAgainstRoot(absentRoot, `${LEDGER_PATH}#4-記録台帳`);
 
     expect(result.status).toBe(1);
     expect(result.stdout).toContain("does not exist in the repository");
+  });
+
+  // T-B14. Resolution alone answered "does this reference lead somewhere",
+  // never "does it lead to the drill ledger". Every path below exists in the
+  // fixture tree and passed the gate before this comparison was added --
+  // package.json among them, which is how far "a drill was recorded" had
+  // drifted from what the field is supposed to attest.
+  it("rejects a reference to a file that exists but is not the drill ledger", () => {
+    for (const other of ["package.json", "outside.md", "docs/runbooks/monitoring.md"]) {
+      const result = runAgainstFixture(other);
+
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain("restoreDrillRecord resolves | ⚠️");
+      expect(result.stdout).toContain("is not the restore drill ledger");
+    }
+  });
+
+  it("judges the path as resolved, so ./ and redundant segments are not a way around the comparison", () => {
+    for (const spelling of [
+      `./${LEDGER_PATH}`,
+      "docs//runbooks/restore-drill-record.md",
+      "docs/design/../runbooks/restore-drill-record.md",
+    ]) {
+      const result = runAgainstFixture(spelling);
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain("restoreDrillRecord resolves | ✅");
+    }
   });
 
   it("fails for an empty or whitespace-only reference", () => {
@@ -327,21 +384,42 @@ describe("check-neon-backup-evidence restoreDrillRecord resolution", () => {
     expect(result.stdout).toContain("has no file path");
   });
 
-  it("accepts a file-only reference, because the ledger has no per-row heading", () => {
-    // Deliberate: requiring an anchor would force the append-only table into a
-    // date-heading layout, which means rewriting rows the ledger forbids
-    // rewriting. Naming the file is the strongest honest reference available.
-    const result = runAgainstFixture("docs/runbooks/ledger.md");
+  it("accepts a file-only reference, by choice rather than by necessity", () => {
+    // This comment used to justify the allowance by claiming the ledger could
+    // not carry per-row anchors without being restructured into date headings.
+    // The test two cases above disproves that: an explicit <a id> inside a table
+    // cell resolves, and putting one on each new row rewrites nothing. What is
+    // actually true is narrower -- anchors are possible but not required today,
+    // because the burden falls on whoever runs a drill and has not been judged
+    // worth it. Kept as a live question, not a settled impossibility.
+    const result = runAgainstFixture("docs/runbooks/restore-drill-record.md");
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("exists (no anchor supplied)");
   });
 
-  it("fails for a directory, an absolute path, and a path escaping the repository", () => {
-    expect(runAgainstFixture("docs/runbooks").status).toBe(1);
-    expect(runAgainstFixture("docs/runbooks").stdout).toContain("is not a regular file");
+  it("demonstrates the anchor the ledger could carry without rewriting a single past row", () => {
+    // The concrete counter-example to the retired claim. The fixture's table has
+    // one row bearing <a id="drill-2026-08-12">; the rows around it carry
+    // nothing and are untouched by its presence.
+    const withAnchor = runAgainstFixture(`${LEDGER_PATH}#drill-2026-08-12`);
+    expect(withAnchor.status).toBe(0);
 
-    const absolute = runAgainstFixture(path.join(fixtureRoot, "docs/runbooks/ledger.md"));
+    // And an older row, which has no anchor, is exactly what stays unaddressable
+    // under that scheme -- the cost of the choice, stated rather than implied.
+    const withoutAnchor = runAgainstFixture(`${LEDGER_PATH}#drill-2026-08-11`);
+    expect(withoutAnchor.status).toBe(1);
+    expect(withoutAnchor.stdout).toContain("has no anchor");
+  });
+
+  it("fails for a directory, an absolute path, and a path escaping the repository", () => {
+    // The ledger path itself is a directory in this tree; pointing at some other
+    // directory would now be rejected as the wrong document before its type was
+    // ever examined, which would leave the regular-file check unmeasured.
+    expect(runAgainstRoot(directoryRoot, LEDGER_PATH).status).toBe(1);
+    expect(runAgainstRoot(directoryRoot, LEDGER_PATH).stdout).toContain("is not a regular file");
+
+    const absolute = runAgainstFixture(path.join(fixtureRoot, "docs/runbooks/restore-drill-record.md"));
     expect(absolute.status).toBe(1);
     expect(absolute.stdout).toContain("must be repository-relative");
 
@@ -351,7 +429,7 @@ describe("check-neon-backup-evidence restoreDrillRecord resolution", () => {
   });
 
   it("does not treat a '#' line inside a fenced code block as a heading", () => {
-    const result = runAgainstFixture("docs/runbooks/ledger.md#見出しではない");
+    const result = runAgainstFixture("docs/runbooks/restore-drill-record.md#見出しではない");
 
     expect(result.status).toBe(1);
     expect(result.stdout).toContain("has no anchor");
@@ -361,13 +439,13 @@ describe("check-neon-backup-evidence restoreDrillRecord resolution", () => {
     // A repeated heading takes "-1"; an emoji-prefixed heading keeps the
     // leading hyphen left behind when the emoji is stripped. Getting either
     // wrong would reject an anchor that resolves in the rendered document.
-    expect(runAgainstFixture("docs/runbooks/ledger.md#1-記録様式-1").status).toBe(0);
-    expect(runAgainstFixture("docs/runbooks/ledger.md#-復旧訓練-実施記録テンプレート").status).toBe(0);
+    expect(runAgainstFixture("docs/runbooks/restore-drill-record.md#1-記録様式-1").status).toBe(0);
+    expect(runAgainstFixture("docs/runbooks/restore-drill-record.md#-復旧訓練-実施記録テンプレート").status).toBe(0);
   });
 
   it("resolves a percent-encoded anchor, which is how a browser copies a CJK link", () => {
     const result = runAgainstFixture(
-      `docs/runbooks/ledger.md#${encodeURIComponent("4-記録台帳")}`,
+      `docs/runbooks/restore-drill-record.md#${encodeURIComponent("4-記録台帳")}`,
     );
 
     expect(result.status).toBe(0);
@@ -376,6 +454,23 @@ describe("check-neon-backup-evidence restoreDrillRecord resolution", () => {
 });
 
 describe("check-neon-backup-evidence against the real repository", () => {
+  // T-B14. The gate hard-codes the ledger path, so moving or renaming that file
+  // makes every reference fail. Failing is the right direction, but a 03:17 JST
+  // backup run is the wrong place to find out. This asserts the coupling here,
+  // where whoever moves the file is still holding it.
+  it("still finds the drill ledger at the path the gate requires", () => {
+    const ledger = path.join(repoRoot, "docs/runbooks/restore-drill-record.md");
+    expect(fs.existsSync(ledger)).toBe(true);
+
+    const result = runGate({
+      ...freshEvidence,
+      restoreDrillRecord: "docs/runbooks/restore-drill-record.md",
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("restoreDrillRecord resolves | ✅");
+  });
+
   it("rejects the reference that was recorded as evidence on 2026-08-12", () => {
     // Not a fixture: this is the value held in the repository variable
     // CODIP_LAST_RESTORE_DRILL_RECORD, judged against the checked-out tree.
