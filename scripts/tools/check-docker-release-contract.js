@@ -2,6 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { createRequireText } = require("./contract-text.js");
 
 const root = process.cwd();
 const dockerfile = fs.readFileSync(path.join(root, "Dockerfile"), "utf8");
@@ -11,11 +12,7 @@ const composePg = fs.readFileSync(path.join(root, "docker-compose.postgresql-pre
 
 const errors = [];
 
-function requireText(label, source, needle) {
-  if (!source.includes(needle)) {
-    errors.push(`${label} missing ${needle}`);
-  }
-}
+const requireText = createRequireText(errors);
 
 requireText("Dockerfile", dockerfile, "FROM node:22-bookworm-slim@sha256:");
 requireText("Dockerfile", dockerfile, "FROM node:22-bookworm-slim@sha256:53ada149d435c38b14476cb57e4a7da73c15595aba79bd6971b547ceb6d018bf AS prod-deps");
