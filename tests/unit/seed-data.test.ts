@@ -39,7 +39,7 @@ describe("データソースシードの整合性", () => {
       (source) =>
         !source.requiresApiKey &&
         ["JSON", "CSV", "GeoJSON", "XML"].includes(source.dataFormat) &&
-        Boolean(source.endpointUrl),
+        Boolean(source.endpointUrl?.startsWith("https://")),
     );
     expect(eligible.length).toBeGreaterThanOrEqual(50);
   });

@@ -48,6 +48,23 @@ jobs:
       - name: Build production app
         run: npm run build
 
+      - name: Validate load test inputs
+        id: validate
+        shell: bash
+        run: |
+          vus="${{ github.event.inputs.max_vus }}"
+          case "$vus" in
+            ''|*[!0-9]*)
+              echo "::error::max_vus must be a positive integer"
+              exit 1
+              ;;
+          esac
+          if [ "$vus" -lt 1 ] || [ "$vus" -gt 200 ]; then
+            echo "::error::max_vus must be between 1 and 200"
+            exit 1
+          fi
+          echo "max_vus=$vus" >> "$GITHUB_ENV"
+
       - name: Start node preview
         run: |
           npm run start:checked -- --hostname 127.0.0.1 --port 3110 > /tmp/codip-preview.log 2>&1 &
@@ -61,7 +78,7 @@ jobs:
             -v "$PWD":/load \
             -w /load \
             -e BASE_URL=http://host.docker.internal:3110 \
-            -e MAX_VUS=${{ github.event.inputs.max_vus || 20 }} \
+            -e MAX_VUS="$MAX_VUS" \
             grafana/k6@sha256:5221b620a4f874faff6e32ba597aa667c058391fe4898b1c6f6377f062c6cdec \
             run scripts/load/k6-scenarios.js
 

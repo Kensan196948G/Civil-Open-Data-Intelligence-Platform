@@ -20,15 +20,19 @@ type RoleManagementPanelProps = {
 type ApiResponse<T> = { ok: boolean; data?: T; error?: { message: string } };
 
 async function api<T>(path: string, init?: RequestInit): Promise<ApiResponse<T>> {
-  const response = await fetch(path, {
-    ...init,
-    headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
-  });
-  const body = await response.json().catch(() => null);
-  if (!response.ok) {
-    return { ok: false, error: { message: body?.error?.message ?? `HTTP ${response.status}` } };
+  try {
+    const response = await fetch(path, {
+      ...init,
+      headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
+    });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      return { ok: false, error: { message: body?.error?.message ?? `HTTP ${response.status}` } };
+    }
+    return { ok: true, data: body?.data as T };
+  } catch {
+    return { ok: false, error: { message: "サーバーへ接続できませんでした" } };
   }
-  return { ok: true, data: body?.data as T };
 }
 
 function fmtDateTime(iso: string): string {
@@ -216,6 +220,7 @@ export function RoleManagementPanel({
                         type="button"
                         onClick={() => revoke(a.id, a.userEmail)}
                         disabled={busy}
+                        aria-label={`${a.userEmail} の ${a.role} (${a.scope}) を失効`}
                         className="cursor-pointer border-0 bg-transparent p-0 text-[12px] font-semibold text-[var(--red)] disabled:opacity-60"
                       >
                         失効

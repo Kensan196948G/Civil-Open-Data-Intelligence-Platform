@@ -10,7 +10,10 @@ import { check, sleep } from "k6";
 import { Rate, Trend } from "k6/metrics";
 
 const BASE = __ENV.BASE_URL || "http://127.0.0.1:3110";
-const MAX_VUS = Number(__ENV.MAX_VUS || 20);
+const MAX_VUS = Math.min(200, Math.max(1, Math.floor(Number(__ENV.MAX_VUS || 20))));
+if (!Number.isFinite(MAX_VUS)) {
+  throw new Error("MAX_VUS must be a positive integer between 1 and 200");
+}
 
 export const options = {
   scenarios: {
