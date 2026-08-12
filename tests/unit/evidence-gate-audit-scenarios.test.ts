@@ -572,14 +572,15 @@ describe("監査文書の偽陰性シナリオを実コードで検算する (�
  *   D. ci.yml `production-target-env` の `${{ vars.* }}`  値の供給元
  *
  * どれか 1 つに足して他を忘れたときの症状は「落ちる」ではなく「黙って緩む」。
- * とくに **B に足して A を忘れた鍵**は `evidenceFormatState` の
- * `if (!spec) return presence;` (`production-evidence-report.js:287-288`) を通り、
- * **非空でありさえすれば ✅ になる**。表には行が増え、ゲートは緑で、
- * 書式検査だけが存在しない。増えた行はむしろ「検査項目が増えた」ように読める。
+ * とくに **B に足して A を忘れた鍵**は、かつて `evidenceFormatState` の
+ * `if (!spec) return presence;` を通り、**非空でありさえすれば ✅ になった**。
+ * 表には行が増え、ゲートは緑で、書式検査だけが存在しない。増えた行はむしろ
+ * 「検査項目が増えた」ように読める。
  *
- * この一致が測られていない限り、未知鍵の fail-close は
- * 「素通りしている鍵は無い」という**未測定の仮定**の上に載る。だから順序として
- * ここが先にある。
+ * その素通りは同 PR の後続 commit で fail-close へ是正した
+ * (`⚠️ no format spec registered for <key>`)。順序が逆だと、fail-close は
+ * 「素通りしている鍵は無い」という**未測定の仮定**の上に載る。だからこの一致を
+ * 先に測り、そのうえで塞いでいる。塞いだ後の挙動は本 describe の末尾で確認する。
  *
  * 測り方の約束:
  *
@@ -726,5 +727,34 @@ describe("証跡変数の集合が仕様・表・ゲート・供給元で一致�
     expect(() => gateCheckedKeys("// 呼び出しの無いソース")).toThrow();
     expect(() => jobEnvBlock(ciWorkflow, "no-such-job")).toThrow();
     expect(() => envBindings("      PLAIN: value\n")).toThrow();
+  });
+
+  // 上の 6 件が「素通りしている鍵は無い」を測っている。そのうえでの fail-close。
+  describe("書式仕様の無い鍵は ✅ を出さない (fail-close)", () => {
+    const UNKNOWN_KEY = "CODIP_KEY_WITHOUT_FORMAT_SPEC";
+    const PLAUSIBLE = "2026-08-11 / platform-ops / drill #4";
+
+    it("仕様の無い鍵は、値が非空でも受理されない", () => {
+      const state = evidenceFormatState(UNKNOWN_KEY, PLAUSIBLE, NOW);
+      expect(acceptsAsEvidence(state)).toBe(false);
+      expect(state).toContain(UNKNOWN_KEY);
+    });
+
+    it("拒否理由に値を混ぜない", () => {
+      // 証跡は連絡先や運用メモを含む。理由文へ載せると readiness レポートと
+      // CI ログの両方へ漏れる。名前だけを出す。
+      expect(evidenceFormatState(UNKNOWN_KEY, PLAUSIBLE, NOW)).not.toContain(PLAUSIBLE);
+    });
+
+    it("presence の失敗は presence として報告される (仕様の有無に優先する)", () => {
+      // 未設定の鍵に「仕様が無い」と言っても、運用者は次の一手を選べない。
+      expect(evidenceFormatState(UNKNOWN_KEY, "", NOW)).toBe("⚠️ unset");
+    });
+
+    it("仕様のある鍵は従来どおり書式検査まで進む", () => {
+      // fail-close が「全部拒否」に化けていないことの対照。
+      const state = evidenceFormatState("CODIP_ROLLBACK_OWNER", PLAUSIBLE, NOW);
+      expect(state).not.toContain("no format spec");
+    });
   });
 });
