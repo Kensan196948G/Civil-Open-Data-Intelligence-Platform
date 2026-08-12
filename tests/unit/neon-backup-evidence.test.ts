@@ -24,6 +24,9 @@ const freshEvidence = {
   lastPgDumpArtifact: "secure-artifact://codip/neon/20260720T063000Z.dump",
   lastRestoreDrillAt: "2026-07-19T06:30:00Z",
   restoreDrillStatus: "success",
+  // No measured path exists for a drill outcome, so the generator always writes
+  // this one value. Required so that its absence is a fact about the document.
+  restoreDrillStatusSource: "declared:--restore-drill-status",
   restoreDrillRecord: "docs/runbooks/restore-drill-record.md#2026-07-19",
   owner: "release-manager",
 };
@@ -217,6 +220,32 @@ describe("check-neon-backup-evidence PITR retention gate", () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("restoreDrillRecord referenced | ℹ️");
     expect(result.stdout).toContain("(not recorded)");
+  });
+
+  it("fails when the drill outcome carries no recorded provenance", () => {
+    // Gating, unlike the pg_dump counterpart: a document without this field is
+    // one this generator cannot have produced, and the whole point of the field
+    // is that its absence should be visible rather than assumed away.
+    const result = runGate({ ...freshEvidence, restoreDrillStatusSource: undefined });
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("restoreDrillStatusSource present | ⚠️");
+  });
+
+  it("reports an unrecognised drill provenance without changing the verdict", () => {
+    const recognised = runGate(freshEvidence);
+    expect(recognised.status).toBe(0);
+    expect(recognised.stdout).toContain("restoreDrillStatusSource is a recognised provenance | ✅");
+
+    // A closed vocabulary: an unknown token is reported as unknown instead of
+    // being read for its prefix. Non-gating, because the honest reading of an
+    // unrecognised provenance is "a human has to look", not "the backup failed".
+    const result = runGate({ ...freshEvidence, restoreDrillStatusSource: "measured:somehow" });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("restoreDrillStatusSource is a recognised provenance | ℹ️");
+    expect(result.stdout).toContain("measured:somehow");
+    expect(result.stdout).toContain("Overall: ✅ backup evidence fresh");
   });
 
   it("fails when the measurement source is not recorded", () => {

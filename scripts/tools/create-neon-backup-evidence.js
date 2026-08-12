@@ -295,6 +295,13 @@ function buildEvidence(options, measurement) {
     lastPgDumpArtifact: pgDumpArtifact.trim(),
     lastRestoreDrillAt: iso(options.restoreDrillAt),
     restoreDrillStatus: options.restoreDrillStatus,
+    // Written unconditionally, and only ever with this value: there is no
+    // measured path for a drill outcome, so "declared" is the whole truth
+    // rather than one branch of it. Recording it anyway means a reader does
+    // not have to know which fields happen to carry provenance and which do
+    // not -- the absence of the field becomes a fact about the document,
+    // instead of a fact about the field's history.
+    restoreDrillStatusSource: "declared:--restore-drill-status",
     restoreDrillRecord,
     owner,
   };

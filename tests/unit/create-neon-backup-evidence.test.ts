@@ -507,6 +507,27 @@ describe("create-neon-backup-evidence restore drill and pg_dump status", () => {
     expect(gate.stdout).toContain("restoreDrillStatus is success | ⚠️");
   });
 
+  // One case per outcome so each gets its own stub lifecycle: the stub handle is
+  // module-scoped and torn down in afterEach, so two runs inside one test body
+  // would leak the first server.
+  it.each(["success", "failed"])(
+    "records the drill provenance on a %s outcome, not only on the happy path",
+    async (status) => {
+      const result = await stubbedRun([
+        "--restore-drill-status",
+        status,
+        "--restore-drill-record",
+        "docs/runbooks/restore-drill-record.md#2026-07-19",
+      ]);
+
+      expect(result.status).toBe(0);
+      const evidence = JSON.parse(result.stdout);
+      // Unconditional. A field that appeared only on the happy path would make
+      // its absence ambiguous between "older document" and "worse outcome".
+      expect(evidence.restoreDrillStatusSource).toBe("declared:--restore-drill-status");
+    },
+  );
+
   it("rejects an outcome outside the recorded vocabulary", async () => {
     const result = await stubbedRun([
       "--restore-drill-status",
