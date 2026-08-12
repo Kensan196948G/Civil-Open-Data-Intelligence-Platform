@@ -188,8 +188,24 @@ backend には自ら凍結を解除する手段がない。解除できない凍
 4. 数値として読めない、または `0`–`10` の範囲外 → 失敗
 
 `"0"` と `0` は正当な値として合格し続ける。これが本検査を「空値の禁止」ではなく「値の検証」に
-している核心なので、回帰テストで固定した。範囲 `0`–`10` は SARIF の `security-severity` の
-定義域であり、換算表のどの等級にも対応しない値を分類しないための境界である。
+している核心なので、回帰テストで固定した。
+
+ただし `0` を受理することは**本リポジトリのローカル方針であって、SARIF の定義域ではない**。
+`security-severity` は SARIF 標準のプロパティではなく GitHub code scanning の拡張であり、
+GitHub 側では `0` は「重大度の表明が無い」として扱われ、`0`–`10` という区間も
+GitHub の換算表（`0.0–3.9` low / `4.0–6.9` medium / `7.0–8.9` high / `9.0–10.0` critical）に
+由来する。本検査が `0` を「読めない値」ではなく「正当な値」として通すのは、
+*壊れた SARIF を検出する* という本検査の目的にとって `0` は壊れていないからであり、
+*重大度が低い* と判断したからではない。
+
+この区別が実装上で意味を持つ場面がある。**`security-severity` が `0` でも `level: error` なら
+本ゲートは FAIL する。** 判定は「severity ≥ 7 **または** level ∈ FAILING_LEVELS」の**論理和**で
+あって、severity 側の値が判定を打ち切る構造にはなっていない。`0` を「重大度なし」と読み替えて
+level 側を見ない実装にすると、error の指摘が丸ごと素通りする。この経路は回帰テスト
+`fails a severity-0 rule whose level is error, without consulting either constant`
+（`tests/unit/codeql-sarif-gate.test.ts`）で固定した。テストは `0` と `error` を**リテラルで**
+書いており、`FAILING_LEVELS` などの定数を経由しない。定数を経由させると、定数を書き換えた
+変更がテストごと道連れになって、固定したはずの経路が黙って消える。
 
 ## 制約と代替
 
@@ -233,12 +249,30 @@ GHAS へ戻した後も決定 4 を残すかは、code-scanning 側のアラー�
 | `check-github-actions-contract.js` | `upload: never` の要求行のみ削除 | CodeQL 関連の契約行（`upload: never` / `output:` / retain step / artifact 名・path・`needs` / `if: always()` / 判定 step）をまとめて削除 |
 | 判定の所在 | 決定 4 と code-scanning の二重管理を明示的に受容する | code-scanning のアラート運用へ一本化する |
 
-切替は canary run で次を確認してから本適用する。`default-setup` API の 403 が消えたことは
+切替は canary run で確認してから本適用する。`default-setup` API の 403 が消えたことは
 **GHAS が使えること**しか示さず、SARIF が実際に取り込まれ可視化されたことは示さない。
 
-1. SARIF upload が成功し、Code Scanning 画面に当該 run のアラートが出る
-2. A を選んだ場合は artifact の生成と取得が両方成功する
-3. `node scripts/tools/check-github-actions-contract.js` が通る
+#### canary の実施手順（人間が実行する。自動ゲートにしない）
+
+**検出0件を成功条件にしてはならない。** 「Code Scanning 画面にアラートが出ない」は、
+取り込みが壊れている状態と、取り込みが正常でコードに指摘が無い状態を区別できない。
+経路の疎通は、**出ることが分かっている指摘**が実際に出ることでしか確認できない。
+
+1. 短命ブランチに、対象言語で CodeQL が確実に検出するコードを1つ置く
+   （例: `js/sql-injection` のように、既定クエリスイートに含まれ検出条件が明確なもの）。
+   `main` へは入れない。canary 用ブランチは確認後に削除する
+2. その run で **その指摘が Code Scanning 画面に現れること**を目視する。
+   件数と rule id を控える（画面が空でないことではなく、**期待した指摘であること**を見る）
+3. A を選んだ場合は artifact の生成と取得が両方成功することを確認する
+4. `node scripts/tools/check-github-actions-contract.js` が通ることを確認する
+5. canary ブランチを削除し、`main` に埋め込みコードが残っていないことを確認する
+
+この手順を CI のゲートへ落とし込まないこと。ゲート化するには「指摘が出ること」を
+恒常的な合格条件にする必要があり、それは**検出されるコードをリポジトリに常設する**ことを
+意味する。逆に「エラーが出ないこと」を合格条件にすると、沈黙で通るゲート
+（`docs/security/evidence-gate-audit.md` §3.5 の欠陥クラス）を新設することになる。
+経路疎通の確認は移行時の一度きりの人間作業として扱い、担当・実施日・観測した rule id を
+Issue #139 へ記録する。
 
 上記の判定を Issue #139 のクローズ条件へも書いておくこと。ADR 側にだけ書くと、
 Issue を閉じた人が契約行の存在を知らないまま放置される。

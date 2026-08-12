@@ -61,6 +61,17 @@ const MAX_SECURITY_SEVERITY = 10;
 // security-severity を持たない (= セキュリティ系でない) rule でも、CodeQL が既定で
 // error 相当と判定するものは落とす。
 const FAILING_LEVELS = new Set(["error"]);
+// CodeQL が出しうる level はこの3語だけ (クエリの `@problem.severity`
+// error / warning / recommendation がそのまま error / warning / note へ写る)。
+// SARIF 2.1.0 の enum には "none" もあるが CodeQL は出さないので、受理語彙を
+// 産出器が実際に使う語より広げない。知らない語は「重大度の表明が読めない」
+// ことを意味するので、既定へ落とさず構造異常として記録する。
+const ACCEPTED_LEVELS = new Set(["note", "warning", "error"]);
+// level が **本当に** 不在のときだけ使う既定値。SARIF 上 level は省略可能で、
+// 実測 (run 31555165656 / artifact 9125778552) では 6/6 の result が level を
+// 持たず、rule 87 件中 2 件は defaultConfiguration.level も持たない。つまり
+// この経路は実データで常時通る。既定を廃して不在を構造異常にすると本物が落ちる。
+const DEFAULT_LEVEL = "warning";
 
 // レビューを経た受容だけを通す。ソース中のコメント (`inSource`) は 1 行で検出を消せるため
 // 受理しない。SARIF 2.1.0 の kind は "inSource" / "external" の 2 値。
@@ -255,6 +266,49 @@ function evaluateSecuritySeverity(where, at, raw) {
   return { score };
 }
 
+// `level` は「無い」か「受理語彙のいずれか」かのどちらかでなければならない。
+//
+// 初版は `result.level ?? rule.defaultConfiguration?.level ?? "warning"` だった。
+// `??` は **明示された null** と **不在** を区別できないため、次の3つが1点へ潰れる:
+// 産出器が null と言った / フィールドが無い / `"fatall"` と書き間違えた。いずれも
+// warning になり、level を根拠にした失敗判定 (FAILING_LEVELS) が黙って消える。
+// security-severity 側は同じ判定のもう一方の入口を厳格に見ているのに、level 側だけ
+// 素通りしていた。**同じ判定の2つの入口で強度が違うこと自体が欠陥**である。
+//
+// 探索順は SARIF の優先順 (result 自身 → rule の既定) に従う。先に見つかった側が
+// 実効値であり、そこが読めなければ後段へ落とさない — 落とすと「読めない値」が
+// 「不在」として既定へ流れ、いま塞いだ穴がそのまま開く。
+function evaluateLevel(where, at, result, rule) {
+  const sources = [
+    ["result", result],
+    ["rule defaultConfiguration", rule.defaultConfiguration],
+  ];
+
+  for (const [source, holder] of sources) {
+    if (holder === null || typeof holder !== "object") continue;
+    if (!Object.prototype.hasOwnProperty.call(holder, "level")) continue;
+
+    const raw = holder.level;
+    if (typeof raw !== "string") {
+      problems.push(
+        `${where}: ${source} level of ${at} is ${describeValue(raw)}, not a string; ` +
+          `an explicitly stated level is not the same as an absent one`,
+      );
+      return { rejected: true };
+    }
+    if (!ACCEPTED_LEVELS.has(raw)) {
+      problems.push(
+        `${where}: ${source} level of ${at} is ${JSON.stringify(raw)}, outside the accepted ` +
+          `vocabulary ${[...ACCEPTED_LEVELS].join("/")}; severity is unclassifiable`,
+      );
+      return { rejected: true };
+    }
+    return { level: raw };
+  }
+
+  return { level: DEFAULT_LEVEL };
+}
+
 function checkRun(file, run, runIndex) {
   const where = `${file} runs[${runIndex}]`;
 
@@ -303,7 +357,10 @@ function checkRun(file, run, runIndex) {
     const suppression = evaluateSuppressions(where, at, result);
     if (suppression !== "none") continue;
 
-    const level = result.level ?? rule.defaultConfiguration?.level ?? "warning";
+    const levelOutcome = evaluateLevel(where, at, result, rule);
+    if (levelOutcome.rejected) continue;
+    const level = levelOutcome.level;
+
     const severity = evaluateSecuritySeverity(where, at, rule.properties?.["security-severity"]);
     if (severity.rejected) continue;
 
@@ -385,4 +442,7 @@ module.exports = {
   ACCEPTED_SUPPRESSION_KIND,
   MIN_SECURITY_SEVERITY,
   MAX_SECURITY_SEVERITY,
+  ACCEPTED_LEVELS,
+  DEFAULT_LEVEL,
+  FAILING_LEVELS,
 };

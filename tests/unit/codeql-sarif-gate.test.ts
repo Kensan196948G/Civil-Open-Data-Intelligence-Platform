@@ -17,8 +17,14 @@ import { describe, expect, it } from "vitest";
  * テストは緑でも本番の SARIF では検出をすり抜ける。
  *
  * 判定閾値が `security-severity >= 7.0` であって `level === "error"` でないことも、
- * 同じ実測に基づく: 当該 run の 6 件は全て `level: warning` かつ `security-severity: 7.8` で、
+ * 同じ実測に基づく: 当該 run の 6 件は**実効 level が warning** かつ `security-severity: 7.8` で、
  * level を閾値にすると high 6 件を抱えたまま緑になる。
+ *
+ * ここで実フィールドと実効値を分けて書く。実測 (run 31555165656 / artifact 9125778552) では
+ * **6/6 の result が `level` を持たず**、`warning` は `rule.defaultConfiguration.level` 由来で
+ * ある。「level が warning だった」と書くと、値が入っていたのか不在の既定値なのかが再現
+ * できない。**欠落と値を同じ記述へ潰すこと**は、まさに本ゲートが摘発している欠陥と同型で
+ * ある (同 run の rule 87 件中 2 件は `defaultConfiguration.level` すら持たない)。
  */
 
 const repoRoot = process.cwd();
@@ -26,10 +32,20 @@ const scriptPath = path.join(repoRoot, "scripts/tools/check-codeql-sarif.js");
 // 予算はスクリプト側の定数を読む。テストへ数値を写すと、定数を動かしたときに
 // テストが「動かした後の実装」ではなく「動かす前の期待値」を測り続ける。
 const require = createRequire(import.meta.url);
-const { MAX_ACCEPTED_SUPPRESSIONS, MIN_SECURITY_SEVERITY, MAX_SECURITY_SEVERITY } = require(scriptPath) as {
+const {
+  MAX_ACCEPTED_SUPPRESSIONS,
+  MIN_SECURITY_SEVERITY,
+  MAX_SECURITY_SEVERITY,
+  ACCEPTED_LEVELS,
+  DEFAULT_LEVEL,
+  FAILING_LEVELS,
+} = require(scriptPath) as {
   MAX_ACCEPTED_SUPPRESSIONS: number;
   MIN_SECURITY_SEVERITY: number;
   MAX_SECURITY_SEVERITY: number;
+  ACCEPTED_LEVELS: Set<string>;
+  DEFAULT_LEVEL: string;
+  FAILING_LEVELS: Set<string>;
 };
 
 const JS_QUERIES = "codeql/javascript-queries";
@@ -478,6 +494,149 @@ describe("CodeQL SARIF security-severity validation", () => {
 });
 
 /**
+ * `level` の値検証。
+ *
+ * 初版は `result.level ?? rule.defaultConfiguration?.level ?? "warning"` の1行で、
+ * **`level` を一切検証していなかった**。`??` は明示された `null` と不在を区別しないため、
+ * 「産出器が null と言った」「フィールドが無い」「`error` を `fatall` と書き間違えた」の
+ * 3つが1点へ潰れ、いずれも `warning` になる。結果として `FAILING_LEVELS` を根拠にした
+ * 失敗判定が黙って消える。実測 (改変 SARIF を投入):
+ *   - lv-error   (level: "error")   : exit 1  ← 唯一落ちていた
+ *   - lv-fatal   (level: "fatal")   : exit 0  (生存)
+ *   - lv-null    (level: null)      : exit 0  (生存)
+ *   - lv-obj     (level: {})        : exit 0  (生存)
+ *   - lv-dflt-fatal / lv-dflt-obj   : exit 0  (生存)
+ *
+ * security-severity 側は同じ判定のもう一方の入口を厳格に見ている (非文字列・空・
+ * 非有限・範囲外を構造異常として拒否)。**同じ判定の2つの入口で強度が違うこと自体が
+ * 欠陥**であり、弱いほうの入口が実効的な強度を決める。
+ *
+ * 一方で「不在」は SARIF 上正当であり、実データではそちらが常態である
+ * (run 31555165656: result 6/6 が level 不在、rule 87 件中 2 件は
+ * defaultConfiguration.level も不在)。不在まで構造異常にすると本物の SARIF が落ちる。
+ * したがって **不在は既定へ落とし、明示された読めない値だけを拒否する**。
+ */
+describe("CodeQL SARIF level validation", () => {
+  // `rule()` は level を必ず文字列として埋めるため、明示 null や非文字列を保持するには
+  // rule を直接組み立てる必要がある (severity 側の ruleWithRawSeverity と同じ理由)。
+  function ruleWithRawLevel(raw: unknown, { omit = false } = {}) {
+    const defaultConfiguration: Record<string, unknown> = {};
+    if (!omit) defaultConfiguration.level = raw;
+    return {
+      id: "js/sample-query",
+      name: "js/sample-query",
+      defaultConfiguration,
+      // level 側だけを見たいので、severity では落ちない値に固定する。
+      properties: { tags: ["security"], "security-severity": "1.0" },
+    };
+  }
+
+  function runWithResultLevel(raw: unknown) {
+    return runGate(
+      withSarif(
+        sarif({
+          results: [{ ...result(), level: raw }],
+          rules: [ruleWithRawLevel("warning")],
+        }),
+      ),
+    );
+  }
+
+  function runWithRuleLevel(raw: unknown, options?: { omit?: boolean }) {
+    return runGate(withSarif(sarif({ results: [result()], rules: [ruleWithRawLevel(raw, options)] })));
+  }
+
+  const unreadable: ReadonlyArray<[string, unknown, string]> = [
+    ["an explicit null", null, "is null, not a string"],
+    ["a boolean", false, "is a boolean, not a string"],
+    ["an object", {}, "is an object, not a string"],
+    ["an array", [], "is an array, not a string"],
+    ["a number", 3, "is a number, not a string"],
+  ];
+
+  it.each(unreadable)("rejects %s on the result as a structural problem", (_label, raw, expected) => {
+    const outcome = runWithResultLevel(raw);
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain(`result level of`);
+    expect(outcome.stderr).toContain(expected);
+    expect(outcome.stderr).toContain("1 structural problem(s)");
+  });
+
+  it.each(unreadable)("rejects %s on the rule default as a structural problem", (_label, raw, expected) => {
+    const outcome = runWithRuleLevel(raw);
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain("rule defaultConfiguration level of");
+    expect(outcome.stderr).toContain(expected);
+  });
+
+  it.each([
+    ["a typo of error", "fatall"],
+    ["a level SARIF defines but CodeQL never emits", "none"],
+    ["an empty string", ""],
+    ["a case variant", "Error"],
+  ])("rejects %s as outside the accepted vocabulary", (_label, raw) => {
+    const outcome = runWithResultLevel(raw);
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain("outside the accepted vocabulary");
+    // 読めない値は「検出」ではない。finding として数えると重大度が捏造される。
+    expect(outcome.stderr).not.toContain("[codeql-sarif][finding]");
+  });
+
+  it("does not leak the offending level into a bare unquoted form", () => {
+    // 値は JSON として引用して出す。裸で連結すると空文字が消えて読めなくなる。
+    const outcome = runWithResultLevel("");
+    expect(outcome.stderr).toContain('is "", outside the accepted vocabulary');
+  });
+
+  it.each([...ACCEPTED_LEVELS].map((level) => [level] as const))(
+    "accepts %s on the result without recording a structural problem",
+    (level) => {
+      const outcome = runWithResultLevel(level);
+      if (FAILING_LEVELS.has(level)) {
+        // error は finding として落ちる。それは構造異常ではない — 両者を分けて見る。
+        expect(outcome.status).toBe(1);
+        expect(outcome.stderr).toContain(`level=${level}`);
+        expect(outcome.stderr).toContain("0 structural problem(s)");
+      } else {
+        expect(outcome.status).toBe(0);
+        // 合格経路には structural problem の行が出ない。受理された件数のほうを見る。
+        expect(outcome.stdout).toContain("1 lower-severity result(s) recorded");
+      }
+    },
+  );
+
+  it("treats a truly absent level as the default, not as a structural problem", () => {
+    // 実データで常時通る経路。ここを厳格化すると本物の SARIF が落ちる。
+    const outcome = runWithRuleLevel(undefined, { omit: true });
+    expect(outcome.status).toBe(0);
+    expect(outcome.stdout).toContain("no finding at or above security-severity");
+  });
+
+  it("prefers the result level over the rule default, and stops there when it is unreadable", () => {
+    // 先に見つかった側が実効値。読めないときに後段へ落とすと、いま塞いだ穴が開く。
+    const outcome = runGate(
+      withSarif(
+        sarif({
+          results: [{ ...result(), level: "fatall" }],
+          rules: [ruleWithRawLevel("warning")],
+        }),
+      ),
+    );
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain("result level of");
+    expect(outcome.stderr).not.toContain("rule defaultConfiguration level of");
+  });
+
+  it("still fails on an error level that reaches the gate through the rule default", () => {
+    // 退行の本丸: 検証を足したことで level 経路の失敗判定を殺していないこと。
+    const outcome = runWithRuleLevel("error");
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain("level=error");
+    expect(outcome.stderr).toContain("0 structural problem(s)");
+  });
+});
+
+/**
  * 上の各 describe は期待値を判定定数から導出している。振る舞いの検査としては
  * それが正しい: 定数を動かしたときに「動かす前の期待値」を測り続けるテストは
  * 退行検知にならない。
@@ -513,6 +672,47 @@ describe("CodeQL SARIF gate policy constants", () => {
   it("pins the security-severity domain at the SARIF-defined 0-10", () => {
     expect(MIN_SECURITY_SEVERITY).toBe(0);
     expect(MAX_SECURITY_SEVERITY).toBe(10);
+  });
+
+  it("pins the accepted level vocabulary at the three CodeQL emits", () => {
+    // 語彙を広げるのは「読めない値を受理する」と決めることであり、テストが黙って
+    // 追随してよい変更ではない。SARIF の enum には "none" もあるが CodeQL は出さない。
+    expect([...ACCEPTED_LEVELS].sort()).toEqual(["error", "note", "warning"]);
+    expect(DEFAULT_LEVEL).toBe("warning");
+    expect([...FAILING_LEVELS]).toEqual(["error"]);
+  });
+
+  it.each([
+    ["a typo of error", "fatall"],
+    ["an explicit null", null],
+  ])("records %s as a structural problem, without consulting the vocabulary constant", (_label, raw) => {
+    // リテラルで固定する。ACCEPTED_LEVELS を書き換えても、上の pin と同時に
+    // 書き換えても落ちる — 定数と期待値を揃えて動かす変異を生かさないため。
+    const outcome = runGate((dir) =>
+      withSarif(
+        sarif({
+          results: [{ ...result(), level: raw }],
+          rules: [rule({ securitySeverity: "1.0" })],
+        }),
+      )(dir),
+    );
+
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain("1 structural problem(s)");
+    expect(outcome.stderr).not.toContain("[codeql-sarif][finding]");
+  });
+
+  it("fails a severity-0 rule whose level is error, without consulting either constant", () => {
+    // security-severity 0 の受理は**本ゲートのローカル方針**であって、
+    // 「重大度なし」を意味する GitHub の解釈とは別物である (ADR 0003 §「0 の扱い」)。
+    // 0 が level=error を覆い隠すと、方針が判定を弱める側へ漏れる。
+    const outcome = runGate((dir) =>
+      withSarif(sarif({ results: [result()], rules: [rule({ securitySeverity: "0", level: "error" })] }))(dir),
+    );
+
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain("level=error");
+    expect(outcome.stderr).toContain("0 structural problem(s)");
   });
 
   it("fails on a single suppressed result, without consulting the budget constant", () => {
