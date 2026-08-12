@@ -476,3 +476,78 @@ describe("CodeQL SARIF security-severity validation", () => {
     expect(outcome.stderr).toContain("security-severity=7.8 (high)");
   });
 });
+
+/**
+ * 上の各 describe は期待値を判定定数から導出している。振る舞いの検査としては
+ * それが正しい: 定数を動かしたときに「動かす前の期待値」を測り続けるテストは
+ * 退行検知にならない。
+ *
+ * ただし導出**だけ**にすると、定数の値そのものを書き換えた変異が全件緑を保つ。
+ * 実測 (単体ファイル 44 tests):
+ *   - MAX_ACCEPTED_SUPPRESSIONS 0 -> 99          : 44/44 passed (生存)
+ *   - MIN/MAX_SECURITY_SEVERITY 0-10 -> -100..100 : 44/44 passed (生存)
+ * 後者が通ると負の security-severity が構造異常として記録されず黙って合格する。
+ *
+ * 定数には2つの役割がある。実装の詳細であるうちは導出でよい。**方針の表明**で
+ * あるとき — 抑制をまだ1件も受け入れていない / SARIF の security-severity は
+ * 0-10 で定義される — その変更はテストが追随してよい変更ではなく、レビューを
+ * 要する変更である。だから固定は2層にする。
+ *
+ *   1. 値そのものを直接固定する (方針を書き換えたら落ちる)
+ *   2. 定数を一切経由しないリテラルで要求を固定する (1 と定数を同時に
+ *      書き換えても落ちる)
+ *
+ * 2 は 1 の重複ではない。1 だけなら「定数と固定値を揃えて書き換える」変異が
+ * 生き残り、それはまさにこのゲートが扱っている欠陥族 — 検査が対象と一緒に
+ * 動いてしまい、緑が網羅を意味しなくなる — と同型である。
+ *
+ * env / CLI から上書きさせない設計は、ソース直接編集に対しては何も守らない。
+ */
+describe("CodeQL SARIF gate policy constants", () => {
+  it("pins the accepted-suppression budget at zero", () => {
+    // 0 は「抑制を受け入れないと決めた」ではなく「受容をまだ誰も決めていない」。
+    // 引き上げるには ADR 0003 の受容記録が要る。テストが黙って追随してはならない。
+    expect(MAX_ACCEPTED_SUPPRESSIONS).toBe(0);
+  });
+
+  it("pins the security-severity domain at the SARIF-defined 0-10", () => {
+    expect(MIN_SECURITY_SEVERITY).toBe(0);
+    expect(MAX_SECURITY_SEVERITY).toBe(10);
+  });
+
+  it("fails on a single suppressed result, without consulting the budget constant", () => {
+    const outcome = runGate((dir) =>
+      withSarif(
+        sarif({
+          results: [
+            {
+              ...result(),
+              suppressions: [{ kind: "external", justification: "accepted in ADR 0003 acceptance record" }],
+            },
+          ],
+        }),
+      )(dir),
+    );
+
+    // リテラル 1 件。budget を経由しないので、budget を 99 へ動かしても落ちる。
+    expect(outcome.status).toBe(1);
+    expect(outcome.stdout).toContain("1 accepted suppression(s)");
+  });
+
+  it.each([
+    ["a negative severity", "-5"],
+    ["a severity above ten", "11"],
+  ])("records %s as a structural problem, not as a finding", (_label, raw) => {
+    const outcome = runGate((dir) =>
+      withSarif(sarif({ rules: [rule({ securitySeverity: raw })], results: [result()] }))(dir),
+    );
+
+    expect(outcome.status).toBe(1);
+    // レンジ端をテストへ写さない: 数値を書くと定数と一緒に書き換えられる。
+    // 「範囲外と判定された」という事実だけを見る。
+    expect(outcome.stderr).toContain("outside the defined range");
+    // 11 は範囲を広げると score>=7 の finding として exit 1 を保つ。exit code
+    // だけを見ると変異が生き残るため、finding として数えられていないことも見る。
+    expect(outcome.stderr).not.toContain("[codeql-sarif][finding]");
+  });
+});
