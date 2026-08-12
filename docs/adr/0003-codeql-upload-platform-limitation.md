@@ -3,6 +3,11 @@
 - 状態: Accepted（2026-08-12）
 - 決定者: CTO代行（Issue #139 の環境制約調査に基づく）。人間による追認を推奨
 - 関連: Issue #132 / #139 / PR #137
+- 日付の時刻系: 本文中の日付は **JST**（開発機のローカル時刻）。GitHub の API 応答・
+  レビュー投稿時刻は UTC なので、日付境界付近では 1 日ずれて見える。実際にレビューで
+  「未来日付」として指摘された（UTC 2026-08-11T23:22 の時点で本文は JST の 2026-08-12）。
+  再現の基準は日付ではなく、併記した **run ID と commit** に置くこと。日付は読み手の
+  目安であり、証跡の同定子ではない
 
 ## 背景
 
@@ -213,13 +218,37 @@ backend には自ら凍結を解除する手段がない。解除できない凍
 GHAS へ戻した後も決定 4 を残すかは、code-scanning 側のアラート運用が確立してから判断する
 （二重管理になるため、自動では残さない）。
 
+#### 復帰時の SARIF ライフサイクル（①を実施する前に決めること）
+
+`output: sarif-results` を外すと CodeQL の SARIF 既定出力は `../results` へ戻る。artifact の
+保存側・取得側・判定スクリプトの引数・契約はすべて `sarif-results` と artifact 名
+`codeql-sarif` に乗っているため、①だけを実施すると **artifact が生成されない / 取得できない**。
+どちらへ倒すかを先に決め、同じ変更で全経路を揃える。
+
+| 決めること | A: artifact を維持する | B: artifact をやめる |
+| --- | --- | --- |
+| `analyze` の `output:` | `sarif-results` を残す（`upload: never` だけ外す） | 削除（既定 `../results` へ戻す） |
+| upload / download step | そのまま | 両方削除 |
+| `codeql-findings` ジョブ | そのまま（決定 4 を残す場合） | 削除 |
+| `check-github-actions-contract.js` | `upload: never` の要求行のみ削除 | CodeQL 関連の契約行（`upload: never` / `output:` / retain step / artifact 名・path・`needs` / `if: always()` / 判定 step）をまとめて削除 |
+| 判定の所在 | 決定 4 と code-scanning の二重管理を明示的に受容する | code-scanning のアラート運用へ一本化する |
+
+切替は canary run で次を確認してから本適用する。`default-setup` API の 403 が消えたことは
+**GHAS が使えること**しか示さず、SARIF が実際に取り込まれ可視化されたことは示さない。
+
+1. SARIF upload が成功し、Code Scanning 画面に当該 run のアラートが出る
+2. A を選んだ場合は artifact の生成と取得が両方成功する
+3. `node scripts/tools/check-github-actions-contract.js` が通る
+
 上記の判定を Issue #139 のクローズ条件へも書いておくこと。ADR 側にだけ書くと、
 Issue を閉じた人が契約行の存在を知らないまま放置される。
 
 ### その他
 
 - GitHub プランを GHAS 対応へ変更した場合は、`upload: never` を外し通常の
-  code-scanning アップロードへ戻す（本ADRを更新する）
+  code-scanning アップロードへ戻す（本ADRを更新する）。手順は上の
+  「復帰時の SARIF ライフサイクル」に従うこと。`upload: never` を外すだけでは
+  artifact 経路が壊れる
 - アラートの可視化が必要になった場合は、SARIF artifact を週次で集計する別基盤を検討する
 
 ## 既知の残課題（2026-08-12 時点）
