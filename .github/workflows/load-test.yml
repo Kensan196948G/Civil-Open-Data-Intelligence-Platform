@@ -1,0 +1,75 @@
+name: Load Test (dispatch only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_vus:
+        description: "同時接続数（既定20）"
+        required: false
+        type: number
+        default: 20
+
+permissions:
+  contents: read
+
+concurrency:
+  group: load-test
+  cancel-in-progress: false
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: "file:./dev.db"
+      CODIP_ENV_MODE: "preview"
+      CODIP_ACCEPT_SQLITE_PREVIEW: "true"
+      CODIP_ADMIN_TOKEN: "ci-load-test-admin-token-123456789"
+      CODIP_ALLOWED_ORIGINS: "http://127.0.0.1:3110"
+      CODIP_TRUST_PROXY_HEADERS: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare SQLite preview database
+        run: |
+          npm run db:migrate
+          npx prisma db seed
+
+      - name: Build production app
+        run: npm run build
+
+      - name: Start node preview
+        run: |
+          npm run start:checked -- --hostname 127.0.0.1 --port 3110 > /tmp/codip-preview.log 2>&1 &
+          timeout 60 bash -c 'until curl -sf http://127.0.0.1:3110/api/ready >/dev/null 2>&1; do sleep 2; done'
+          curl -sf http://127.0.0.1:3110/api/ready >/dev/null
+
+      - name: Run k6 load test (preview only, never production)
+        run: |
+          docker run --rm \
+            --add-host host.docker.internal:host-gateway \
+            -v "$PWD":/load \
+            -w /load \
+            -e BASE_URL=http://host.docker.internal:3110 \
+            -e MAX_VUS=${{ github.event.inputs.max_vus || 20 }} \
+            grafana/k6@sha256:5221b620a4f874faff6e32ba597aa667c058391fe4898b1c6f6377f062c6cdec \
+            run scripts/load/k6-scenarios.js
+
+      - name: Upload preview log on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: codip-preview-log
+          path: /tmp/codip-preview.log
+          if-no-files-found: ignore
+          retention-days: 7
