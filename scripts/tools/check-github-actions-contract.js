@@ -150,6 +150,32 @@ function requireStepLine(label, source, selector, line) {
   }
 }
 
+/**
+ * job ブロック内の needle を **行全体** として検査する。`requireText` の部分一致は、
+ * 値の接尾辞を伸ばす変更を通してしまう。実測 (#143 head b1d23e2 に対する変異):
+ *
+ *   - `if: always()`    → `if: always() && false`  : exit 0 (生存)
+ *   - `needs: analyze`  → `needs: analyze-preview` : exit 0 (生存)
+ *
+ * 前者は判定ジョブを恒久 skip にし、後者は存在しないジョブへ結線する。どちらも
+ * 「結線が切れたのに契約は合格」で、この契約が塞いだはずの形そのものである。
+ * step 側は `requireStepText` → `requireStepLine` で行全体一致へ直したのに、job 側だけ
+ * 部分一致のまま残っていた。**同じ契約の入口ごとに強度が違うこと自体が欠陥**であり、
+ * 弱いほうの入口が実効的な強度を決める。
+ *
+ * コメント行は除外する (`workflowSteps` と同じ理由): 契約の needle を説明文で
+ * 満たせるなら、検査しているのは実効設定ではない。
+ */
+function requireJobLine(label, jobBlock, line) {
+  const found = jobBlock
+    .split("\n")
+    .filter((entry) => !entry.trimStart().startsWith("#"))
+    .some((entry) => entry.trim() === line);
+  if (!found) {
+    errors.push(`${label} missing line "${line}"`);
+  }
+}
+
 function requireJobBlock(label, source, jobName) {
   const match = source.match(new RegExp(`\\n  ${jobName}:\\n[\\s\\S]*?(?=\\n  [a-zA-Z0-9_-]+:\\n|\\n?$)`));
   if (!match) {
@@ -303,8 +329,8 @@ requireStepText(
 // いずれも「検査が成立しなかった」を「問題なし」と区別せず通す形で、
 // docs/security/evidence-gate-audit.md §3.5 の欠陥族と同型である。結線自体を契約にする。
 const codeqlFindingsJob = requireJobBlock("CodeQL workflow", codeql, "codeql-findings");
-requireText("CodeQL findings job", codeqlFindingsJob, "needs: analyze");
-requireText("CodeQL findings job", codeqlFindingsJob, "if: always()");
+requireJobLine("CodeQL findings job", codeqlFindingsJob, "needs: analyze");
+requireJobLine("CodeQL findings job", codeqlFindingsJob, "if: always()");
 // artifact の name / path はリテラルで固定する。保存側と取得側を互いに比較すると、
 // 両方を同時に書き換えたとき一致したまま通る。判定スクリプトの引数と analyze の
 // `output:` も同じ文字列に乗っているため、4箇所を1つのリテラルへ束ねる。
