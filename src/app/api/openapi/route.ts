@@ -165,6 +165,53 @@ const openApiDocument = {
         },
       },
     },
+    "/api/admin/roles": {
+      get: {
+        tags: ["admin"],
+        summary: "RBACロール一覧と有効な割当を取得",
+        security: adminSecurity,
+        responses: {
+          "200": { description: "ロール一覧と割当一覧" },
+          "401": { description: "管理認証エラー" },
+          "429": { description: "レート制限超過" },
+        },
+      },
+      post: {
+        tags: ["admin"],
+        summary: "ユーザーへロールを割当（監査ログ記録）",
+        security: adminSecurity,
+        responses: {
+          "201": { description: "割当成功" },
+          "400": { description: "入力不正（メール形式・未知ロール・scope形式）" },
+          "401": { description: "管理認証エラー" },
+          "409": { description: "有効な割当が既に存在、またはロール未シード" },
+          "422": { description: "expiresAt が不正な日付" },
+          "429": { description: "レート制限超過" },
+        },
+      },
+    },
+    "/api/admin/roles/{id}": {
+      delete: {
+        tags: ["admin"],
+        summary: "ロール割当を失効させる（監査ログ記録）",
+        parameters: [
+          {
+            in: "path",
+            name: "id",
+            required: true,
+            schema: { type: "string" },
+            description: "RoleAssignment ID",
+          },
+        ],
+        security: adminSecurity,
+        responses: {
+          "200": { description: "失効成功" },
+          "401": { description: "管理認証エラー" },
+          "404": { description: "割当が見つからない、または既に失効" },
+          "429": { description: "レート制限超過" },
+        },
+      },
+    },
     "/api/tags": {
       get: {
         tags: ["catalog"],

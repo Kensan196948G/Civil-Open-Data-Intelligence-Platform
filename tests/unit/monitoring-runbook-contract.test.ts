@@ -119,7 +119,11 @@ describe("production smoke workflow contract", () => {
   it("still files the incident when the run history cannot be read", () => {
     // The notification is the safety net; losing it because a secondary API call
     // failed is worse than reporting an unknown streak.
-    expect(smokeWorkflow).toMatch(/let consecutiveFailures = null;[\s\S]*?try \{[\s\S]*?\} catch/);
+    // The test path initialises the streak to 1, real failures to null; both
+    // must still attempt the history read inside a try/catch.
+    expect(smokeWorkflow).toMatch(
+      /let consecutiveFailures = isNotificationTest \? 1 : null;[\s\S]*?try \{[\s\S]*?\} catch/,
+    );
   });
 
   it("does not depend on labels having been registered by hand", () => {
@@ -254,6 +258,32 @@ describe("notification test record template", () => {
 
   it("judges a notification path on human receipt, not on send success", () => {
     expect(notificationRecord).toContain("受信確認者が受信時刻を記入できた");
+  });
+});
+
+describe("dispatch-only notification test path", () => {
+  it("exposes a workflow_dispatch input instead of failing the production probe", () => {
+    expect(smokeWorkflow).toContain("run_notification_test");
+    expect(smokeWorkflow).toContain("workflow_dispatch:");
+    // The notification step fires on a real failure OR the dispatch-only test
+    // input; the production probe is never degraded for the test.
+    expect(smokeWorkflow).toContain(
+      "if: failure() || github.event.inputs.run_notification_test == 'true'",
+    );
+  });
+
+  it("marks test incidents so they cannot be confused with real failures", () => {
+    const script = smokeWorkflow.slice(smokeWorkflow.indexOf("github-script@"));
+    expect(script).toContain("isNotificationTest");
+    expect(script).toContain("production-smoke-test");
+    expect(script).toContain("[TEST] ");
+  });
+
+  it("documents the dispatch-only test method in the runbooks", () => {
+    expect(alertsRunbook).toContain("run_notification_test=true");
+    expect(notificationRecord).toContain("run_notification_test=true");
+    // 本番probeを故意に落とす旧方式が現行手順として残っていないこと
+    expect(alertsRunbook).not.toContain("意図的失敗run");
   });
 });
 
