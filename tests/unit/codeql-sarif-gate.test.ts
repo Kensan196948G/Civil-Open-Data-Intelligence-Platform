@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -22,6 +23,10 @@ import { describe, expect, it } from "vitest";
 
 const repoRoot = process.cwd();
 const scriptPath = path.join(repoRoot, "scripts/tools/check-codeql-sarif.js");
+// 予算はスクリプト側の定数を読む。テストへ数値を写すと、定数を動かしたときに
+// テストが「動かした後の実装」ではなく「動かす前の期待値」を測り続ける。
+const require = createRequire(import.meta.url);
+const { MAX_ACCEPTED_SUPPRESSIONS } = require(scriptPath) as { MAX_ACCEPTED_SUPPRESSIONS: number };
 
 const JS_QUERIES = "codeql/javascript-queries";
 
@@ -220,5 +225,156 @@ describe("CodeQL SARIF findings gate", () => {
     );
     expect(outcome.status).toBe(1);
     expect(outcome.stderr).toContain("is not a number");
+  });
+});
+
+/**
+ * 抑制チャネル (`result.suppressions`)。
+ *
+ * ゲートがこの欄を読まないと、抑制は塞がれたのではなく**見えない場所へ移る**。
+ * ここで測るのは 2 つの独立した性質である。
+ *   受理: 要件を満たした抑制は finding として落とさない (かつ必ず出力される)
+ *   予算: 受理件数の上限。超過は受理とは別の失敗
+ * 予算 0 のとき「ちょうど予算」は抑制なしの状態と一致するので、受理そのものは
+ * 「予算+1 件で落ちるが finding は 1 件も出ない」という形で観測する。
+ */
+describe("CodeQL SARIF suppression channel", () => {
+  function suppressed(overrides: Record<string, unknown> = {}, line = 9) {
+    return {
+      ...result(),
+      locations: [
+        {
+          physicalLocation: {
+            artifactLocation: { uri: "src/example.ts" },
+            region: { startLine: line },
+          },
+        },
+      ],
+      suppressions: [
+        { kind: "external", justification: "accepted in ADR 0003 acceptance record", ...overrides },
+      ],
+    };
+  }
+
+  it("always reports the accepted suppression count, including zero", () => {
+    // 出力が無いことと 0 件は区別できない。既定でも件数を出す。
+    const outcome = runGate(withSarif(sarif({ results: [] })));
+    expect(outcome.status).toBe(0);
+    expect(outcome.stdout).toContain(`0 accepted suppression(s) (budget ${MAX_ACCEPTED_SUPPRESSIONS})`);
+  });
+
+  it("reports the count on the failing path too", () => {
+    const outcome = runGate(withSarif(sarif({ results: [result()] })));
+    expect(outcome.status).toBe(1);
+    expect(outcome.stdout).toContain("0 accepted suppression(s)");
+  });
+
+  it("takes an accepted suppression out of the finding channel but bounds it by the budget", () => {
+    const results = Array.from({ length: MAX_ACCEPTED_SUPPRESSIONS + 1 }, (_unused, index) =>
+      suppressed({}, index + 1),
+    );
+    const outcome = runGate(withSarif(sarif({ results })));
+
+    // security-severity 7.8 のまま。それでも finding としては 1 件も出ない ＝ 受理が効いている。
+    expect(outcome.stderr).not.toContain("[codeql-sarif][finding]");
+    expect(outcome.stdout).toContain(`[codeql-sarif][suppressed] src/example.ts:1 [js/sample-query]`);
+    expect(outcome.stdout).toContain(
+      `${MAX_ACCEPTED_SUPPRESSIONS + 1} accepted suppression(s) (budget ${MAX_ACCEPTED_SUPPRESSIONS})`,
+    );
+    // 落ちる理由は finding ではなく予算超過である。
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain("exceed the sanctioned budget");
+  });
+
+  it("passes at exactly the budget", () => {
+    const results = Array.from({ length: MAX_ACCEPTED_SUPPRESSIONS }, (_unused, index) =>
+      suppressed({}, index + 1),
+    );
+    const outcome = runGate(withSarif(sarif({ results })));
+    expect(outcome.status).toBe(0);
+    expect(outcome.stdout).toContain(`${MAX_ACCEPTED_SUPPRESSIONS} accepted suppression(s)`);
+  });
+
+  it("fails on a suppression with an empty justification", () => {
+    const outcome = runGate(withSarif(sarif({ results: [suppressed({ justification: "   " })] })));
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain("carries no justification");
+    expect(outcome.stdout).toContain("0 accepted suppression(s)");
+  });
+
+  it("fails on a suppression with no justification key at all", () => {
+    const outcome = runGate(
+      withSarif(sarif({ results: [{ ...suppressed(), suppressions: [{ kind: "external" }] }] })),
+    );
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain("carries no justification");
+  });
+
+  it("does not accept an inSource suppression", () => {
+    // ソース中のコメント 1 行で検出を消せる経路は、レビューを経ない受容になる。
+    const outcome = runGate(withSarif(sarif({ results: [suppressed({ kind: "inSource" })] })));
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain('only kind="external" is a sanctioned channel');
+    expect(outcome.stdout).not.toContain("[codeql-sarif][suppressed]");
+  });
+
+  it("does not accept a suppression whose kind is absent", () => {
+    const outcome = runGate(
+      withSarif(sarif({ results: [{ ...suppressed(), suppressions: [{ justification: "why" }] }] })),
+    );
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain("kind=(absent)");
+  });
+
+  it("does not accept a suppression that is not in force", () => {
+    const outcome = runGate(withSarif(sarif({ results: [suppressed({ status: "underReview" })] })));
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain('only "accepted" is in force');
+  });
+
+  it("fails when suppressions is not an array", () => {
+    const outcome = runGate(
+      withSarif(sarif({ results: [{ ...suppressed(), suppressions: { kind: "external" } }] })),
+    );
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain("is not an array");
+  });
+
+  it("fails when a suppression entry is not an object", () => {
+    const outcome = runGate(
+      withSarif(sarif({ results: [{ ...suppressed(), suppressions: ["external"] }] })),
+    );
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain("is not an object");
+  });
+
+  it("rejects the whole result when a valid suppression is mixed with an invalid one", () => {
+    // 部分受理を許すと、不正な 1 件を正当な 1 件で隠せる。
+    const outcome = runGate(
+      withSarif(
+        sarif({
+          results: [
+            {
+              ...suppressed(),
+              suppressions: [
+                { kind: "external", justification: "accepted" },
+                { kind: "inSource", justification: "accepted" },
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+    expect(outcome.status).toBe(1);
+    expect(outcome.stdout).toContain("0 accepted suppression(s)");
+    expect(outcome.stdout).not.toContain("[codeql-sarif][suppressed]");
+  });
+
+  it("does not print the justification text", () => {
+    // レビューされていない自由文を CI ログの記録にしない (message を出さないのと同じ理由)。
+    const outcome = runGate(
+      withSarif(sarif({ results: [suppressed({ justification: "SECRET-LOOKING-RATIONALE" })] })),
+    );
+    expect(`${outcome.stdout}${outcome.stderr}`).not.toContain("SECRET-LOOKING-RATIONALE");
   });
 });
