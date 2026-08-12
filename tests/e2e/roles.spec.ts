@@ -16,7 +16,7 @@ test.describe("ロール管理UI（/settings・管理者のみ）", () => {
     await page.getByRole("button", { name: "➕ 割当" }).click();
 
     await expect(page.getByRole("status")).toContainText("割当しました");
-    await expect(page.getByRole("cell", { name: email })).toBeVisible();
+    await expect(page.getByRole("cell", { name: email, exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: `${email} の engineer (global) を失効` }).click();
     await expect(page.getByRole("status")).toContainText("失効しました");
@@ -34,8 +34,8 @@ test.describe("ロール管理UI（/settings・管理者のみ）", () => {
     await page.getByRole("button", { name: "➕ 割当" }).click();
 
     await expect(page.getByRole("status")).toContainText("割当しました");
-    await expect(page.getByRole("cell", { name: email })).toBeVisible();
-    await expect(page.getByRole("cell", { name: "site:site-1" })).toBeVisible();
+    await expect(page.getByRole("cell", { name: email, exact: true })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "site:site-1", exact: true })).toBeVisible();
     await expect(page.getByRole("cell", { name: /2099\/12\/31/ })).toBeVisible();
   });
 
