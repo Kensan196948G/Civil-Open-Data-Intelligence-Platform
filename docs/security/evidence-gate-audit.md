@@ -234,13 +234,39 @@ CodeRabbit の checks 行の文言も formal review の件数も、**どちら�
 
 機構は「両者が違う対象を測っている」ことにある。**checks 行は最新 run のみ**（head が動くたび上書き）、**reviews API は全 head を通じた累積**である。#148 は `71eba41`（23:52:35Z）で実審査を受けた後 `aaf0586` が push され、最新 run が rate limit に当たった。累積2件・最新 rate limited は矛盾ではない。逆に CodeRabbit は指摘がある場合にのみ formal review を作成するため、`reviews` 0 件は未実施を意味しない（#149）。
 
-カバー範囲を宣言しているのは walkthrough コメント中の `between <sha> and <sha>` ブロックだけだが、**この申告は最後の増分しか語らない**。walkthrough は in-place で更新され、過去の申告レンジは上書き破棄される（#148 実測: CodeRabbit のコメントは**1件のみ**で `created=2026-08-11T23:46:50Z` / `updated=2026-08-12T00:19:33Z`）。したがって多段 push の PR で途中の増分に指摘が無かった場合、**その増分が読まれたかは事後的に検証できない**。`reviews[].commit_id` が過去 head を残すが、それは指摘があったときだけ作られる。
+では何を読むか。証拠は2種類あり、**壊れ方が違う**。
 
-`Files selected for processing (N)` を **PR 全体の変更ファイル数**と突き合わせるのは誤りである。#148 実測: 申告レンジ `71eba41…aaf0586` の差分は **1 ファイル**、PR 全体は **3 ファイル**、`Files selected (1)`。PR 全体と比べると「1≠3 で未カバー」と誤判定するが、実際には両 head とも読まれている（`reviews[].commit_id` = `71eba41` / `aaf0586`）。
+| 証拠 | 上書き破棄 | 省略 |
+| --- | --- | --- |
+| `reviews[].commit_id` | されない | **指摘があったときだけ作られる** |
+| walkthrough の `between <sha> and <sha>` 申告 | **in-place で上書きされる** | **出ないことがある** |
 
-支持できる判別子は次の一点に限る。**申告レンジの終端が現 head と一致し、`Files selected (N)` がそのレンジの差分ファイル数と一致するとき、その増分は読まれた。** PR 全体のカバーを主張するには、申告 base が merge-base と一致することの確認が要る。#149 はこれを満たす（実測: 申告 base `bebfd6f` = `main...7c8ca25` の merge_base、レンジ差分 6 = PR 全体 6 = `Files selected (6)`）が、それは**たまたま**単段だったからである。一致しない分は `reviews[].commit_id` で埋め、埋まらなければ **「未カバー」ではなく「証明不能」**と記録する。この3値の区別を潰さないこと。
+walkthrough が壊れる実測。#148 の CodeRabbit コメントは**1件のみ**（`created=2026-08-11T23:46:50Z` / `updated=2026-08-12T00:19:33Z`）で、読めるのは最後の増分の申告だけである。過去の申告レンジは残らない。さらに #143 では walkthrough コメント本体（7,447 文字）は存在するのに `Recent review info` / `Commits` / `Files selected` の**どのブロックも出力されていない**。**申告の不在をカバー不足と読むと誤判定する** — #143 は実際に読まれている（`reviews[].commit_id` = `0ab9bae` @23:22:02Z、これは現 head と一致）。
 
-同 PR には近接形もある。CodeRabbit は「✅ Passed checks (4 passed)」を表示するが、その内訳の `Linked Issues check` と `Out of Scope Changes check` は「リンクされた Issue が無い」という前提で **skip** されたものである。実測では GitHub の `closingIssuesReferences` は `totalCount: 1`（#147）を返す。**「passed」の件数は、実際に評価された検査の件数ではない。**
+したがって判定はこの順で行う。
+
+1. `reviews[].commit_id` に**現 head** があるか → あれば「その head は読まれた」（確定・非破壊）
+2. 無ければ、申告レンジの終端が現 head と一致し、かつ `Files selected (N)` が**そのレンジの差分ファイル数**と一致するか → 満たせば「その増分は読まれた」
+3. どちらも無ければ **「未カバー」ではなく「証明不能」**
+
+`Files selected (N)` を **PR 全体の変更ファイル数**と突き合わせてはならない。#148 実測: 申告レンジ `71eba41…aaf0586` の差分は **1 ファイル**、PR 全体は **3 ファイル**、`Files selected (1)`。PR 全体と比べると「1≠3 で未カバー」と誤判定するが、実際には両 head とも読まれている（`reviews[].commit_id` = `71eba41` / `aaf0586`）。PR 全体のカバーを主張するには、申告 base が merge-base と一致することの確認が要る。
+
+現況の実測（2026-08-12T09:3xZ、未マージ PR 全数）:
+
+| PR | CR reviews | commits | 申告レンジ | 全体の証明 |
+| --- | ---: | ---: | --- | --- |
+| #143 | 1 | 3 | **申告ブロック無し** | ✅ reviews（現 head 一致） |
+| #145 | 0 | 3 | `bebfd6f→583a9eb`（base = merge-base） | ✅ walkthrough |
+| #146 | 0 | 1 | `bebfd6f→fec267b`（同上） | ✅ walkthrough |
+| #148 | 2 | 2 | `71eba41→aaf0586`（**増分**） | ✅ reviews で補完 |
+| #149 | 0 | 3 | `bebfd6f→7c8ca25`（base = merge-base） | ✅ walkthrough |
+| #150 | 0 | 1 | `1b8aae7` まで（同上） | ✅ walkthrough |
+
+**6/6 が証明可能**であり、この判定式を阻止条件に置いても現状どの PR も止まらない。commits が 3 でも全レンジを申告し直す場合がある（#145・#149）ため、「多段 push なら証明不能」は成り立たない。増分申告になったのは #148 のみである。それでも区分は残す — #148 の形は実在し、そのとき walkthrough だけでは足りないためである。
+
+**この形態の芯は非対称性にある。** `reviews` は指摘があったときにしか作られない。つまり**「何も見つからなかった」場合ほど証拠が残らない**。これは形態Aの `analyze` の緑が「high ゼロ」の根拠にならないのと同型であり、**検出が無いことと検査が無いことが同じ出力へ潰れている**。
+
+近接形もある。CodeRabbit は「✅ Passed checks (4 passed)」を表示するが、その内訳の `Linked Issues check` と `Out of Scope Changes check` は「リンクされた Issue が無い」という前提で **skip** されたものである。実測では GitHub の `closingIssuesReferences` は `totalCount: 1`（#147）を返す。**「passed」の件数は、実際に評価された検査の件数ではない。** この表示は #143 と #149 に同形で現れており、特定 PR の事故ではなく系統的である。
 
 **形態C — 必須チェックが一度も起動していないまま CLEAN と表示される。**
 PR #149 は base を `fix/xroad-hostname-validation`（main 以外）として作成された。`ci.yml`・`codeql.yml` はいずれも `pull_request: branches: [main]` であり paths / types フィルタを持たないため、この期間の PR ではワークフローが起動しない。実測:
