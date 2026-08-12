@@ -54,6 +54,10 @@ const path = require("node:path");
 // GitHub の security-severity 換算: 9.0+ critical / 7.0-8.9 high / 4.0-6.9 medium。
 // 品質ゲートが critical + high をゼロと要求するので、閾値は high の下限に置く。
 const FAILING_SECURITY_SEVERITY = 7.0;
+// SARIF の security-severity は 0-10 の範囲で定義される。範囲外は、換算表のどの等級にも
+// 対応しないので分類できない。
+const MIN_SECURITY_SEVERITY = 0;
+const MAX_SECURITY_SEVERITY = 10;
 // security-severity を持たない (= セキュリティ系でない) rule でも、CodeQL が既定で
 // error 相当と判定するものは落とす。
 const FAILING_LEVELS = new Set(["error"]);
@@ -206,6 +210,51 @@ function evaluateSuppressions(where, at, result) {
   return "accepted";
 }
 
+function describeValue(value) {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "an array";
+  if (typeof value === "object") return "an object";
+  return `a ${typeof value}`;
+}
+
+// `security-severity` は「無い」か「0-10 の数値として読める」かのどちらかでなければならない。
+// 明示されているのに読めない値は、**severity 0 として合格させてはならない** —
+// `Number("")` / `Number(null)` / `Number(false)` はいずれも 0 になるため、素朴な
+// `Number.isFinite(Number(raw))` は空値を「重大度なし」と同じ扱いにしてしまう。
+// これは抑制チャネルと同じ形の穴で、不正な入力が拒否ではなく沈黙を生む。
+function evaluateSecuritySeverity(where, at, raw) {
+  if (raw === undefined) return { score: undefined };
+
+  if (typeof raw !== "string" && typeof raw !== "number") {
+    problems.push(
+      `${where}: security-severity of ${at} is ${describeValue(raw)}, not a string or number; ` +
+        `severity is unclassifiable`,
+    );
+    return { rejected: true };
+  }
+  if (typeof raw === "string" && raw.trim() === "") {
+    problems.push(
+      `${where}: security-severity of ${at} is present but empty; ` +
+        `an empty value is not the same as severity 0`,
+    );
+    return { rejected: true };
+  }
+
+  const score = Number(raw);
+  if (!Number.isFinite(score)) {
+    problems.push(`${where}: security-severity of ${at} is not a number; severity is unclassifiable`);
+    return { rejected: true };
+  }
+  if (score < MIN_SECURITY_SEVERITY || score > MAX_SECURITY_SEVERITY) {
+    problems.push(
+      `${where}: security-severity of ${at} is ${score}, outside the defined range ` +
+        `${MIN_SECURITY_SEVERITY}-${MAX_SECURITY_SEVERITY}; severity is unclassifiable`,
+    );
+    return { rejected: true };
+  }
+  return { score };
+}
+
 function checkRun(file, run, runIndex) {
   const where = `${file} runs[${runIndex}]`;
 
@@ -254,14 +303,11 @@ function checkRun(file, run, runIndex) {
     const suppression = evaluateSuppressions(where, at, result);
     if (suppression !== "none") continue;
 
-    const raw = rule.properties?.["security-severity"];
     const level = result.level ?? rule.defaultConfiguration?.level ?? "warning";
-    if (raw !== undefined && !Number.isFinite(Number(raw))) {
-      problems.push(`${where}: security-severity of ${at} is not a number; severity is unclassifiable`);
-      continue;
-    }
+    const severity = evaluateSecuritySeverity(where, at, rule.properties?.["security-severity"]);
+    if (severity.rejected) continue;
 
-    const score = raw === undefined ? undefined : Number(raw);
+    const score = severity.score;
     if (score !== undefined && score >= FAILING_SECURITY_SEVERITY) {
       failingResults.push(`${at} security-severity=${score} (${severityLabel(score)})`);
     } else if (FAILING_LEVELS.has(level)) {
@@ -334,4 +380,9 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { MAX_ACCEPTED_SUPPRESSIONS, ACCEPTED_SUPPRESSION_KIND };
+module.exports = {
+  MAX_ACCEPTED_SUPPRESSIONS,
+  ACCEPTED_SUPPRESSION_KIND,
+  MIN_SECURITY_SEVERITY,
+  MAX_SECURITY_SEVERITY,
+};

@@ -26,7 +26,11 @@ const scriptPath = path.join(repoRoot, "scripts/tools/check-codeql-sarif.js");
 // 予算はスクリプト側の定数を読む。テストへ数値を写すと、定数を動かしたときに
 // テストが「動かした後の実装」ではなく「動かす前の期待値」を測り続ける。
 const require = createRequire(import.meta.url);
-const { MAX_ACCEPTED_SUPPRESSIONS } = require(scriptPath) as { MAX_ACCEPTED_SUPPRESSIONS: number };
+const { MAX_ACCEPTED_SUPPRESSIONS, MIN_SECURITY_SEVERITY, MAX_SECURITY_SEVERITY } = require(scriptPath) as {
+  MAX_ACCEPTED_SUPPRESSIONS: number;
+  MIN_SECURITY_SEVERITY: number;
+  MAX_SECURITY_SEVERITY: number;
+};
 
 const JS_QUERIES = "codeql/javascript-queries";
 
@@ -376,5 +380,99 @@ describe("CodeQL SARIF suppression channel", () => {
       withSarif(sarif({ results: [suppressed({ justification: "SECRET-LOOKING-RATIONALE" })] })),
     );
     expect(`${outcome.stdout}${outcome.stderr}`).not.toContain("SECRET-LOOKING-RATIONALE");
+  });
+});
+
+/**
+ * `security-severity` の値検証。
+ *
+ * 初版は `!Number.isFinite(Number(raw))` だけを見ていた。JavaScript の `Number()` は
+ * `""` / `null` / `false` / `[]` をいずれも **0** へ変換するため、これらは有限値として
+ * 通過し、**severity 0 として合格**していた（実測: 6 種のうち 4 種が exit 0）。
+ * 「重大度が明示されているが読めない」ことと「重大度が無い」ことを同じに扱う穴で、
+ * 抑制チャネルと同じく、不正な入力が拒否ではなく沈黙を生む形をしている。
+ *
+ * 明示された `0` は正当な値であり、空値とは区別する。これが本検査の核心なので、
+ * 0 が合格し続けることを回帰として固定する。
+ */
+describe("CodeQL SARIF security-severity validation", () => {
+  // `rule()` は securitySeverity: null をプロパティ省略として扱うため、明示的な null や
+  // boolean を保持するにはプロパティを直接組み立てる必要がある。
+  function ruleWithRawSeverity(raw: unknown) {
+    return {
+      id: "js/sample-query",
+      name: "js/sample-query",
+      defaultConfiguration: { level: "warning" },
+      properties: { tags: ["security"], "security-severity": raw },
+    };
+  }
+
+  function runWithSeverity(raw: unknown) {
+    return runGate(withSarif(sarif({ rules: [ruleWithRawSeverity(raw)], results: [result()] })));
+  }
+
+  const unclassifiable: ReadonlyArray<[string, unknown, string]> = [
+    ["an empty string", "", "present but empty"],
+    ["a whitespace-only string", "   ", "present but empty"],
+    ["an explicit null", null, "is null, not a string or number"],
+    ["a boolean false", false, "is a boolean, not a string or number"],
+    ["an array", [], "is an array, not a string or number"],
+    ["an object", {}, "is an object, not a string or number"],
+  ];
+
+  it.each(unclassifiable)("rejects %s as a structural problem, not severity 0", (_label, raw, expected) => {
+    const outcome = runWithSeverity(raw);
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain(expected);
+    // severity 0 として黙って受理されていた頃の挙動に戻っていないこと。
+    expect(outcome.stderr).toContain("1 structural problem(s)");
+  });
+
+  it("rejects a severity below the defined range", () => {
+    const outcome = runWithSeverity(MIN_SECURITY_SEVERITY - 1);
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain(`outside the defined range ${MIN_SECURITY_SEVERITY}-${MAX_SECURITY_SEVERITY}`);
+  });
+
+  it("rejects a severity above the defined range as a structural problem, not a finding", () => {
+    const outcome = runWithSeverity(MAX_SECURITY_SEVERITY + 1);
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain(`outside the defined range ${MIN_SECURITY_SEVERITY}-${MAX_SECURITY_SEVERITY}`);
+    // 範囲外は「極めて重大な検出」ではなく「読めない値」である。
+    expect(outcome.stderr).not.toContain("[codeql-sarif][finding]");
+  });
+
+  it("rejects a non-numeric string", () => {
+    const outcome = runWithSeverity("critical");
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain("is not a number");
+  });
+
+  it.each([
+    ["a string zero", "0"],
+    ["a numeric zero", 0],
+  ])("accepts %s as a genuine severity 0", (_label, raw) => {
+    const outcome = runWithSeverity(raw);
+    expect(outcome.status).toBe(0);
+    expect(outcome.stdout).toContain("no finding at or above security-severity");
+  });
+
+  it.each([
+    ["the range maximum", MAX_SECURITY_SEVERITY],
+    ["a string at the maximum", String(MAX_SECURITY_SEVERITY)],
+  ])("still fails on %s as a finding", (_label, raw) => {
+    const outcome = runWithSeverity(raw);
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain("[codeql-sarif][finding]");
+    expect(outcome.stderr).toContain("0 structural problem(s)");
+  });
+
+  it.each([
+    ["a string severity", "7.8"],
+    ["a numeric severity", 7.8],
+  ])("still classifies %s as a high finding", (_label, raw) => {
+    const outcome = runWithSeverity(raw);
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain("security-severity=7.8 (high)");
   });
 });
