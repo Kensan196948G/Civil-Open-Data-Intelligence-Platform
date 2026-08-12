@@ -54,7 +54,7 @@ flowchart LR
 3. 各ワークフロー（`production-smoke.yml` / `neon-backup.yml` / `data-ingestion.yml` / `data-ingestion-weather.yml` / `ci.yml`）の失敗時に通知するジョブを追加
    - メール: `actions/github-script` で Issue 起票＋`@dependabot` 等ではなく、運用台帳のエスカレーション先へ
    - Teams: `dcr-jrndm/workflow-teams-notify` 等のSHA固定Action（レビュー後に採用）またはWebhook呼び出し
-4. **通知テスト**: 意図的に失敗するテストrun（例: 存在しないURLをprobe）を `workflow_dispatch` で実行し、受信を確認。テスト後は通常設定へ戻す
+4. **通知テスト**: `production-smoke.yml` を `workflow_dispatch` で `run_notification_test=true` にして実行する。本番probeは通常どおり実行され、通知stepだけがテスト専用incident Issue（`[TEST]` 接頭辞・`production-smoke-test` label）を起票する。本番を故意に落とす必要はない。起票後、受信確認してテストIssueをクローズする（`notification-test-record.md` §3）
 
 ### 3.2 Cloudflare Alert Policies
 

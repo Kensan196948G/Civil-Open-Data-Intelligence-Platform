@@ -119,7 +119,11 @@ describe("production smoke workflow contract", () => {
   it("still files the incident when the run history cannot be read", () => {
     // The notification is the safety net; losing it because a secondary API call
     // failed is worse than reporting an unknown streak.
-    expect(smokeWorkflow).toMatch(/let consecutiveFailures = null;[\s\S]*?try \{[\s\S]*?\} catch/);
+    // The test path initialises the streak to 1, real failures to null; both
+    // must still attempt the history read inside a try/catch.
+    expect(smokeWorkflow).toMatch(
+      /let consecutiveFailures = isNotificationTest \? 1 : null;[\s\S]*?try \{[\s\S]*?\} catch/,
+    );
   });
 
   it("does not depend on labels having been registered by hand", () => {
@@ -254,6 +258,29 @@ describe("notification test record template", () => {
 
   it("judges a notification path on human receipt, not on send success", () => {
     expect(notificationRecord).toContain("受信確認者が受信時刻を記入できた");
+  });
+});
+
+describe("dispatch-only notification test path", () => {
+  it("exposes a workflow_dispatch input instead of failing the production probe", () => {
+    expect(smokeWorkflow).toContain("run_notification_test");
+    expect(smokeWorkflow).toContain("workflow_dispatch:");
+    // The test trigger is a step-level intentional failure with
+    // continue-on-error, so the job itself stays green.
+    expect(smokeWorkflow).toContain("Trigger notification test (dispatch only)");
+    expect(smokeWorkflow).toContain("continue-on-error: true");
+  });
+
+  it("marks test incidents so they cannot be confused with real failures", () => {
+    const script = smokeWorkflow.slice(smokeWorkflow.indexOf("github-script@"));
+    expect(script).toContain("isNotificationTest");
+    expect(script).toContain("production-smoke-test");
+    expect(script).toContain("[TEST] ");
+  });
+
+  it("documents the dispatch-only test method in the runbooks", () => {
+    expect(alertsRunbook).toContain("run_notification_test=true");
+    expect(notificationRecord).toContain("run_notification_test=true");
   });
 });
 

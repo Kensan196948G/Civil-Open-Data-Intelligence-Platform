@@ -53,7 +53,7 @@
 1. 対象経路の設定状態を確認する（`alerts-and-notifications.md` §3）。通知先が未確定なら `BLOCKED` として §3 へ記録し、テストを実施しない。
 2. 受信確認者を**事前に**決め、テスト実施を通知しておく。受信確認者は送信者と同一人物でもよいが、ロール名を明記する。
 3. テストを送信する。
-   - GitHub Actions: 失敗するrunを `workflow_dispatch` で実行し、**テスト後は必ず通常設定へ戻す**
+   - GitHub Actions: `production-smoke.yml` を `workflow_dispatch` で `run_notification_test=true` にして実行する（本番probeは通常どおり実行。テスト専用incident Issueが `[TEST]` 接頭辞＋`production-smoke-test` label で起票される）。受信確認後、テストIssueをクローズする
    - Cloudflare: Dashboard の「Send test notification」または Notifications API のテスト送信
    - Neon: Console の Notifications からテストアラート
 4. 受信確認者が受信を目視し、**受信時刻を記録する**。5分以内に受信しない場合は `FAIL` とする。
