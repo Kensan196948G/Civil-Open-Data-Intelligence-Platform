@@ -110,32 +110,56 @@ function workflowSteps(source) {
  * 無いので合格」ではなく、step 名の変更や YAML 構造の変化で**検査が成立しなかった**
  * ことを意味する（docs/security/evidence-gate-audit.md §3.5）。
  */
-function requireStepText(label, source, selector, needle) {
+function selectStep(label, source, selector) {
   const steps = workflowSteps(source);
   if (steps.length === 0) {
     errors.push(`${label}: no steps parsed (step contract cannot be evaluated)`);
-    return;
+    return null;
   }
   const matched = steps.filter((step) => step.includes(selector));
   if (matched.length !== 1) {
     errors.push(`${label}: expected exactly one step matching "${selector}", found ${matched.length}`);
-    return;
+    return null;
   }
-  if (!matched[0].includes(needle)) {
+  return matched[0];
+}
+
+function requireStepText(label, source, selector, needle) {
+  const step = selectStep(label, source, selector);
+  if (step === null) return;
+  if (!step.includes(needle)) {
     errors.push(`${label}: step "${selector}" missing ${needle}`);
   }
 }
 
-function requireJobBlock(source, jobName) {
+/**
+ * needle を **行全体** として検査する。`requireStepText` の部分一致は、値の接尾辞を
+ * 伸ばす変更を通してしまう。実測: download 側の artifact 名を `codeql-sarif` から
+ * `codeql-sarif-v2` へ変えても `includes("name: codeql-sarif")` は真になり、
+ * 保存側と取得側が食い違ったまま契約が合格した。
+ *
+ * 「どこかに現れる」で十分な設定 (`upload: never` など) は requireStepText で、
+ * **値の全体が一致していること自体が意味を持つ** 設定 (artifact 名、path) は
+ * こちらで検査する。
+ */
+function requireStepLine(label, source, selector, line) {
+  const step = selectStep(label, source, selector);
+  if (step === null) return;
+  if (!step.split("\n").some((entry) => entry.trim() === line)) {
+    errors.push(`${label}: step "${selector}" missing line "${line}"`);
+  }
+}
+
+function requireJobBlock(label, source, jobName) {
   const match = source.match(new RegExp(`\\n  ${jobName}:\\n[\\s\\S]*?(?=\\n  [a-zA-Z0-9_-]+:\\n|\\n?$)`));
   if (!match) {
-    errors.push(`CI workflow missing ${jobName} job`);
+    errors.push(`${label} missing ${jobName} job`);
     return "";
   }
   return match[0];
 }
 
-const nodePreviewJob = requireJobBlock(ci, "node-preview");
+const nodePreviewJob = requireJobBlock("CI workflow", ci, "node-preview");
 
 requireText("CI workflow", ci, "permissions:\n  contents: read");
 requireText("CI workflow", ci, "pull-requests: read");
@@ -268,6 +292,26 @@ requireStepText(
   "name: Fail on CodeQL findings",
   "node scripts/tools/check-codeql-sarif.js sarif-results",
 );
+// 判定コマンドを step へ束縛しても、**ジョブが走らなければ**このスキャンは何も測らない。
+// `codeql-findings` は analyze とは別ジョブなので、結線は3箇所で切れる。
+//
+//   - `needs: analyze` を外す → SARIF がまだ無いうちに download が走る
+//   - `if: always()` を外す  → analyze が落ちた回だけ判定が skip される。skip は
+//     GitHub 上で赤にならないため、**判定が最も要る回に限って沈黙する**
+//   - artifact の name / path がずれる → 別の SARIF を読むか、読めない
+//
+// いずれも「検査が成立しなかった」を「問題なし」と区別せず通す形で、
+// docs/security/evidence-gate-audit.md §3.5 の欠陥族と同型である。結線自体を契約にする。
+const codeqlFindingsJob = requireJobBlock("CodeQL workflow", codeql, "codeql-findings");
+requireText("CodeQL findings job", codeqlFindingsJob, "needs: analyze");
+requireText("CodeQL findings job", codeqlFindingsJob, "if: always()");
+// artifact の name / path はリテラルで固定する。保存側と取得側を互いに比較すると、
+// 両方を同時に書き換えたとき一致したまま通る。判定スクリプトの引数と analyze の
+// `output:` も同じ文字列に乗っているため、4箇所を1つのリテラルへ束ねる。
+requireStepLine("CodeQL workflow", codeql, "actions/upload-artifact@", "name: codeql-sarif");
+requireStepLine("CodeQL workflow", codeql, "actions/upload-artifact@", "path: sarif-results");
+requireStepLine("CodeQL workflow", codeql, "actions/download-artifact@", "name: codeql-sarif");
+requireStepLine("CodeQL workflow", codeql, "actions/download-artifact@", "path: sarif-results");
 requireText("package.json", packageJson, "\"release:check-codeql-sarif\": \"node scripts/tools/check-codeql-sarif.js\"");
 // analyze は最終 step なので、落ちても実行すべき後続が無い。continue-on-error を付けると
 // security scan が必ず success になり、「CI必須チェックが全て success (security scan含む)」を
