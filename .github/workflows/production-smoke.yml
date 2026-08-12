@@ -79,7 +79,9 @@ jobs:
       # （docs/runbooks/alerts-and-notifications.md §3）。
       - name: Trigger notification test (dispatch only)
         id: notification-test-trigger
-        if: inputs.run_notification_test == 'true'
+        # boolean型のinputsは式コンテキストで boolean へ変換され 'true' 文字列と
+        # 一致しないため、workflow_dispatch の raw input（常に文字列）で判定する。
+        if: github.event.inputs.run_notification_test == 'true'
         continue-on-error: true
         shell: bash
         run: |
