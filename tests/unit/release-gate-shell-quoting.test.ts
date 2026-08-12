@@ -182,6 +182,62 @@ describe("release-gate quoteShellArg", () => {
     });
   });
 
+  describe("the parser above, checked against Microsoft's published examples", () => {
+    // Every assertion in this file runs through parseSingleToken, so a
+    // misreading of the CRT rules would corrupt the implementation and the
+    // oracle in the same direction and the suite would stay green. win32 is
+    // unavailable here, so the only independent check left is a first-party
+    // source. These input -> argv[1] pairs are published verbatim in
+    // "Parsing C command-line arguments"
+    // (https://learn.microsoft.com/cpp/c-language/parsing-c-command-line-arguments)
+    // and in the CommandLineToArgvW remarks
+    // (https://learn.microsoft.com/windows/win32/api/shellapi/nf-shellapi-commandlinetoargvw).
+    // They are not derived from this repository's reading of the rules.
+    const documented: Array<[string, string]> = [
+      [String.raw`"a b c" d e`, String.raw`a b c`],
+      [String.raw`"ab\"c" "\\" d`, String.raw`ab"c`],
+      [String.raw`a\\\b d"e f"g h`, String.raw`a\\\b`],
+      [String.raw`a\\\"b c d`, String.raw`a\"b`],
+      [String.raw`a\\\\"b c" d e`, String.raw`a\\b c`],
+    ];
+
+    it.each(documented)("parses %j to the documented argv[1]", (input, expected) => {
+      expect(parseSingleToken(input).value).toBe(expected);
+    });
+
+    // The table has a sixth row, `a"b"" c d` -> `ab" c d`, which this parser
+    // does NOT reproduce: it applies the rule that a pair of double quotes
+    // inside a quoted string collapses to one literal quote. Dropping the row
+    // silently would be the same "green means covered" mistake this file is
+    // careful about elsewhere, so the reason is asserted rather than claimed:
+    // quoteShellArg can never emit a bare '""' pair, so the rule is
+    // unreachable for the values this function produces.
+    it("never emits an interior quote that is not preceded by a backslash", () => {
+      const corpus = [
+        "npm",
+        "a b",
+        'he said "hi"',
+        "C:\\path\\",
+        "C:\\Program Files\\node\\node.exe",
+        'a\\" && whoami',
+        '\\"\\"',
+        "tail\\\\\\",
+        '""',
+        "",
+      ];
+
+      for (const value of corpus) {
+        const token = quoteShellArg(value);
+        if (!token.startsWith('"')) continue;
+        const interior = token.slice(1, -1);
+        for (let index = 0; index < interior.length; index += 1) {
+          if (interior[index] !== '"') continue;
+          expect(interior[index - 1], `value ${JSON.stringify(value)} token ${JSON.stringify(token)}`).toBe("\\");
+        }
+      }
+    });
+  });
+
   it("stays importable: requiring the module must not run the release gate", () => {
     // main() is guarded by require.main, so this import performs no npm audit,
     // no migration and no build. Reaching this assertion is the evidence.
