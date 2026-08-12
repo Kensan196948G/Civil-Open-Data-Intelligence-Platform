@@ -19,7 +19,14 @@ import { requireCspContract } from "../../scripts/tools/release-smoke.js";
  *     気付けない。だからここは requireCspContract を直接叩く。
  */
 
-/** next.config.ts が production build で実際に発行する CSP (2026-08-12 実測)。 */
+/**
+ * next.config.ts が production build で実際に発行する CSP (2026-08-11T23:45Z 実測)。
+ *
+ * タイムゾーンを明示するのは、証跡の真偽が読む人の地域で変わらないようにするため。
+ * 裸の `YYYY-MM-DD 実測` は、書き手が JST で、読み手が UTC だと 1 日ずれ、
+ * 「まだ来ていない日付で実測したと書いてある」という読まれ方をする。
+ * このリポジトリの docs/ は `YYYY-MM-DDTHH:MMZ` が 350 件で支配的であり、それに揃える。
+ */
 const PRODUCTION_CSP = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -48,7 +55,7 @@ const PRODUCTION_CSP = [
  *
  * 抑制コメントは採れない。`scripts/tools/check-codeql-sarif.js` は SARIF の
  * `suppressions` を参照せず `runs[].results` を全件数えるため、抑制しても
- * `codeql-findings` は落ち続ける (2026-08-12 実測)。
+ * `codeql-findings` は落ち続ける (2026-08-11T23:45Z 実測)。
  *
  * 判定内容は逐語のまま。needle の値・並び・論理は旧実装と同一で、振る舞いは変えていない
  * (この不変性は下のケース群がそのまま変異試験になっている)。
