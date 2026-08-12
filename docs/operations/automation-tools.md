@@ -52,3 +52,34 @@ DATABASE_URL=postgres://... npm run ops:review-roles -- --strict --expiring-days
 1. 人間が e-Stat API キー（ESTAT_APP_ID）を取得し、GitHub Actions Secret / 環境へ登録
 2. キー付き環境で `seed-jobs --enable` または個別ジョブ作成
 3. 収集・品質監視で実測確認
+
+## 5. ウォッチリスト（通知基盤）
+
+`/api/v1/watchlist`（GET/POST）・`/api/v1/watchlist/{id}`（DELETE）で、
+`site` / `dataSource` / `ingestionJob` を個人単位で登録できる（engineer以上・RBAC連動）。
+
+```bash
+curl -X POST https://<host>/api/v1/watchlist \
+  -H "Content-Type: application/json" \
+  -d '{"targetType":"dataSource","targetId":"<dataSourceId>"}'
+```
+
+日次ダイジェストは `.github/workflows/sla-monitor.yml`（21:05 JST）が生成し、
+`data-watch-digest` Issue を自動更新する。手動確認:
+
+```bash
+DATABASE_URL=postgres://... npm run ops:notification-check
+```
+
+通知対象: 更新遅延（SLA鮮度超過）・ジョブ失敗（lastStatus=failed / retry上限到達）・
+現場の直近判定が caution/stop。
+
+## 6. 河川水位XML・水文水質CSV（確認中）
+
+2026-08-12 時点では `river.go.jp` 関連URLのHTTP 200はHTMLページのみで、
+構造的データ（XML/CSV）エンドポイントを確認できていない。**エンドポイント検証後に追加**する。
+
+## 7. 本番負荷シナリオ（承認後）
+
+`scripts/load/k6-production-scenario.js`（read-only・Access service token対応）を
+承認後に **5→10→20 VU** の順で段階実行する。本番SLO（P95 5秒・エラー率1%未満）を確認する。

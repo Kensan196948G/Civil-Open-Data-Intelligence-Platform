@@ -53,6 +53,7 @@
     "ingest:weather": "node scripts/ingestion/run-weather-jobs.js",
     "ingest:harvest-ckan": "node scripts/ingestion/harvest-ckan.js",
     "ops:sla-monitor": "node scripts/ingestion/sla-monitor.js",
+    "ops:notification-check": "node scripts/ingestion/notification-check.js",
     "ops:review-roles": "node scripts/tools/review-role-assignments.js",
     "db:studio": "prisma studio",
     "cf:typegen": "node node_modules/wrangler/bin/wrangler.js types",

@@ -773,6 +773,46 @@ const openApiDocument = {
         },
       },
     },
+    "/api/v1/watchlist": {
+      get: {
+        tags: ["downstream"],
+        summary: "自分のウォッチリスト登録一覧を取得（engineer以上）",
+        security: adminSecurity,
+        responses: {
+          "200": { description: "ウォッチリスト登録一覧" },
+          "401": { description: "管理認証エラーまたは識別ヘッダー不足" },
+          "429": v1ErrorResponse,
+        },
+      },
+      post: {
+        tags: ["downstream"],
+        summary: "ウォッチリストへ登録（site / dataSource / ingestionJob）",
+        security: adminSecurity,
+        responses: {
+          "201": { description: "登録成功" },
+          "400": v1ErrorResponse,
+          "401": { description: "管理認証エラーまたは識別ヘッダー不足" },
+          "409": { description: "既に登録済み" },
+          "429": v1ErrorResponse,
+        },
+      },
+    },
+    "/api/v1/watchlist/{id}": {
+      delete: {
+        tags: ["downstream"],
+        summary: "自分のウォッチリスト登録を解除",
+        parameters: [
+          { in: "path", name: "id", required: true, schema: { type: "string" } },
+        ],
+        security: adminSecurity,
+        responses: {
+          "200": { description: "解除成功" },
+          "401": { description: "管理認証エラーまたは識別ヘッダー不足" },
+          "404": { description: "登録が見つからない" },
+          "429": v1ErrorResponse,
+        },
+      },
+    },
     "/api/v1/sources/{id}/lineage": {
       get: {
         tags: ["downstream"],
