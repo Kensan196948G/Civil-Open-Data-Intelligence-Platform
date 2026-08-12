@@ -46,6 +46,39 @@
  * 受容者・受容日・owner・期限・受容したリスク — は ADR 0003 の受容記録に置き、
  * PR レビューで確認する。同じ 5 項目が、個別抑制・予算引き上げ・ゲート自体の
  * 非必須化のいずれにも適用される (ADR 0003「受容記録」)。
+ *
+ * ## 受容記録チャネル (`docs/security/codeql-accepted-findings.json`)
+ *
+ * 上の `result.suppressions` は、この構成では**到達不能**である。受理するのは
+ * `kind: "external"` だけで、それは code-scanning 側の dismissal から生える。GHAS が
+ * 無く upload が 403 の以上 (ADR 0003)、dismissal は存在せず、`external` は SARIF に
+ * 現れない。つまり出力の `0 accepted suppression(s)` は「誰も受容していない」ではなく
+ * 「**受容する手段が無い**」を表示しており、両者は出力上まったく区別が付かない。
+ * 受容経路が塞がっているのではなく、経路そのものが無い状態である。
+ *
+ * そこでリポジトリ側に、レビュー可能な受容記録を 1 本置く。`inSource` を退けた理由は
+ * 「レビューを経ない受容になるから」であって「ファイルに書くのが悪い」からではない。
+ * JSON の 1 エントリは PR の diff として現れ、レビューを経る。`inSource` が持っていた
+ * 危険 (コード中の 1 行で、誰にも見えず消せる) は、ここには無い。
+ *
+ * エントリは `{ path, ruleId, count, justification }` で、判定は**消費数と宣言 count の
+ * 一致**である。上限 (`count 以下なら通す`) にしないのは、減少方向を吸収してしまうため:
+ * 5 件が 3 件になっても `3 <= 5` で通り、受容記録は静かに陳腐化する。多くても少なくても
+ * 落とす。行番号は固定しない — 生成物の再エクスポートで行がずれるだけでゲートが赤くなる
+ * 設計は、ドリフトを検出する検査をドリフトを強制する検査へ反転させ、是正のほうを罰する。
+ * 行を固定しないぶんの緩みは `count` の一致が引き受ける。
+ *
+ * ## 解析レジーム (`runs[].properties.incrementalMode`)
+ *
+ * `pull_request` の run には `incrementalMode: "diff-informed"` が付き、差分の外にある
+ * 検出は**報告されない** (実測: main `64f5954` の push run は 11 件、PR #143 `bc9e53b` の
+ * run は 6 件で、差の 5 件は差分外の `data/…html`)。したがって PR run の「0 件」は
+ * 「無い」ではなく「**見ていない**」を含む。
+ *
+ * ゲートはレジームを必ず出力する。加えて、受容記録の**不足方向**の判定はレジームで
+ * 変える: full run では不足＝陳腐化として落とすが、diff-informed run では差分外を
+ * 見ていない以上、不足は陳腐化の証拠にならないので落とさない。**超過は両方で落とす**
+ * (見えている以上、多いことは確実に言える)。非対称なのは、片側だけが観測可能だからである。
  */
 
 const fs = require("node:fs");
@@ -86,9 +119,26 @@ const ACCEPTED_SUPPRESSION_STATUS = "accepted";
 // 取り除いたはずの自由 (誰でも黙って免除できる) がそのまま戻る。
 const MAX_ACCEPTED_SUPPRESSIONS = 0;
 
+// 受容記録の既定の置き場所。CI はここを引数なしで使う (codeql.yml の実行行は
+// `node scripts/tools/check-codeql-sarif.js sarif-results` で第 3 引数を渡さない)
+// ので、本番経路では常にこの定数だけが読まれる。第 3 引数での差し替えを許してあるのは
+// テストが一時ファイルを与えるためで、予算定数の上書きを禁じたのとは性質が違う:
+// 予算の上書きは**記録の無い免除**を作れるが、こちらは記録の置き場所を移すだけで、
+// 免除の中身は必ずどこかのファイルに書かれている必要がある。そのうえで、実際に読んだ
+// パスを常に出力する (差し替えが起きたならログに出る)。
+const DEFAULT_ALLOWLIST_FILE = path.join(__dirname, "..", "..", "docs", "security", "codeql-accepted-findings.json");
+// SARIF の artifactLocation.uri は percent-encoded で来る (実測:
+// `data/Civil%20Open%20Data%20Intelligence%20Platform%20(1).html`)。受容記録には人が
+// 読める形で書けるべきなので、両辺を復号して突き合わせる。
+const ALLOWLIST_REGIME_FULL = "full";
+
 const problems = [];
 const failingResults = [];
 const acceptedSuppressions = [];
+const allowlist = [];
+const allowlistHits = [];
+const regimes = new Set();
+let allowlistSource = DEFAULT_ALLOWLIST_FILE;
 let acceptedResults = 0;
 
 function severityLabel(score) {
@@ -153,7 +203,135 @@ function locationOf(result) {
   const uri = physical?.artifactLocation?.uri;
   const line = physical?.region?.startLine;
   if (!uri) return "(no location)";
-  return line ? `${uri}:${line}` : uri;
+  // 復号して出す。SARIF の生値は percent-encoded (`data/Civil%20Open%20…html`) で、
+  // 受容記録の側は人が読める形で書く。両方が出力に現れる以上、片方だけ生値だと
+  // 同じファイルを指していることが読み取れない。
+  const decoded = normalizePath(uri);
+  return line ? `${decoded}:${line}` : decoded;
+}
+
+/**
+ * percent-encoding を外して突き合わせ用の形にする。復号できない (不正な escape を
+ * 含む) 場合は原文のまま返す。ここで例外を投げると、SARIF の 1 件の壊れた uri で
+ * ゲート全体が落ち、その理由が「壊れた uri」ではなく「クラッシュ」として出る。
+ */
+function normalizePath(uri) {
+  if (typeof uri !== "string") return "";
+  try {
+    return decodeURIComponent(uri);
+  } catch {
+    return uri;
+  }
+}
+
+function artifactPathOf(result) {
+  return normalizePath(result.locations?.[0]?.physicalLocation?.artifactLocation?.uri);
+}
+
+/**
+ * 受容記録を読んで検証する。副作用を持たない (問題は返り値に入れる) ので、テストから
+ * 直接呼べる。
+ */
+function parseAllowlist(raw, source) {
+  const issues = [];
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    return { entries: [], problems: [`${source}: not parseable as JSON (${error.message})`] };
+  }
+
+  const rows = parsed?.entries;
+  if (!Array.isArray(rows)) {
+    // 空の受容記録と「読めなかった」を分ける。読めなかったものを空として扱うと、
+    // 壊れた記録がそのまま「免除ゼロ」に化けて、免除されていたはずの検出が
+    // finding として出る — 一見安全側だが、記録が壊れた事実は誰にも見えない。
+    return { entries: [], problems: [`${source}: entries is not an array; the acceptance record cannot be evaluated`] };
+  }
+
+  const entries = [];
+  const seen = new Set();
+  rows.forEach((row, index) => {
+    const at = `${source} entries[${index}]`;
+    if (typeof row !== "object" || row === null || Array.isArray(row)) {
+      issues.push(`${at}: is not an object; the acceptance record cannot be evaluated`);
+      return;
+    }
+
+    const text = (key) => (typeof row[key] === "string" && row[key].trim() !== "" ? row[key] : undefined);
+    const filePath = text("path");
+    const ruleId = text("ruleId");
+    // 理由の非空は個別抑制と同じ規律。理由のない受容は何の記録でもない。
+    const justification = text("justification");
+    const count = row.count;
+
+    if (filePath === undefined) issues.push(`${at}: path is missing or empty`);
+    if (ruleId === undefined) issues.push(`${at}: ruleId is missing or empty`);
+    if (justification === undefined) {
+      issues.push(`${at}: carries no justification; an unexplained acceptance is not a record of anything`);
+    }
+    // count >= 1 を要求する。0 を許すと「0 件を受容する」という、何も受容していない
+    // のに記録だけがあるエントリが作れてしまい、消費ゼロの検査を素通りする。
+    if (!Number.isInteger(count) || count < 1) {
+      issues.push(`${at}: count is ${describeValue(count)}; an accepted finding count must be an integer >= 1`);
+    }
+    if (filePath === undefined || ruleId === undefined || justification === undefined) return;
+    if (!Number.isInteger(count) || count < 1) return;
+
+    const key = `${normalizePath(filePath)} ${ruleId}`;
+    if (seen.has(key)) {
+      // 同じ (path, ruleId) が 2 行あると、どちらが何件を消費したのか決められない。
+      // 一致判定が曖昧になる時点で、この記録は照合の役に立たない。
+      issues.push(`${at}: duplicates an earlier entry for ${filePath} [${ruleId}]; the consumption cannot be attributed`);
+      return;
+    }
+    seen.add(key);
+    entries.push({ key, path: filePath, ruleId, count, justification, consumed: 0 });
+  });
+
+  return { entries, problems: issues };
+}
+
+function loadAllowlist(file, explicit) {
+  let raw;
+  try {
+    raw = fs.readFileSync(file, "utf8");
+  } catch (error) {
+    if (error.code === "ENOENT" && !explicit) {
+      // 既定パスにファイルが無い = 受容ゼロ。これは fail close 側である:
+      // 受容記録を消せば、受容されていた検出は finding として戻ってきて赤になる。
+      return { entries: [], problems: [] };
+    }
+    return { entries: [], problems: [`${file}: cannot be read (${error.message})`] };
+  }
+  return parseAllowlist(raw, file);
+}
+
+function matchAllowlist(filePath, ruleId) {
+  const key = `${filePath} ${ruleId}`;
+  return allowlist.find((entry) => entry.key === key);
+}
+
+/**
+ * 消費数と宣言 count を突き合わせる。超過は常に落とす。不足は full run のときだけ
+ * 落とす — diff-informed run は差分外を報告しないので、不足は「消えた」ではなく
+ * 「見ていない」でも起きるためである。
+ */
+function reconcileAllowlist(diffInformed) {
+  for (const entry of allowlist) {
+    const at = `${entry.path} [${entry.ruleId}]`;
+    if (entry.consumed > entry.count) {
+      problems.push(
+        `${allowlistSource}: ${at} matched ${entry.consumed} finding(s) but ${entry.count} is what was accepted; ` +
+          `the extra finding(s) are not covered by any acceptance record`,
+      );
+    } else if (entry.consumed < entry.count && !diffInformed) {
+      problems.push(
+        `${allowlistSource}: ${at} accepts ${entry.count} finding(s) but only ${entry.consumed} was found in a full ` +
+          `analysis; the acceptance record is stale and must be reduced to what still exists`,
+      );
+    }
+  }
 }
 
 /**
@@ -312,6 +490,13 @@ function evaluateLevel(where, at, result, rule) {
 function checkRun(file, run, runIndex) {
   const where = `${file} runs[${runIndex}]`;
 
+  // 解析レジームを記録する。`incrementalMode` が無い run は差分を絞っていない
+  // (= full) と読む。ここを「不明」として別扱いにしないのは、判定に使うのが
+  // 「差分の外を見ていない可能性があるか」だけで、full と断定できない run を
+  // full 側に倒すと**不足を陳腐化として落とす**厳しい側に入るためである。
+  const incrementalMode = run.properties?.incrementalMode;
+  regimes.add(typeof incrementalMode === "string" && incrementalMode.trim() !== "" ? incrementalMode : ALLOWLIST_REGIME_FULL);
+
   const driverName = run.tool?.driver?.name;
   if (typeof driverName !== "string" || driverName.trim() === "") {
     problems.push(`${where}: tool.driver.name is missing; this is not a recognisable analyzer output`);
@@ -365,19 +550,39 @@ function checkRun(file, run, runIndex) {
     if (severity.rejected) continue;
 
     const score = severity.score;
+    let failure;
     if (score !== undefined && score >= FAILING_SECURITY_SEVERITY) {
-      failingResults.push(`${at} security-severity=${score} (${severityLabel(score)})`);
+      failure = `${at} security-severity=${score} (${severityLabel(score)})`;
     } else if (FAILING_LEVELS.has(level)) {
-      failingResults.push(`${at} level=${level}`);
-    } else {
-      acceptedResults += 1;
+      failure = `${at} level=${level}`;
     }
+    if (failure === undefined) {
+      acceptedResults += 1;
+      continue;
+    }
+
+    // 受容記録が消費するのは、**落とすはずだった検出だけ**である。閾値未満の検出まで
+    // 消費対象にすると、記録の count が「受容した件数」ではなく「たまたま一致した件数」に
+    // なり、一致判定が何も固定しなくなる。
+    const entry = matchAllowlist(artifactPathOf(result), result.ruleId ?? result.rule?.id);
+    if (entry) {
+      entry.consumed += 1;
+      allowlistHits.push(failure);
+      continue;
+    }
+    failingResults.push(failure);
   }
 }
 
 function main() {
   const dir = process.argv[2] ?? "sarif-results";
   const files = listSarifFiles(dir);
+
+  const explicitAllowlist = process.argv[3] !== undefined;
+  allowlistSource = process.argv[3] ?? DEFAULT_ALLOWLIST_FILE;
+  const loaded = loadAllowlist(allowlistSource, explicitAllowlist);
+  allowlist.push(...loaded.entries);
+  problems.push(...loaded.problems);
 
   for (const file of files) {
     let sarif;
@@ -410,6 +615,28 @@ function main() {
     );
   }
 
+  // レジームは常に出す。これを書かないと、diff-informed run の「finding 0 件」が
+  // full run の「finding 0 件」と同じ文字列で出て、読んだ人は**見ていない範囲がある**
+  // ことを知りようがない。
+  const regimeList = regimes.size > 0 ? [...regimes].sort().join(", ") : "(no run analysed)";
+  const diffInformed = [...regimes].some((regime) => regime !== ALLOWLIST_REGIME_FULL);
+  console.log(`[codeql-sarif] analysis regime: ${regimeList}`);
+
+  reconcileAllowlist(diffInformed);
+
+  // 受容記録も抑制と同じ規律で、合格・不合格のどちらでも、0 件でも必ず出す。
+  // 読んだパスまで出すのは、既定以外の記録が使われたならそれがログに残るようにするため。
+  for (const hit of allowlistHits) {
+    console.log(`[codeql-sarif][accepted] ${hit}`);
+  }
+  console.log(`[codeql-sarif] acceptance record: ${allowlistSource} (${allowlist.length} entry/entries)`);
+  for (const entry of allowlist) {
+    console.log(
+      `[codeql-sarif][acceptance] ${entry.path} [${entry.ruleId}] consumed ${entry.consumed}/${entry.count}`,
+    );
+  }
+  console.log(`[codeql-sarif] ${allowlistHits.length} accepted (allowlist)`);
+
   // 検出内容は ruleId と位置だけを出す。SARIF の message はソース断片を含み得るため、
   // CI ログへ本文を流さない。
   for (const failing of failingResults) {
@@ -422,14 +649,18 @@ function main() {
   if (problems.length > 0 || failingResults.length > 0) {
     console.error(
       `[codeql-sarif] FAIL: ${failingResults.length} finding(s) at or above security-severity ` +
-        `${FAILING_SECURITY_SEVERITY}/level error, ${problems.length} structural problem(s)`,
+        `${FAILING_SECURITY_SEVERITY}/level error, ${problems.length} structural problem(s) ` +
+        `[regime: ${regimeList}]`,
     );
     process.exit(1);
   }
 
+  // 合格文にもレジームを添える。「これ以上の検出は無い」ではなく「このレジームで見た
+  // 範囲に無い」が、この行が言える限界である。
   console.log(
-    `[codeql-sarif] OK (${files.length} sarif file(s), no finding at or above security-severity ` +
-      `${FAILING_SECURITY_SEVERITY}; ${acceptedResults} lower-severity result(s) recorded)`,
+    `[codeql-sarif] OK (${files.length} sarif file(s), no unaccepted finding at or above ` +
+      `security-severity ${FAILING_SECURITY_SEVERITY}; ${acceptedResults} lower-severity result(s) ` +
+      `recorded, ${allowlistHits.length} accepted (allowlist)) [regime: ${regimeList}]`,
   );
 }
 
@@ -445,4 +676,11 @@ module.exports = {
   ACCEPTED_LEVELS,
   DEFAULT_LEVEL,
   FAILING_LEVELS,
+  DEFAULT_ALLOWLIST_FILE,
+  ALLOWLIST_REGIME_FULL,
+  // テストが受容記録の中身を写経せず、実物から読めるようにする。写経すると、記録を
+  // 更新したときにテストは「更新後の実装」ではなく「更新前の期待値」を測り続ける。
+  normalizePath,
+  parseAllowlist,
+  loadAllowlist,
 };

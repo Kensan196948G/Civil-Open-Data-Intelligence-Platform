@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -39,6 +39,11 @@ const {
   ACCEPTED_LEVELS,
   DEFAULT_LEVEL,
   FAILING_LEVELS,
+  DEFAULT_ALLOWLIST_FILE,
+  ALLOWLIST_REGIME_FULL,
+  normalizePath,
+  parseAllowlist,
+  loadAllowlist,
 } = require(scriptPath) as {
   MAX_ACCEPTED_SUPPRESSIONS: number;
   MIN_SECURITY_SEVERITY: number;
@@ -46,7 +51,23 @@ const {
   ACCEPTED_LEVELS: Set<string>;
   DEFAULT_LEVEL: string;
   FAILING_LEVELS: Set<string>;
+  DEFAULT_ALLOWLIST_FILE: string;
+  ALLOWLIST_REGIME_FULL: string;
+  normalizePath: (uri: unknown) => string;
+  parseAllowlist: (raw: string, source: string) => { entries: AllowlistEntry[]; problems: string[] };
+  loadAllowlist: (file: string, explicit: boolean) => { entries: AllowlistEntry[]; problems: string[] };
 };
+
+type AllowlistEntry = {
+  path: string;
+  ruleId: string;
+  count: number;
+  justification: string;
+  consumed: number;
+};
+
+/** 実測どおり `diff-informed`。定数側は "full" しか持たないため、こちらは実測値を書く。 */
+const DIFF_INFORMED = "diff-informed";
 
 const JS_QUERIES = "codeql/javascript-queries";
 
@@ -62,7 +83,7 @@ function rule({ id = "js/sample-query", securitySeverity = "7.8", level = "warni
   return { id, name: id, defaultConfiguration: { level }, properties };
 }
 
-function result(ruleId = "js/sample-query", ruleIndex = 0) {
+function result(ruleId = "js/sample-query", ruleIndex = 0, uri = "src/example.ts", startLine = 9) {
   return {
     ruleId,
     // 実測どおり、result 自身は level を持たない。
@@ -71,8 +92,8 @@ function result(ruleId = "js/sample-query", ruleIndex = 0) {
     locations: [
       {
         physicalLocation: {
-          artifactLocation: { uri: "src/example.ts" },
-          region: { startLine: 9 },
+          artifactLocation: { uri },
+          region: { startLine },
         },
       },
     ],
@@ -85,6 +106,8 @@ type SarifOverrides = {
   invocations?: unknown[];
   omitResults?: boolean;
   runs?: unknown[];
+  /** `pull_request` の run に付く `incrementalMode` を再現する。実測値は "diff-informed"。 */
+  properties?: Record<string, unknown>;
 };
 
 function sarif(overrides: SarifOverrides = {}) {
@@ -98,19 +121,90 @@ function sarif(overrides: SarifOverrides = {}) {
     },
     invocations: overrides.invocations ?? [{ executionSuccessful: true }],
   };
+  if (overrides.properties) run.properties = overrides.properties;
   if (!overrides.omitResults) run.results = overrides.results ?? [];
   return { version: "2.1.0", runs: overrides.runs ?? [run] };
 }
 
-function runGate(write: (dir: string) => string): { status: number | null; stdout: string; stderr: string } {
+/**
+ * 既定では**空の受容記録**を明示的に渡す。渡さないとスクリプトはリポジトリ本物の
+ * `docs/security/codeql-accepted-findings.json` を読み、その中身が fixture 41 件すべての
+ * 暗黙の基準になる。そうなると、受容記録へ 1 行足しただけで無関係なテストが落ち、
+ * 落ちた理由は「記録を足した」ではなく「fixture が古い」ように見える。各テストは
+ * **自分が何を受容記録としているか**を自分で宣言する。
+ *
+ * 本物の記録を読む経路 (引数なし = CI の実行形) は `runGateWithRepositoryRecord` が測る。
+ */
+function runGate(
+  write: (dir: string) => string,
+  acceptance: unknown = { entries: [] },
+): { status: number | null; stdout: string; stderr: string } {
   const base = mkdtempSync(path.join(tmpdir(), "codip-sarif-"));
   try {
     const target = write(base);
-    const outcome = spawnSync("node", [scriptPath, target], { encoding: "utf8", cwd: repoRoot });
+    const record = path.join(base, "acceptance.json");
+    writeFileSync(record, typeof acceptance === "string" ? acceptance : JSON.stringify(acceptance));
+    const outcome = spawnSync("node", [scriptPath, target, record], { encoding: "utf8", cwd: repoRoot });
     return { status: outcome.status, stdout: outcome.stdout, stderr: outcome.stderr };
   } finally {
     rmSync(base, { recursive: true, force: true });
   }
+}
+
+/** 受容記録を渡さない = CI が実際に走らせる形。既定パスの解決までを含めて測る。 */
+function runGateWithRepositoryRecord(write: (dir: string) => string) {
+  const base = mkdtempSync(path.join(tmpdir(), "codip-sarif-"));
+  try {
+    const outcome = spawnSync("node", [scriptPath, write(base)], { encoding: "utf8", cwd: repoRoot });
+    return { status: outcome.status, stdout: outcome.stdout, stderr: outcome.stderr };
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+}
+
+/** 記録ファイルそのものを置かない（= 明示指定が解決できない）経路を測るための実行形。 */
+function runGateWithMissingRecord(write: (dir: string) => string) {
+  const base = mkdtempSync(path.join(tmpdir(), "codip-sarif-"));
+  try {
+    const absent = path.join(base, "does-not-exist.json");
+    const outcome = spawnSync("node", [scriptPath, write(base), absent], { encoding: "utf8", cwd: repoRoot });
+    return { status: outcome.status, stdout: outcome.stdout, stderr: outcome.stderr, record: absent };
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+}
+
+type FindingSpec = {
+  path: string;
+  ruleId: string;
+  found: number;
+  /** 既定は失格相当 (security-severity 7.8)。閾値未満を作るときだけ渡す。 */
+  securitySeverity?: string;
+  level?: string;
+};
+
+/**
+ * `path` は **encodeURI した形** で SARIF へ書く。実物の SARIF は
+ * `data/Civil%20Open%20Data%20Intelligence%20Platform%20(1).html` のように percent-encoded で、
+ * 受容記録の側は人が読める形で書く。fixture が復号済みの文字列を書いてしまうと、
+ * 突き合わせの復号が消えてもテストは緑のままになる。
+ */
+function findingsSarif(specs: FindingSpec[], regime?: string) {
+  // rule が 1 件も無い run は「クエリが走っていない」として別の structural problem に
+  // なる。検出ゼロを作りたいだけの fixture がそちらへ落ちると、測っているつもりの
+  // ものと落ちた理由が食い違う。空のときは既定の rule を 1 件だけ残す。
+  const rules =
+    specs.length === 0
+      ? [rule()]
+      : specs.map((spec) =>
+          rule({ id: spec.ruleId, securitySeverity: spec.securitySeverity ?? "7.8", level: spec.level ?? "warning" }),
+        );
+  const results = specs.flatMap((spec, index) =>
+    Array.from({ length: spec.found }, (_, offset) =>
+      result(spec.ruleId, index, encodeURI(spec.path), 100 + offset),
+    ),
+  );
+  return sarif({ rules, results, ...(regime === undefined ? {} : { properties: { incrementalMode: regime } }) });
 }
 
 function withSarif(content: unknown, fileName = "javascript.sarif") {
@@ -470,7 +564,7 @@ describe("CodeQL SARIF security-severity validation", () => {
   ])("accepts %s as a genuine severity 0", (_label, raw) => {
     const outcome = runWithSeverity(raw);
     expect(outcome.status).toBe(0);
-    expect(outcome.stdout).toContain("no finding at or above security-severity");
+    expect(outcome.stdout).toContain("no unaccepted finding at or above security-severity");
   });
 
   it.each([
@@ -609,7 +703,7 @@ describe("CodeQL SARIF level validation", () => {
     // 実データで常時通る経路。ここを厳格化すると本物の SARIF が落ちる。
     const outcome = runWithRuleLevel(undefined, { omit: true });
     expect(outcome.status).toBe(0);
-    expect(outcome.stdout).toContain("no finding at or above security-severity");
+    expect(outcome.stdout).toContain("no unaccepted finding at or above security-severity");
   });
 
   it("prefers the result level over the rule default, and stops there when it is unreadable", () => {
@@ -749,5 +843,222 @@ describe("CodeQL SARIF gate policy constants", () => {
     // 11 は範囲を広げると score>=7 の finding として exit 1 を保つ。exit code
     // だけを見ると変異が生き残るため、finding として数えられていないことも見る。
     expect(outcome.stderr).not.toContain("[codeql-sarif][finding]");
+  });
+});
+
+describe("CodeQL SARIF acceptance record", () => {
+  // 実物と同じ形 (空白と括弧を含み、SARIF 側では percent-encoded になる) を使う。
+  const HTML = "data/Design Reference (1).html";
+  const RULE = "js/xss-through-dom";
+  const WHY = "design reference export; not shipped";
+
+  function record(entries: Array<Record<string, unknown>>) {
+    return { entries };
+  }
+
+  it("passes a full run when the consumed count equals the declared count", () => {
+    const outcome = runGate(
+      withSarif(findingsSarif([{ path: HTML, ruleId: RULE, found: 2 }])),
+      record([{ path: HTML, ruleId: RULE, count: 2, justification: WHY }]),
+    );
+
+    expect(outcome.status).toBe(0);
+    expect(outcome.stdout).toContain(`[codeql-sarif][acceptance] ${HTML} [${RULE}] consumed 2/2`);
+    expect(outcome.stdout).toContain("2 accepted (allowlist)");
+    expect(outcome.stderr).not.toContain("[codeql-sarif][finding]");
+  });
+
+  it("matches a percent-encoded SARIF uri against the decoded record path", () => {
+    expect(normalizePath(encodeURI(HTML))).toBe(HTML);
+
+    const outcome = runGate(
+      withSarif(findingsSarif([{ path: HTML, ruleId: RULE, found: 1 }])),
+      record([{ path: HTML, ruleId: RULE, count: 1, justification: WHY }]),
+    );
+
+    expect(outcome.status).toBe(0);
+    // 受容行と記録行が同じファイルを指していることを読み取れる形で出す。片方だけ
+    // 生値だと、同一ファイルであることが出力から判断できない。
+    expect(outcome.stdout).toContain(`[codeql-sarif][accepted] ${HTML}:100`);
+    expect(outcome.stdout).not.toContain("%20");
+  });
+
+  it.each([
+    ["a full run", undefined, ALLOWLIST_REGIME_FULL],
+    ["a diff-informed run", DIFF_INFORMED, DIFF_INFORMED],
+  ])("fails %s when more findings match than were accepted", (_label, regime, printed) => {
+    const outcome = runGate(
+      withSarif(findingsSarif([{ path: HTML, ruleId: RULE, found: 2 }], regime)),
+      record([{ path: HTML, ruleId: RULE, count: 1, justification: WHY }]),
+    );
+
+    expect(outcome.status).toBe(1);
+    // 超過はどちらのレジームでも観測できる。「見えている以上、多いことは確実に言える」。
+    expect(outcome.stderr).toContain("matched 2 finding(s) but 1 is what was accepted");
+    expect(outcome.stderr).toContain(`[regime: ${printed}]`);
+  });
+
+  it("fails a full run when the record accepts more than the analysis found", () => {
+    const outcome = runGate(
+      withSarif(findingsSarif([{ path: HTML, ruleId: RULE, found: 1 }])),
+      record([{ path: HTML, ruleId: RULE, count: 2, justification: WHY }]),
+    );
+
+    expect(outcome.status).toBe(1);
+    expect(outcome.stdout).toContain(`consumed 1/2`);
+    expect(outcome.stderr).toContain("only 1 was found in a full analysis");
+    expect(outcome.stderr).toContain("stale");
+  });
+
+  it("does not fail a diff-informed run when the accepted findings lie outside the diff", () => {
+    // これが #143 自身の PR run である。`pull_request` は diff-informed で、
+    // 差分外の html の検出は**報告されない**。厳密一致をそのまま当てると、
+    // このゲートは自分の PR を赤にする。不足は「見ていない」を含むため落とさない。
+    const outcome = runGate(
+      withSarif(findingsSarif([{ path: HTML, ruleId: RULE, found: 0 }], DIFF_INFORMED)),
+      record([{ path: HTML, ruleId: RULE, count: 2, justification: WHY }]),
+    );
+
+    expect(outcome.status).toBe(0);
+    expect(outcome.stdout).toContain(`[codeql-sarif][acceptance] ${HTML} [${RULE}] consumed 0/2`);
+    expect(outcome.stdout).toContain("0 accepted (allowlist)");
+    expect(outcome.stdout).toContain(`analysis regime: ${DIFF_INFORMED}`);
+  });
+
+  it("does not let a result below the failing threshold consume an acceptance", () => {
+    // 閾値未満まで消費させると、count が「受容した件数」ではなく「たまたま一致した
+    // 件数」になる。消費 0 のまま full run で陳腐化として落ちるのが正しい。
+    const outcome = runGate(
+      withSarif(findingsSarif([{ path: HTML, ruleId: RULE, found: 1, securitySeverity: "4.0", level: "warning" }])),
+      record([{ path: HTML, ruleId: RULE, count: 1, justification: WHY }]),
+    );
+
+    expect(outcome.status).toBe(1);
+    expect(outcome.stdout).toContain(`consumed 0/1`);
+    expect(outcome.stdout).toContain("0 accepted (allowlist)");
+  });
+
+  it.each([
+    ["path is missing", { ruleId: RULE, count: 1, justification: WHY }, "path is missing or empty"],
+    ["ruleId is missing", { path: HTML, count: 1, justification: WHY }, "ruleId is missing or empty"],
+    ["justification is blank", { path: HTML, ruleId: RULE, count: 1, justification: "   " }, "carries no justification"],
+    ["count is zero", { path: HTML, ruleId: RULE, count: 0, justification: WHY }, "integer >= 1"],
+    ["count is not an integer", { path: HTML, ruleId: RULE, count: 1.5, justification: WHY }, "integer >= 1"],
+    ["the row is not an object", "not-an-object", "is not an object"],
+  ])("rejects an entry where %s", (_label, row, fragment) => {
+    const parsed = parseAllowlist(JSON.stringify({ entries: [row] }), "record.json");
+
+    expect(parsed.entries).toEqual([]);
+    expect(parsed.problems.join("\n")).toContain(fragment);
+  });
+
+  it("rejects a second entry for the same path and ruleId", () => {
+    const parsed = parseAllowlist(
+      JSON.stringify(
+        record([
+          { path: HTML, ruleId: RULE, count: 1, justification: WHY },
+          { path: HTML, ruleId: RULE, count: 3, justification: WHY },
+        ]),
+      ),
+      "record.json",
+    );
+
+    // 2 行あると、どちらが何件を消費したのか決められない。一致判定が何も固定しなくなる。
+    expect(parsed.entries).toHaveLength(1);
+    expect(parsed.problems.join("\n")).toContain("duplicates an earlier entry");
+  });
+
+  it("treats an encoded and a decoded path as the same entry", () => {
+    const parsed = parseAllowlist(
+      JSON.stringify(
+        record([
+          { path: HTML, ruleId: RULE, count: 1, justification: WHY },
+          { path: encodeURI(HTML), ruleId: RULE, count: 1, justification: WHY },
+        ]),
+      ),
+      "record.json",
+    );
+
+    // 符号化違いで重複判定をすり抜けると、同じファイルに 2 つの受容枠ができる。
+    expect(parsed.entries).toHaveLength(1);
+    expect(parsed.problems.join("\n")).toContain("duplicates an earlier entry");
+  });
+
+  it.each([
+    ["the record is not parseable as JSON", "{ not json", "not parseable as JSON"],
+    ["entries is not an array", { entries: {} }, "entries is not an array"],
+    ["entries is absent", { documentation: "docs/security/codeql-accepted-findings.md" }, "entries is not an array"],
+  ])("fails the run when %s", (_label, acceptance, fragment) => {
+    const outcome = runGate(withSarif(sarif()), acceptance);
+
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain(fragment);
+  });
+
+  it("fails the run when an explicitly named record cannot be read", () => {
+    const outcome = runGateWithMissingRecord(withSarif(sarif()));
+
+    // 既定パスの不在は無記録として通すが、名指しした記録が読めないのは別物である。
+    // 読めない記録を黙って空として扱うと、パスを打ち間違えた受容が全部消える。
+    expect(outcome.status).toBe(1);
+    expect(outcome.stderr).toContain("cannot be read");
+    // 解決したパスは必ず出力に残す。既定以外の記録が使われたなら、それがログに現れる。
+    expect(outcome.stdout).toContain(`acceptance record: ${outcome.record}`);
+  });
+
+  it.each([
+    ["a run without incrementalMode", undefined, ALLOWLIST_REGIME_FULL],
+    ["a diff-informed run", DIFF_INFORMED, DIFF_INFORMED],
+  ])("prints the regime and a zero acceptance count for %s", (_label, regime, printed) => {
+    const outcome = runGate(withSarif(findingsSarif([], regime)));
+
+    expect(outcome.status).toBe(0);
+    // レジームを書かなければ、diff-informed の「0 件」が full の「0 件」と同じ文字列で出る。
+    expect(outcome.stdout).toContain(`analysis regime: ${printed}`);
+    expect(outcome.stdout).toContain(`[regime: ${printed}]`);
+    // 0 件でも必ず出す。出さないと「受容が無い」と「受容の手段が無い」が区別できない。
+    expect(outcome.stdout).toContain("0 accepted (allowlist)");
+  });
+});
+
+describe("CodeQL SARIF acceptance record shipped in the repository", () => {
+  // 記録の中身をテストへ写経しない。写経すると、記録を更新したときにテストは
+  // 「更新後の実装」ではなく「更新前の期待値」を測り続ける。
+  const shipped = loadAllowlist(DEFAULT_ALLOWLIST_FILE, true);
+
+  it("parses without a structural problem", () => {
+    expect(shipped.problems).toEqual([]);
+    expect(shipped.entries.length).toBeGreaterThan(0);
+  });
+
+  it("gives every entry a non-empty justification", () => {
+    for (const entry of shipped.entries) {
+      expect(entry.justification.trim()).not.toBe("");
+    }
+  });
+
+  it("accepts exactly what it declares when the gate resolves it by default", () => {
+    const specs = shipped.entries.map((entry) => ({
+      path: entry.path,
+      ruleId: entry.ruleId,
+      found: entry.count,
+    }));
+    const outcome = runGateWithRepositoryRecord(withSarif(findingsSarif(specs)));
+
+    expect(outcome.status).toBe(0);
+    for (const entry of shipped.entries) {
+      expect(outcome.stdout).toContain(
+        `[codeql-sarif][acceptance] ${entry.path} [${entry.ruleId}] consumed ${entry.count}/${entry.count}`,
+      );
+    }
+    const declared = shipped.entries.reduce((total, entry) => total + entry.count, 0);
+    expect(outcome.stdout).toContain(`${declared} accepted (allowlist)`);
+    expect(outcome.stdout).toContain(`acceptance record: ${DEFAULT_ALLOWLIST_FILE}`);
+  });
+
+  it("documents itself where the gate says it does", () => {
+    const raw = JSON.parse(readFileSync(DEFAULT_ALLOWLIST_FILE, "utf8")) as { documentation?: string };
+    expect(raw.documentation).toBeDefined();
+    expect(readFileSync(path.join(repoRoot, raw.documentation as string), "utf8").length).toBeGreaterThan(0);
   });
 });
