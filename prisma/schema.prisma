@@ -367,3 +367,17 @@ model RoleAssignment {
   @@index([roleId])
   @@map("role_assignments")
 }
+
+model WatchlistEntry {
+  id         String   @id @default(cuid())
+  userEmail  String // 小文字正規化
+  targetType String // site / dataSource / ingestionJob
+  targetId   String
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userEmail, targetType, targetId])
+  @@index([userEmail, enabled])
+  @@map("watchlist_entries")
+}

@@ -51,3 +51,11 @@ DATABASE_URL=<本番Pg> npm run ops:sla-monitor -- --strict
 - 本番へのハーベスト実行は「ドライラン → 少量反映 → 監査」の順で人間が判断する
 - 100VU負荷テストは preview で実施済み。本番同等環境での測定は本番負荷を伴うため
   利用時間帯を避けて段階実施する（承認事項）
+
+## 5. 追加（2026-08-12 実装済み）
+
+- **ウォッチリストAPI** `/api/v1/watchlist`（engineer以上・個人単位）と
+  日次ダイジェスト（`sla-monitor.yml` が `data-watch-digest` Issue を自動更新）
+- **SLA日次監視** `sla-monitor.yml`（21:05 JST・strict失敗で赤・artifact保存）
+- **本番負荷シナリオ** `scripts/load/k6-production-scenario.js`（承認後に段階実行）
+- 河川水位XML・水文水質CSVは構造的エンドポイント確認後に追加（現時点はHTMLのみ確認）
