@@ -118,13 +118,67 @@ describe("release-gate quoteShellArg", () => {
     });
 
     it("quotes every character outside the set", () => {
-      for (const char of [" ", "&", "|", ">", "<", "^", "%", "!", '"', "\\", "$", "`", "(", ")", "*", "?", ";", "'", "\t"]) {
+      // '%' and '!' are outside the set too, but they fail closed rather than
+      // being quoted — see the cmd.exe layer block below.
+      for (const char of [" ", "&", "|", ">", "<", "^", '"', "\\", "$", "`", "(", ")", "*", "?", ";", "'", "\t"]) {
         expect(quoteShellArg(char), `char ${JSON.stringify(char)}`).not.toBe(char);
       }
     });
 
     it("does not take the fast path when only part of the value is allowed", () => {
       expect(quoteShellArg("npm run")).toBe('"npm run"');
+    });
+  });
+
+  describe("the cmd.exe layer, which quoting alone does not cover", () => {
+    // The line is parsed twice: cmd.exe first, then the child's CRT. Every test
+    // above exercises the CRT axis. Without this block the suite would be green
+    // while never touching the other parser — the same "green means covered"
+    // mistake this repository is currently cataloguing.
+    it("neutralises the cmd metacharacters that double quotes do cover", () => {
+      // cmd.exe does not interpret these inside double quotes, so quoting is
+      // sufficient and the CRT round trip must still hold.
+      for (const value of ["a & b", "a | b", "a > b", "a < b", "a ^ b"]) {
+        expect(quoteShellArg(value).startsWith('"'), `value ${JSON.stringify(value)}`).toBe(true);
+        expect(roundTrip(value), `value ${JSON.stringify(value)}`).toEqual({ value, rest: "" });
+      }
+    });
+
+    it("fails closed on the two characters quotes do not cover", () => {
+      // cmd.exe expands %VAR% inside double quotes, and !VAR! too when delayed
+      // expansion is enabled. Neither can be escaped reliably on a cmd command
+      // line, so emitting a token here would mean vouching for a value we
+      // cannot produce faithfully.
+      for (const value of ["%PATH%", "a%b", "100%", "!DELAYED!", "a!b"]) {
+        expect(() => quoteShellArg(value), `value ${JSON.stringify(value)}`).toThrow(/cannot safely quote/);
+      }
+    });
+
+    it("does not leak the rejected value in the error message", () => {
+      // The value may be a secret; the character class alone identifies the
+      // problem, so the message must not echo it back into CI logs.
+      expect(() => quoteShellArg("%SECRET_TOKEN%")).toThrow(
+        expect.objectContaining({ message: expect.not.stringContaining("SECRET_TOKEN") }),
+      );
+    });
+
+    it("rejects nothing that release-gate actually passes today", () => {
+      // Reachability: every run() call site passes source literals, so the
+      // fail-close above is unreachable in the current program. It is a guard
+      // for future callers, not a behaviour change.
+      const source = require("node:fs").readFileSync(
+        new URL("../../scripts/tools/release-gate.js", import.meta.url),
+        "utf8",
+      ) as string;
+      const callSites = [...source.matchAll(/run\(\s*"[^"]*"\s*,\s*("[^"]*")\s*,\s*(\[[^\]]*\])/g)];
+      expect(callSites.length).toBeGreaterThan(0);
+
+      for (const [, command, argsLiteral] of callSites) {
+        const args = [...argsLiteral.matchAll(/"([^"]*)"/g)].map((match) => match[1]);
+        for (const value of [JSON.parse(command) as string, ...args]) {
+          expect(() => quoteShellArg(value), `arg ${JSON.stringify(value)}`).not.toThrow();
+        }
+      }
     });
   });
 
