@@ -71,6 +71,7 @@
 | 2026-08-10（時刻未記録） | cloudflare-alert-policy | Notifications API テスト送信 | success | 未記録 | 未記録 | - | `NOT RUN`（受信記録なし） | `alerts-and-notifications.md` §「2026-08-10 実施済み」。送信APIの成功のみが記録され、受信時刻・受信確認者が残っていない。QAはNotifications read権限が無く独立検証不能 | 権限付与後に再実施 |
 | - | github-actions-failure | - | - | - | - | - | `BLOCKED` | 通知先が未確定（`alerts-and-notifications.md` §3.1 step1 が人間承認待ち）。`production-smoke.yml` に通知stepが存在しない | 通知先確定後 |
 | - | neon-alert | - | - | - | - | - | `BLOCKED` | Neon Alerts 未設定（`alerts-and-notifications.md` §1） | 設定後 |
+| 2026-08-12T00:52:12Z | github-actions-failure | `production-smoke.yml` を `workflow_dispatch` で `run_notification_test=true` 実行（本番probeは通常どおり成功） | success（job結論 success・テスト専用incident Issue作成） | CTO代行（kensan環境。Issue #152をAPI経由で確認・クローズ。GitHubメール通知の人間目視はユーザー設定に依存） | 2026-08-12T00:52:14Z | 2秒（Issue作成時刻 - 検知時刻） | `PASS` | run 31551646341 / Issue #152（`[TEST] [P2] production smoke failure`、`production-smoke-test` label、本文に種別明記） | 2026-09-11 |
 
 <!-- 新しい記録は上の表へ1行ずつ追記する。過去行は書き換えない。 -->
 

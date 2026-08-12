@@ -4,7 +4,6 @@ import {
   createRoleResolver,
   normalizeEmail,
   requireRole,
-  requireRoleOrAdmin,
   userEmailFromRequest,
   DEFAULT_ROLE,
 } from "../../src/lib/rbac";
