@@ -116,7 +116,11 @@ export async function requireRole(
 ): Promise<NextResponse | null> {
   const email = userEmailFromRequest(request);
   if (!email) {
-    return errorResponse(401, "unauthorized", "認証済みユーザー識別ヘッダーがありません");
+    return errorResponse(
+      401,
+      "unauthorized",
+      "管理認証が必要です（認証済みユーザー識別ヘッダーがありません）",
+    );
   }
   const role = await resolver(email, scope);
   if (!allowedRoles.includes(role)) {
