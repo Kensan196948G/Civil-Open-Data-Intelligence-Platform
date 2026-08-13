@@ -589,6 +589,16 @@ const SCRIPT_GATES: readonly GateEntry[] = [
     notRunMeans: "",
   },
   {
+    file: "scripts/tools/check-codeql-sarif.js",
+    grade: 0,
+    issue: "none",
+    why: "CodeQL SARIF の検出結果を実ファイルから評価する。severity 閾値（security-severity 7.0 以上）のほか、runs/results の実在・解析成否・抑制チャネルを照合し、『検出0件』と『読めなかった』を区別して空集合を合格として扱わない",
+    signals: { substringDominant: false, probesExternal: false, probesFs: true },
+    runsOn: "scheduled",
+    notRunMeans:
+      "codeql.yml の codeql-findings ジョブ（if: always() の条件付き）にのみ結線され、workflow が schedule トリガーを含むため deriveRunsOn の単純化では scheduled 扱いになる。PR でも実走するが『PR で毎回走る』母集団には含めない",
+  },
+  {
     file: "scripts/tools/validate-production-target-env.js",
     grade: 0,
     issue: "none",
