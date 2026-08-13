@@ -17,8 +17,9 @@ if (!Number.isFinite(MAX_VUS)) {
 
 export const options = {
   scenarios: {
-    ramp: {
+    read: {
       executor: "ramping-vus",
+      exec: "readFlow",
       startVUs: 1,
       stages: [
         { duration: "20s", target: Math.min(5, MAX_VUS) },
@@ -26,6 +27,12 @@ export const options = {
         { duration: "20s", target: 0 },
       ],
       gracefulRampDown: "5s",
+    },
+    write: {
+      executor: "constant-vus",
+      exec: "writeFlow",
+      vus: Math.min(5, MAX_VUS),
+      duration: "30s",
     },
   },
   thresholds: {
@@ -53,7 +60,7 @@ function headers() {
   return { "cf-connecting-ip": `10.0.0.${__VU}` };
 }
 
-export default function () {
+export function readFlow() {
   for (const path of PUBLIC_GETS) {
     const res = http.get(`${BASE}${path}`, { headers: headers() });
     const ok = res.status >= 200 && res.status < 500;
@@ -85,4 +92,44 @@ export default function () {
   apiTrend.add(rec.timings.duration);
 
   sleep(0.5);
+}
+
+/**
+ * 書き込み系・管理系APIのシナリオ（preview限定）。
+ * 管理者トークンは --env ADMIN_TOKEN=... で渡す（本番には実行しない）。
+ */
+export function writeFlow() {
+  const adminToken = __ENV.ADMIN_TOKEN || "";
+  const authHeaders = adminToken ? { "x-codip-admin-token": adminToken } : {};
+  const code = `load-${__VU}-${Date.now()}`;
+  const create = http.post(
+    `${BASE}/api/v1/sites`,
+    JSON.stringify({
+      code,
+      name: "ロードテスト現場",
+      kind: "land",
+      lat: 35.68,
+      lon: 139.76,
+    }),
+    {
+      headers: {
+        ...headers(),
+        "content-type": "application/json",
+        ...authHeaders,
+      },
+    },
+  );
+  const createOk = create.status === 201 || create.status === 409;
+  check(create, { "site create ok (201/409)": () => createOk });
+  checkFailures.add(!createOk);
+  apiTrend.add(create.timings.duration);
+
+  const roles = http.get(`${BASE}/api/admin/roles`, {
+    headers: { ...headers(), ...authHeaders },
+  });
+  check(roles, { "admin roles ok": (r) => r.status === 200 });
+  checkFailures.add(roles.status !== 200);
+  apiTrend.add(roles.timings.duration);
+
+  sleep(1);
 }

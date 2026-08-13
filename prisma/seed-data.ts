@@ -240,6 +240,31 @@ export const SOURCES: SeedSource[] = [
     tags: ["自治体", "統計"],
     useCases: [{ useCaseName: "データカタログの定期取得", targetSystem: "Open Data Discovery" }],
   },
+  {
+    providerName: "総務省統計局",
+    name: "e-Stat 統計表データ（国勢調査）",
+    nameEn: "e-Stat Statistics Data (Population Census)",
+    description:
+      "e-Stat APIで国勢調査等の統計表データ一覧を取得する。APIキー（ESTAT_APP_ID）が必要。",
+    officialUrl: "https://www.e-stat.go.jp/",
+    endpointUrl:
+      "https://api.e-stat.go.jp/rest/2.1/app/json/getStatsList?statsCode=00200502&appId=${ESTAT_APP_ID}",
+    documentationUrl: "https://www.e-stat.go.jp/api/",
+    category: "statistics",
+    dataFormat: "JSON",
+    accessType: "API",
+    requiresApiKey: true,
+    apiKeyEnvName: "ESTAT_APP_ID",
+    licenseName: "政府標準利用規約",
+    commercialUse: "allowed",
+    attributionRequired: true,
+    updateFrequency: "yearly",
+    trustLevel: 5,
+    qualityScore: 70,
+    note: "APIキー（ESTAT_APP_ID）登録後に実測・ジョブ有効化。2026-08-12 時点は未実測（キー待ち）。",
+    tags: ["統計", "APIキー必要"],
+    useCases: [{ useCaseName: "統計データの取得", targetSystem: "Open Data Discovery" }],
+  },
   // ===== 初期10件 =====
   {
     providerName: "国土交通省",
