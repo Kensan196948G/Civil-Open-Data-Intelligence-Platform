@@ -39,6 +39,7 @@ const NEON_PROJECT_ID = process.env.CODIP_NEON_PROJECT_ID?.trim() || "falling-da
 const MVP_NEON_BRANCH = process.env.CODIP_MVP_NEON_BRANCH?.trim() || "mvp-20260813";
 const MVP_HOST = "codip-mvp.mirai-dx-platform.com";
 const MVP_ZONE = "mirai-dx-platform.com";
+const MVP_ZONE_ID = "e375e651e49a40801a305b89e297bff0";
 const MVP_BASE_URL = `https://${MVP_HOST}`;
 const MVP_DEMO_EMAIL = "demo.engineer@example.com";
 const MVP_ADMIN_TOKEN_FILE = ".mvp-admin-token.txt";
@@ -192,8 +193,31 @@ async function ensureDnsRecord(token) {
   console.log(`[deploy-mvp] created proxied AAAA record for ${MVP_HOST}`);
 }
 
+/**
+ * Workers Custom Domains で MVP host を Worker `codip-mvp` へ紐付ける（冪等）。
+ *
+ * zone route は現行 token に Workers Routes:Edit スコープが無いため使わない
+ * (2026-08-13 実測 code 10000)。同一 token の Workers Domains スコープで
+ * カスタムドメインを登録する。既に紐付いていれば何もしない。
+ */
+async function ensureCustomDomain(token, accountId) {
+  const domains = await cfRequest(token, "GET", `/accounts/${accountId}/workers/domains`);
+  const existing = domains.find((d) => d.hostname === MVP_HOST);
+  if (existing) {
+    console.log(`[deploy-mvp] reuse Workers custom domain ${MVP_HOST} (${existing.id})`);
+    return;
+  }
+  await cfRequest(token, "PUT", `/accounts/${accountId}/workers/domains`, {
+    hostname: MVP_HOST,
+    service: "codip-mvp",
+    environment: "production",
+    zone_id: MVP_ZONE_ID,
+  });
+  console.log(`[deploy-mvp] attached Workers custom domain ${MVP_HOST}`);
+}
+
 export async function main() {
-  const { neonApiKey, cfToken } = resolveMvpEnv();
+  const { neonApiKey, cfToken, accountId } = resolveMvpEnv();
 
   step("resolve Neon connection targets (in-process)");
   const neon = await resolveNeonUris(neonApiKey);
@@ -225,6 +249,7 @@ export async function main() {
 
   step("ensure DNS record (zone route target)");
   await ensureDnsRecord(cfToken);
+  await ensureCustomDomain(cfToken, accountId);
 
   const adminToken = process.env.CODIP_ADMIN_TOKEN?.trim() || randomBytes(32).toString("hex");
 

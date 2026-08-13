@@ -7,7 +7,8 @@
   - 本番 `odip` / `codip-production` / Hyperdrive / Neon production main には無変更
   - デプロイ実績 (2026-08-13): Worker アップロード・Neon branch は成功。
     zone route は token に Workers Routes:Edit スコープが無いため断念し、
-    **Workers Custom Domains 方式へ切替**（紐付け成功・DNS 自動生成・smoke 73 checks OK）
+    **Workers Custom Domains 方式へ切替**（紐付け成功・DNS 自動生成・
+    smoke 73 checks OK・watchlist demo identity/PATCH 実測）
 - 🗄️ Neon branch `mvp-20260813`（main から copy-on-write）へ `migrate reset --force` +
   `migrate deploy` + `db:pg:seed` で架空ダミーデータを投入・保持
 - 🔌 Hyperdrive 権限不足（code 10000）を回避する直接 TCP 接続を実装:

@@ -11,7 +11,7 @@
 | FQDN | `codip-mvp.mirai-dx-platform.com` |
 | URL | `https://codip-mvp.mirai-dx-platform.com` |
 | Worker | `codip-mvp`（`wrangler.jsonc` の `env.mvp`） |
-| Routing | Workers Custom Domains（`custom_domains: true`）+ proxied AAAA `100::`、`workers_dev=false`。zone route は現行 token に Workers Routes:Edit スコープが無いため不採用（2026-08-13 実測 code 10000） |
+| Routing | Workers Custom Domains + proxied AAAA `100::`、`workers_dev=false`。zone route は現行 token に Workers Routes:Edit スコープが無いため不採用（2026-08-13 実測 code 10000）。カスタムドメイン登録は `deploy-mvp.mjs` が API で冪等実行 |
 | DB | Neon branch `mvp-20260813`（project `falling-dawn-93620497` の main から copy-on-write。**production main は不変**） |
 | 接続方式 | Hyperdrive 不使用。Worker secret `DATABASE_URL`（Neon pooled URI）を Prisma の `@prisma/adapter-pg`（pg ドライバ）で Worker から直接 TCP 接続（`nodejs_compat` + Prisma >= 6.15） |
 | 認証 | `CODIP_ENV_MODE=preview` / `CODIP_TRUST_PROXY_AUTH=false` / 管理トークン（`CODIP_ADMIN_TOKEN`）でセッション開始。ウォッチリストはデモ識別子 `demo.engineer@example.com`（seed 済み RBAC + ウォッチリスト） |
@@ -32,8 +32,9 @@ zone route の登録には Cloudflare API token に **Zone > Workers Routes > Ed
 で失敗した（Worker アップロードと DNS 作成は成功。本番リソースは無変更）。
 
 一方で同 token には **Workers Custom Domains** スコープがあり、カスタムドメイン
-`codip-mvp.mirai-dx-platform.com` の Worker 紐付けは成功した。以降は
-`custom_domains: true` を正とし、zone route は使用しない。
+`codip-mvp.mirai-dx-platform.com` の Worker 紐付けは成功した。以降はカスタム
+ドメイン方式を正とし（`deploy-mvp.mjs` の `ensureCustomDomain` が冪等登録）、
+zone route は使用しない。
 
 - 再デプロイ: `node scripts/deploy/deploy-mvp.mjs --with-secrets`（冪等。
   Worker 更新 / DNS 確認 / secrets 登録まで1コマンドで完結する）
