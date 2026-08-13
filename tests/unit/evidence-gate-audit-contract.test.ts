@@ -211,6 +211,89 @@ describe("production evidence variables match the audited list", () => {
 
     expect(performsExternalCheck).toBe(!docSaysStringOnly);
   });
+
+  /**
+   * Row #7's leniency claim must track what the monitoring rows actually go
+   * through, not what one named function contains.
+   *
+   * The test just above probes `evidenceState` for an external call and requires
+   * the doc to keep the `ok` claim while none is found. That proxy is wrong in a
+   * way backend's remediation exposed: 7f72626 (PR #137, Issue #128) keeps
+   * `evidenceState` as a deliberate presence check and moves the rows onto a
+   * per-key format validator. No external call is ever added, so the proxy pins
+   * the document to a claim that has become false — and it stays green while
+   * doing so. The three tests below measure the row path instead.
+   *
+   * Both live here on purpose. Removing the proxy is a separate judgement
+   * ("is it in fact only accidentally green?") and is proposed on its own so it
+   * can be accepted or refused without touching this inventory.
+   */
+  const monitoringRowChecker = () => {
+    const rowLine = productionEvidenceReport.match(/const monitoringRows = [\s\S]*?\n/)?.[0] ?? "";
+    const called = /\[key, (\w+)\(/.exec(rowLine)?.[1];
+    if (!called) return { tier: "unknown", called } as const;
+
+    const body =
+      productionEvidenceReport.match(new RegExp(`function ${called}\\([^)]*\\)\\s*\\{([\\s\\S]*?)\\n\\}`))?.[1] ?? "";
+    if (/fetch\(|spawnSync|execSync|https?:\/\//.test(body)) return { tier: "probed", called } as const;
+    // A per-key expectation table means "ok" no longer satisfies every key
+    if (/EVIDENCE_FORMATS|\bspec\b|\.pattern\b|RegExp/.test(body)) return { tier: "format-validated", called } as const;
+    return { tier: "presence-only", called } as const;
+  };
+
+  const row7 = () => {
+    const row = gateRows.find((entry) => entry.id === "7");
+    expect(row, "audit row #7 (Monitoring evidence 7項目) が表から解決できない").toBeDefined();
+    return row!;
+  };
+
+  it("resolves how the monitoring rows are actually built", () => {
+    // If this stops resolving, the tier below silently degrades to one value
+    // and the claim check turns into a constant. Fail loudly instead.
+    const { tier, called } = monitoringRowChecker();
+    expect(called, "monitoringRows の構築行から判定関数を解決できない").toBeDefined();
+    expect(tier).not.toBe("unknown");
+  });
+
+  it("carries the `ok` leniency claim as live only while the rows are presence-only", () => {
+    // The sentence itself is not the claim. After Issue #128 the row keeps the
+    // wording as a dated finding ("🗓️ 2026-08-11（QA 調査時点）の所見") and marks
+    // the path closed. Asserting on `auditDoc.includes(...)` alone would read
+    // that history as a live assertion and fail a document that is correct.
+    const row = row7();
+    const wording = "GitHub Variables に `ok` の2文字を入れれば7項目すべてが ✅ になる";
+    const statesWording = row.falseNegative.includes(wording);
+    const declaredClosed = /閉じた|是正済み/.test(`${row.falseNegative} ${row.remediation}`);
+    const claimsLive = statesWording && !declaredClosed;
+
+    const { tier } = monitoringRowChecker();
+    expect(
+      claimsLive,
+      tier === "presence-only"
+        ? "行は今も存在確認だけなので、この主張を現役として残すこと"
+        : `行は ${tier} へ強化されている。docs/security/evidence-gate-audit.md 行#7 の ` +
+          "「`ok` の2文字で7項目すべてが ✅」は既に偽なので、所見の日付と是正先を添えて閉じること",
+    ).toBe(tier === "presence-only");
+  });
+
+  it("backs a closed row #7 with symbols that exist in the implementation", () => {
+    // 「閉じた」と書けてしまう以上、その一言自体が自己申告になり得る。閉じたと述べる
+    // なら是正先を名指させ、名指した記号が現物に在ることまでを検査する。
+    // (defect の裏返し: 「一致してはならない」ではなく「一致し続けよ」)
+    const row = row7();
+    if (!/閉じた|是正済み/.test(`${row.falseNegative} ${row.remediation}`)) return;
+
+    const named = [...row.remediation.matchAll(/`([A-Za-z_][A-Za-z0-9_]*)(?:\(\))?`/g)].map((match) => match[1]);
+    expect(named, "閉じたと述べるなら、是正先の記号を remediation 欄で名指すこと").not.toEqual([]);
+    // 語境界で照合する。`includes` だと `EVIDENCE_FORMATS` を
+    // `EVIDENCE_FORMATS_RENAMED` へ改名しても改名後が旧名を部分文字列として含むため
+    // 素通りする。2026-08-12 に変異試験で実測 (43 緑のまま生存)。この表が等級4
+    // (文言の部分一致で網羅を主張) と呼んでいる欠陥を、告発する側が犯していた
+    expect(
+      named.filter((symbol) => !new RegExp(`\\b${symbol}\\b`).test(productionEvidenceReport)),
+      "是正先として名指した記号が production-evidence-report.js に無い。退行か、記述の誤りである",
+    ).toEqual([]);
+  });
 });
 
 describe("recorded positive patterns still exist", () => {
