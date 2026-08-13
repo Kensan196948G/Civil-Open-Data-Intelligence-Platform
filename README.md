@@ -10,7 +10,7 @@
 
 **CODIP** は、国土交通省、国土地理院、気象庁、自治体、道路、河川、防災、都市計画、インフラ、環境などに分散している公開データを、土木建設業務で再利用しやすい形に整理するための共通データ基盤です。
 
-現行MVPは **データソース台帳、取得確認、取得ログ、地図プレビュー、品質状態、後続API、PostgreSQL/PostGIS標準レコード読取経路** を中心に実装しています。共有preview `http://192.168.0.185:3100/` は稼働中です。本番Cloudflare Workers + Hyperdrive + Neonも配備済みで、**本番 `https://odip.mirai-dx-platform.com` は2026-08-05以降 Access 保護下で継続稼働中**（15分毎のstrict read-only smoke成功、日次暗号化バックアップ・復元ドリル実施済み）。公開レビュー用MVPは **`https://codip-mvp.mirai-dx-platform.com`**（架空ダミーデータ、管理トークンでセッション開始。詳細は [docs/runbooks/cloudflare-mvp.md](docs/runbooks/cloudflare-mvp.md)）。本番稼働状況は [docs/16-release-readiness-checklist.md](docs/16-release-readiness-checklist.md) を参照してください。
+現行MVPは **データソース台帳、取得確認、取得ログ、地図プレビュー、品質状態、後続API、PostgreSQL/PostGIS標準レコード読取経路** を中心に実装しています。共有preview `http://192.168.0.185:3100/` は稼働中です。本番Cloudflare Workers + Hyperdrive + Neonも配備済みで、**本番 `https://odip.mirai-dx-platform.com` は2026-08-05以降 Access 保護下で継続稼働中**（15分毎のstrict read-only smoke成功、日次暗号化バックアップ・復元ドリル実施済み）。公開レビュー用MVPは **`https://codip-mvp.mirai-dx-platform.com`**（架空ダミーデータ、管理トークンでセッション開始）として Worker・Neon branch・デプロイ手順まで整備済みです。**zone route の作成には Cloudflare API token への「Workers Routes: Edit」スコープ付与が必要**で、付与後に `node scripts/deploy/deploy-mvp.mjs --with-secrets` を1回実行すれば公開されます（詳細は [docs/runbooks/cloudflare-mvp.md](docs/runbooks/cloudflare-mvp.md)）。本番稼働状況は [docs/16-release-readiness-checklist.md](docs/16-release-readiness-checklist.md) を参照してください。
 
 > 公開データを探すだけのサイトではなく、土木建設システムが公開データを安全に再利用するための共通データハブです。
 
@@ -135,7 +135,7 @@ flowchart LR
 | 確認項目 | 実測 | 判定 |
 | --- | --- | --- |
 | 正式URL | `https://odip.mirai-dx-platform.com` | ✅ DNS/TLS/route到達 |
-| MVPレビューURL | `https://codip-mvp.mirai-dx-platform.com` | ✅ Worker `codip-mvp` + zone route、Neon `mvp-20260813` |
+| MVPレビューURL | `https://codip-mvp.mirai-dx-platform.com` | ⚠️ Worker/DNS/DBは準備済み。zone route作成のみCloudflare tokenスコープ待ち（Workers Routes: Edit） |
 | Access | Cloudflare Access app `odip`（mirai-const.co.jp + kensan1969@gmail.com） | ✅ 未認証は302→login |
 | Health / Ready | Access service token付きprobeで200（2026-08-05T02:55Z run 30970704615）。未認証は302 | ✅ Worker/DB稼働 |
 | 稼働deployment | `codip-production`（Version `d1528b5d-b5e6-47e9-aa4b-1070868161f6`、main `3ec5e8f` 相当） | ✅ 統合機能・/reports修正・地形クラッシュ修正反映済 |
