@@ -88,6 +88,69 @@ function okFetcher() {
   return vi.fn(async () => new Response("{}", { status: 200 }));
 }
 
+/**
+ * mock fetcher が「どちらのエンドポイント宛か」を決める判定。
+ *
+ * 以前は `url.includes("odip.mirai-dx-platform.com")` と書いていた。部分一致では
+ * `https://evil.example.com/?next=odip.mirai-dx-platform.com` のように**ホストが別で
+ * あってもパスやクエリに文字列が現れるだけ**の URL が production 宛と判定される。
+ * mock の分岐が本物より緩いと、本番判定の検査が意図しない要求まで拾って緑になり得る。
+ * ここは hostname を厳密比較する (CodeQL js/incomplete-url-substring-sanitization, 7.8)。
+ *
+ * 期待ホストは DEFAULT_PRODUCTION_URL から導出する。テスト側へホスト名を書き写すと、
+ * 本番 URL が変わったときに mock だけ古い値のまま残る。
+ */
+const PRODUCTION_HOSTNAME = new URL(DEFAULT_PRODUCTION_URL).hostname;
+
+function isProductionUrl(url: string): boolean {
+  try {
+    return new URL(url).hostname === PRODUCTION_HOSTNAME;
+  } catch {
+    // 相対 URL など、そもそも production 宛になり得ないもの
+    return false;
+  }
+}
+
+/**
+ * mock のルーティング判定が「厳密比較へ変えた意味がある」ことを、実行のたびに再現する。
+ *
+ * 旧実装 (legacyIncludesRouting) を据え置いてあるので、この主張は手順型の変異試験と違い
+ * 退行しない。`isProductionUrl` を部分一致へ戻すと、下の 2 ケースが即座に落ちる。
+ *
+ * ⚠ この関数は**意図的に脆弱な形のまま**である。ここを厳密比較へ直すと、下の
+ *   「旧実装は素通りさせた」が成立しなくなり、証明そのものが消える。
+ *
+ * ⚠ CodeQL `js/incomplete-url-substring-sanitization` がここを指摘しないのは、
+ *   引数が実行時計算値 (`new URL(...).hostname`) でクエリが定数解決できないためであり、
+ *   **この書き方が安全だからではない**。スキャナが黙っていることを根拠にしないこと。
+ */
+function legacyIncludesRouting(url: string): boolean {
+  return url.includes(PRODUCTION_HOSTNAME);
+}
+
+describe("mock fetcher のルーティング判定 (CodeQL js/incomplete-url-substring-sanitization)", () => {
+  const decoys = [
+    `https://evil.example.com/?next=${PRODUCTION_HOSTNAME}`,
+    `https://evil.example.com/${PRODUCTION_HOSTNAME}/api/health`,
+    `https://${PRODUCTION_HOSTNAME}.evil.example.com/api/health`,
+  ];
+
+  it("本物の production URL は従来どおり production 宛と判定する", () => {
+    expect(isProductionUrl(`${DEFAULT_PRODUCTION_URL}/api/health`)).toBe(true);
+    // 前提の確認: 旧実装も本物は通していた (最初から落ちていたなら差の証明にならない)
+    expect(legacyIncludesRouting(`${DEFAULT_PRODUCTION_URL}/api/health`)).toBe(true);
+  });
+
+  it.each(decoys)("ホストが別の %s を production 宛と誤認しない", (url) => {
+    expect(legacyIncludesRouting(url)).toBe(true); // 旧実装は素通りさせた
+    expect(isProductionUrl(url)).toBe(false); // 新実装は弾く
+  });
+
+  it("preview URL を production 宛と判定しない", () => {
+    expect(isProductionUrl(`${DEFAULT_PREVIEW_URL}/api/health`)).toBe(false);
+  });
+});
+
 describe("post-release-status", () => {
   it("defaults to the approved production subdomain and shared preview URL", () => {
     const args = parseArgs([]);
@@ -166,7 +229,7 @@ describe("post-release-status", () => {
 
   it("probes and flags production endpoint failures even when local DNS resolution is inconclusive", async () => {
     const fetcher = vi.fn(async (url: string) => {
-      if (url.includes("odip.mirai-dx-platform.com")) {
+      if (isProductionUrl(url)) {
         return new Response("522: Connection timed out", {
           status: 522,
           headers: { server: "cloudflare", "cf-ray": "abc-NRT" },
@@ -278,7 +341,7 @@ describe("post-release-status", () => {
 
   it("reports an Access boundary diagnosis when production returns 302 with Cloudflare edge headers", async () => {
     const fetcher = vi.fn(async (url: string) => {
-      if (url.includes("odip.mirai-dx-platform.com")) {
+      if (isProductionUrl(url)) {
         return new Response("", { status: 302, headers: { server: "cloudflare", "cf-ray": "abc-NRT" } });
       }
       return new Response("{}", { status: 200 });
