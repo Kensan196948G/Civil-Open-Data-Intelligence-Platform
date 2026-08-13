@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
-import { startAdminSession } from "./admin-session";
+import { E2E_ADMIN_TOKEN, startAdminSession } from "./admin-session";
 
 /**
  * ウォッチリストUI（/watchlist・現場一覧のトグル）のE2E。
@@ -11,6 +11,7 @@ import { startAdminSession } from "./admin-session";
 
 const DEMO_EMAIL = "demo.engineer@example.com";
 const TARGET_SITE_LABEL = "TYO-02 羽田D滑走路工事";
+const E2E_ORIGIN = `http://localhost:${process.env.PLAYWRIGHT_E2E_PORT ?? "3000"}`;
 
 async function watchlistEntries(request: APIRequestContext) {
   const res = await request.get("/api/v1/watchlist");
@@ -33,7 +34,8 @@ async function removeWatchForSite(request: APIRequestContext, siteId: string) {
     (item: { targetType: string; targetId: string }) => item.targetType === "site" && item.targetId === siteId,
   );
   if (entry) {
-    await request.delete(`/api/v1/watchlist/${entry.id}`);
+    // 管理セッション Cookie を使う変更操作は同一 Origin 必須（CSRF 検証）。
+    await request.delete(`/api/v1/watchlist/${entry.id}`, { headers: { origin: E2E_ORIGIN } });
   }
 }
 
@@ -93,6 +95,17 @@ test.describe("ウォッチリストUI", () => {
   test("未認証ではログイン案内を表示する", async ({ page }) => {
     await page.goto("/watchlist");
     await expect(page.getByRole("heading", { name: "🔒 認証が必要" })).toBeVisible();
-    await expect(page.getByText("管理操作トークン")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "🛡️ 管理操作トークン" }),
+    ).toBeVisible();
+  });
+
+  test("未認証画面からトークンでセッション開始すると一覧が表示される", async ({ page }) => {
+    await page.goto("/watchlist");
+    await expect(page.getByRole("heading", { name: "🔒 認証が必要" })).toBeVisible();
+    await page.getByLabel("管理操作トークン").fill(E2E_ADMIN_TOKEN);
+    await page.getByRole("button", { name: "セッション開始" }).click();
+    await expect(page.getByRole("heading", { name: "📋 登録一覧（2件）" })).toBeVisible();
+    await expect(page.getByText(DEMO_EMAIL)).toBeVisible();
   });
 });

@@ -9,6 +9,7 @@ const deleteManyMock = vi.hoisted(() => vi.fn());
 const findFirstMock = vi.hoisted(() => vi.fn());
 const updateMock = vi.hoisted(() => vi.fn());
 const auditLogCreateMock = vi.hoisted(() => vi.fn());
+const requireRoleOrAdminMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/db", () => ({
   prisma: {
@@ -35,14 +36,14 @@ vi.mock("@/lib/db", () => ({
 }));
 
 vi.mock("@/lib/rbac", () => ({
-  requireRoleOrAdmin: async () => null,
+  requireRoleOrAdmin: requireRoleOrAdminMock,
   userEmailFromRequest: vi.fn(() => "u@example.com"),
   normalizeEmail: (v: string) => v.trim().toLowerCase(),
 }));
 
 import { GET, POST } from "@/app/api/v1/watchlist/route";
 import { DELETE, PATCH } from "@/app/api/v1/watchlist/[id]/route";
-import { userEmailFromRequest } from "@/lib/rbac";
+import { requireRoleOrAdmin, userEmailFromRequest } from "@/lib/rbac";
 
 function req(path: string, method = "GET", body?: unknown) {
   return new NextRequest(`http://localhost${path}`, {
@@ -54,6 +55,7 @@ function req(path: string, method = "GET", body?: unknown) {
 
 afterEach(() => {
   vi.clearAllMocks();
+  requireRoleOrAdminMock.mockResolvedValue(null);
   resetRateLimitForTests();
 });
 
@@ -68,6 +70,28 @@ describe("watchlist API", () => {
     expect(findManyMock).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userEmail: "u@example.com" } }),
     );
+  });
+
+  it("auditor をウォッチリスト許可ロールへ渡さない (rbac-design 整合)", async () => {
+    findManyMock.mockResolvedValue([]);
+    await GET(req("/api/v1/watchlist"));
+    await POST(req("/api/v1/watchlist", "POST", { targetType: "site", targetId: "s1" })).catch(
+      () => undefined,
+    );
+    await DELETE(req("/api/v1/watchlist/w1", "DELETE"), { params: Promise.resolve({ id: "w1" }) }).catch(
+      () => undefined,
+    );
+    await PATCH(
+      req("/api/v1/watchlist/w1", "PATCH", { enabled: false }),
+      { params: Promise.resolve({ id: "w1" }) },
+    ).catch(() => undefined);
+
+    const passedRoles = requireRoleOrAdminMock.mock.calls.flatMap((call) =>
+      (call[1] as readonly string[]).map((role) => role),
+    );
+    expect(passedRoles.length).toBeGreaterThan(0);
+    expect(passedRoles).not.toContain("auditor");
+    expect(passedRoles).toEqual(expect.arrayContaining(["engineer", "data-steward", "admin"]));
   });
 
   it("rejects invalid target type", async () => {

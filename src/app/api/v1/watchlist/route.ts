@@ -6,7 +6,9 @@ import { requireRoleOrAdmin, userEmailFromRequest } from "@/lib/rbac";
 import { demoUserEmailFromEnv } from "@/lib/demo-identity";
 
 const TARGET_TYPES = new Set(["site", "dataSource", "ingestionJob"]);
-const WATCH_ROLES = ["engineer", "data-steward", "admin", "auditor"] as const;
+// auditor は rbac-design.md で「ウォッチリスト・通知設定」が禁止されている。
+// 監査ロールは読み取り専用とし、ここでは許可しない。
+const WATCH_ROLES = ["engineer", "data-steward", "admin"] as const;
 
 export async function GET(request: NextRequest) {
   const authError = await requireRoleOrAdmin(request, WATCH_ROLES);

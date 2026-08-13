@@ -234,6 +234,8 @@ jobs:
     env:
       DATABASE_URL: "file:./dev.db"
       CODIP_ALLOW_INSECURE_ADMIN: "true"
+      CODIP_DEMO_IDENTITY: "true"
+      CODIP_DEMO_USER_EMAIL: "demo.engineer@example.com"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 

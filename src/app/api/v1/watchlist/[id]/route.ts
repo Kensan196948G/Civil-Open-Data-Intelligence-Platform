@@ -5,7 +5,8 @@ import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-
 import { requireRoleOrAdmin, userEmailFromRequest } from "@/lib/rbac";
 import { demoUserEmailFromEnv } from "@/lib/demo-identity";
 
-const WATCH_ROLES = ["engineer", "data-steward", "admin", "auditor"] as const;
+// rbac-design.md: auditor はウォッチリスト・通知設定不可（読み取り専用）。
+const WATCH_ROLES = ["engineer", "data-steward", "admin"] as const;
 
 export async function DELETE(
   request: NextRequest,

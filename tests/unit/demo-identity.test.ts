@@ -37,4 +37,12 @@ describe("demo identity", () => {
     vi.stubEnv("CODIP_DEMO_USER_EMAIL", `${"a".repeat(250)}@example.com`);
     expect(demoUserEmailFromEnv()).toBeNull();
   });
+
+  it("本番では設定値に関係なくランタイムで無効化する", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("CODIP_DEMO_IDENTITY", "true");
+    vi.stubEnv("CODIP_DEMO_USER_EMAIL", "demo.engineer@example.com");
+    expect(demoIdentityEnabled()).toBe(false);
+    expect(demoUserEmailFromEnv()).toBeNull();
+  });
 });

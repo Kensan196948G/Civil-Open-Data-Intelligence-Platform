@@ -818,6 +818,19 @@ const openApiDocument = {
         parameters: [
           { in: "path", name: "id", required: true, schema: { type: "string" } },
         ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["enabled"],
+                properties: { enabled: { type: "boolean" } },
+                additionalProperties: false,
+              },
+            },
+          },
+        },
         security: adminSecurity,
         responses: {
           "200": { description: "更新成功" },

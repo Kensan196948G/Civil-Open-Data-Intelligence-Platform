@@ -129,10 +129,10 @@ export default function WatchlistPage() {
       if (!res.ok) {
         throw new Error(body?.error?.message ?? "登録に失敗しました");
       }
-      setMessage("ウォッチリストへ登録しました");
-      setTone("success");
       setAddTargetId("");
       await load();
+      setMessage("ウォッチリストへ登録しました");
+      setTone("success");
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : "登録に失敗しました");
       setTone("error");
@@ -150,9 +150,9 @@ export default function WatchlistPage() {
         const body = await res.json().catch(() => null);
         throw new Error(body?.error?.message ?? "解除に失敗しました");
       }
+      await load();
       setMessage("ウォッチリストから解除しました");
       setTone("success");
-      await load();
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : "解除に失敗しました");
       setTone("error");
@@ -174,9 +174,9 @@ export default function WatchlistPage() {
         const body = await res.json().catch(() => null);
         throw new Error(body?.error?.message ?? "更新に失敗しました");
       }
+      await load();
       setMessage(entry.enabled ? "通知を一時停止しました" : "通知を再開しました");
       setTone("success");
-      await load();
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : "更新に失敗しました");
       setTone("error");
@@ -201,7 +201,7 @@ export default function WatchlistPage() {
             ページ下部の「🛡️ 管理操作トークン」からセッションを開始してください。
           </p>
         </div>
-        <AdminTokenPanel />
+        <AdminTokenPanel onAuthenticated={() => void load()} />
       </div>
     );
   }

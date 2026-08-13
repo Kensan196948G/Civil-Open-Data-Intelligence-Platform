@@ -6,7 +6,13 @@ const launchOptions = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
 const e2eAdminToken = "e2e-admin-token-12345678901234567890";
 // ローカル実行時に 3000 を別プロセスが使用している場合へ対処できるよう、
 // ポートは環境変数で上書き可能にする（既定は 3000。CI では未指定）。
-const e2ePort = Number(process.env.PLAYWRIGHT_E2E_PORT ?? "3000");
+const e2ePortRaw = process.env.PLAYWRIGHT_E2E_PORT ?? "3000";
+const e2ePort = Number(e2ePortRaw);
+if (!Number.isInteger(e2ePort) || e2ePort < 1 || e2ePort > 65535) {
+  throw new Error(
+    `PLAYWRIGHT_E2E_PORT must be an integer in the range 1..65535, got: ${e2ePortRaw}`,
+  );
+}
 const e2eBaseUrl = `http://localhost:${e2ePort}`;
 
 export default defineConfig({

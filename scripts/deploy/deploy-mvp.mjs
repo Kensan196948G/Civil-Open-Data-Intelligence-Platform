@@ -219,6 +219,8 @@ export async function main() {
   });
   run("npm", ["run", "db:pg:seed"], {
     DATABASE_URL: neon.directUri,
+    CODIP_DEMO_IDENTITY: "true",
+    CODIP_DEMO_USER_EMAIL: MVP_DEMO_EMAIL,
   });
 
   step("ensure DNS record (zone route target)");

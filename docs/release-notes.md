@@ -23,6 +23,9 @@
   - `WatchToggle` を現場一覧（`/sites`）とデータソース詳細へ配置
   - `PATCH /api/v1/watchlist/{id}` で `enabled` 切替（日次通知ダイジェストは
     enabled のみ対象）。GET は無効登録と識別子も返す
+    - 実装状態: `notification-check.js` / `sla-monitor.yml` は enabled=true のみを
+      処理し、日次ダイジェストを Issue 生成する。**本番 SLA/digest 監視への結線と
+      人間の通知受信確認（Issue #152 の [TEST]）はこの時点では NOT RUN**
   - ローカル/共有preview向けデモ識別子（`CODIP_DEMO_IDENTITY` +
     `CODIP_DEMO_USER_EMAIL`）は明示 opt-in かつ管理認証済みのみ。本番では不使用
   - `prisma/seed.ts` にデモRBAC割当とウォッチリスト登録（現場・データソース各1件）を追加

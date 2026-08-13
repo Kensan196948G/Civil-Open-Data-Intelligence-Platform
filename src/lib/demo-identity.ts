@@ -17,6 +17,9 @@
  * リクエスト」に限るため、未認証者がデモ識別子を名乗ることはできない。
  */
 export function demoIdentityEnabled(): boolean {
+  // 本番では設定値に関係なく無効化する。validate-env は別プロセスで実行される
+  // ゲートのため、検証されない起動経路でもランタイム側で二重に遮断する。
+  if (process.env.NODE_ENV === "production") return false;
   return (process.env.CODIP_DEMO_IDENTITY ?? "").trim().toLowerCase() === "true";
 }
 
