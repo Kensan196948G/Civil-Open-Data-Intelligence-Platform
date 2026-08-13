@@ -167,6 +167,7 @@ flowchart LR
 | 📍 地点横断 | `/api/v1/assessments/point`（PostGISカテゴリ別集計・最短距離） |
 | 📐 空間評価 | `/api/v1/assessments/geometry`（circle/bbox/polygon・バッファ・キーワード・最近傍） |
 | 🧾 運用ログ | 接続確認ログ、サンプルレスポンス、保持期間dry-run |
+| 🔔 ウォッチリスト | `/watchlist` で現場・データソース・収集ジョブを個人単位で登録・一時停止・解除。有効な登録は日次の通知ダイジェスト（SLA鮮度・ジョブ失敗・判定閾値超過）の対象 |
 | 🛡️ セキュリティ | 管理API保護、CSRF、Rate Limit、SSRF対策、秘密URL拒否 |
 | 🔗 後続API | `/api/v1/records/search`, `/point`, `/layers`, `/freshness`, `/assessments/point`, `/recommendations` |
 | 🐳 Docker | production runner / preview runner / PostgreSQL preview |
@@ -341,6 +342,20 @@ DATABASE_URL='file:./dev.db' npm run dev
 ```
 
 `/settings` で管理操作トークンを入力し、管理セッションを開始します。
+
+ウォッチリストUI（`/watchlist`）は個人単位の機能のため、本番では Cloudflare Access の
+識別ヘッダーから利用者を解決します。ローカル/共有previewでは Access が無いので、
+デモ識別子を明示的に有効化して操作できます（本番では絶対に設定しないこと）。
+
+```bash
+export CODIP_DEMO_IDENTITY="true"
+export CODIP_DEMO_USER_EMAIL="demo.engineer@example.com"
+```
+
+`prisma db seed` はこのデモ識別子向けのウォッチリスト登録（現場・データソース各1件）と
+デモRBAC割当を投入するため、seed 後に管理セッションを開始すれば直ちに一覧・一時停止・
+解除を操作できます。ウォッチ対象の現場一覧（`/sites`）とデータソース詳細にも登録トグルを
+設置しています。
 
 ---
 
