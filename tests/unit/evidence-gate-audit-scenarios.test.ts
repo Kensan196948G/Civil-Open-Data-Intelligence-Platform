@@ -115,14 +115,26 @@ function smokeAcceptsCsp(csp: string): boolean {
   return checks.length > 0 && checks.every((check) => check.ok);
 }
 
-/** Issue #129 以前の release-smoke.js の判定を逐語で保存したもの (仕様ではない)。 */
+/**
+ * Issue #129 以前の release-smoke.js の判定を逐語で保存したもの (仕様ではない)。
+ *
+ * needle を配列へ出してあるのは CodeQL `js/incomplete-url-substring-sanitization`
+ * (7.8 / Issue #142) 対応。理由と、厳密比較へ書き換えられない根拠、抑制コメントが
+ * 効かない根拠は tests/unit/release-smoke-csp.test.ts の同名関数のコメントに書いた。
+ * 値・並び・論理は旧実装と同一で、振る舞いは変えていない。
+ */
+const LEGACY_REQUIRED_SUBSTRINGS = [
+  "default-src 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "https://cyberjapandata.gsi.go.jp",
+] as const;
+const LEGACY_FORBIDDEN_SUBSTRING = "'unsafe-eval'";
+
 function legacySubstringCheck(csp: string): boolean {
   return (
-    csp.includes("default-src 'self'") &&
-    csp.includes("object-src 'none'") &&
-    csp.includes("frame-ancestors 'none'") &&
-    csp.includes("https://cyberjapandata.gsi.go.jp") &&
-    !csp.includes("'unsafe-eval'")
+    LEGACY_REQUIRED_SUBSTRINGS.every((needle) => csp.includes(needle)) &&
+    !csp.includes(LEGACY_FORBIDDEN_SUBSTRING)
   );
 }
 
