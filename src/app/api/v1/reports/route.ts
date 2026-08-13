@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAdminRequest } from "@/lib/admin-auth";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 import { renderReport, REPORT_FORMATS, type ReportFormat } from "@/lib/report-export";
+import { requireRoleOrAdmin } from "@/lib/rbac";
 
 const TEMPLATES = new Set(["daily", "weekly", "monthly", "decision", "marine", "annual"]);
 
 export async function POST(request: NextRequest) {
-  const authError = requireAdminRequest(request);
+  // RBAC: engineer 以上（auditor 含む）がレポートを出力できる
+  const authError = await requireRoleOrAdmin(request, [
+    "engineer",
+    "data-steward",
+    "admin",
+    "auditor",
+  ]);
   if (authError) return authError;
   const rate = checkRateLimit("api:v1:reports:write", clientIdentifier(request), 10, 60_000);
   if (!rate.allowed) return rateLimitResponse(rate);

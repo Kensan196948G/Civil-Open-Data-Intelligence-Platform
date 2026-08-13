@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAdminRequest } from "@/lib/admin-auth";
+import { requireRoleOrAdmin } from "@/lib/rbac";
 import { auditLogCreateData } from "@/lib/audit";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 import { decisionNotSupportedWarning, requestId } from "@/lib/v1-response";
@@ -8,7 +8,8 @@ import { evaluateDecision, isRuleInEffect } from "@/lib/decision/engine";
 import type { ThresholdRule } from "@/lib/decision/engine";
 
 export async function POST(request: NextRequest) {
-  const authError = requireAdminRequest(request);
+  // RBAC: engineer 以上が判定を実行できる
+  const authError = await requireRoleOrAdmin(request, ["engineer", "data-steward", "admin"]);
   if (authError) return authError;
   const rate = checkRateLimit("api:v1:decisions:write", clientIdentifier(request), 30, 60_000);
   if (!rate.allowed) return rateLimitResponse(rate);
