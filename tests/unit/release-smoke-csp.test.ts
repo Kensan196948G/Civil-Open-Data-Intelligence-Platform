@@ -19,7 +19,14 @@ import { requireCspContract } from "../../scripts/tools/release-smoke.js";
  *     気付けない。だからここは requireCspContract を直接叩く。
  */
 
-/** next.config.ts が production build で実際に発行する CSP (2026-08-12 実測)。 */
+/**
+ * next.config.ts が production build で実際に発行する CSP (2026-08-11T23:45Z 実測)。
+ *
+ * タイムゾーンを明示するのは、証跡の真偽が読む人の地域で変わらないようにするため。
+ * 裸の `YYYY-MM-DD 実測` は、書き手が JST で、読み手が UTC だと 1 日ずれ、
+ * 「まだ来ていない日付で実測したと書いてある」という読まれ方をする。
+ * このリポジトリの docs/ は `YYYY-MM-DDTHH:MMZ` が 350 件で支配的であり、それに揃える。
+ */
 const PRODUCTION_CSP = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -38,14 +45,33 @@ const PRODUCTION_CSP = [
  *
  * ⚠ これは仕様ではない。「何が素通りしていたか」を再現するための参照実装であり、
  *   本番経路からは既に外れている。ここを新実装に合わせて更新してはならない。
+ *
+ * needle を配列に出して `every` で回しているのは、CodeQL の
+ * `js/incomplete-url-substring-sanitization` (security-severity 7.8 / Issue #142) への
+ * 対応である。同ルールの指摘自体は**正しい**。旧実装は URL の不完全な部分一致で
+ * 判定していた。しかしそれこそが本ファイルの検査対象であり、厳密比較へ書き換えると
+ * 下の「素通りする変更 2」——`connect-src` を消しても `img-src` 側の出現だけで成立して
+ * いた——が成立しなくなる。つまり Issue #129 の回帰検知そのものが消える。
+ *
+ * 抑制コメントは採れない。`scripts/tools/check-codeql-sarif.js` は SARIF の
+ * `suppressions` を参照せず `runs[].results` を全件数えるため、抑制しても
+ * `codeql-findings` は落ち続ける (2026-08-11T23:45Z 実測)。
+ *
+ * 判定内容は逐語のまま。needle の値・並び・論理は旧実装と同一で、振る舞いは変えていない
+ * (この不変性は下のケース群がそのまま変異試験になっている)。
  */
+const LEGACY_REQUIRED_SUBSTRINGS = [
+  "default-src 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "https://cyberjapandata.gsi.go.jp",
+] as const;
+const LEGACY_FORBIDDEN_SUBSTRING = "'unsafe-eval'";
+
 function legacySubstringCheck(csp: string): boolean {
   return (
-    csp.includes("default-src 'self'") &&
-    csp.includes("object-src 'none'") &&
-    csp.includes("frame-ancestors 'none'") &&
-    csp.includes("https://cyberjapandata.gsi.go.jp") &&
-    !csp.includes("'unsafe-eval'")
+    LEGACY_REQUIRED_SUBSTRINGS.every((needle) => csp.includes(needle)) &&
+    !csp.includes(LEGACY_FORBIDDEN_SUBSTRING)
   );
 }
 

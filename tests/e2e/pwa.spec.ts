@@ -20,4 +20,17 @@ test.describe("PWA基本", () => {
     expect(body).toContain("stale-while-revalidate");
     expect(body).toContain("skipWaiting");
   });
+
+  test("Service Worker がオンライン復帰時の再検証とオフライン表示に対応する", async ({
+    page,
+    request,
+  }) => {
+    const body = await (await request.get("/sw.js")).text();
+    expect(body).toContain('"codip-revalidate-apis"');
+    expect(body).toContain("revalidateApiCache");
+
+    await page.goto("/");
+    // オンライン時はオフライン表示が出ない
+    await expect(page.getByTestId("offline-indicator")).toHaveCount(0);
+  });
 });
