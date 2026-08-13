@@ -1,10 +1,19 @@
 import { PrismaClient } from "@prisma/client";
-import { INITIAL_TAGS, PROVIDERS, SOURCES } from "./seed-data";
+import { DEFAULT_ROLES, INITIAL_TAGS, PROVIDERS, SOURCES } from "./seed-data";
 import { seedWeatherDemo } from "./seed-weather-demo";
 
 const prisma = new PrismaClient();
 
 async function main() {
+  // --- RBAC roles ---
+  for (const role of DEFAULT_ROLES) {
+    await prisma.role.upsert({
+      where: { name: role.name },
+      update: { priority: role.priority, note: role.note },
+      create: role,
+    });
+  }
+
   // --- Providers ---
   const providerMap = new Map<string, string>();
   for (const p of PROVIDERS) {

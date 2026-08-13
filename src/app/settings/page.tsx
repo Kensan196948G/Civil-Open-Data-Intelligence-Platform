@@ -5,6 +5,7 @@ import { OPERATION_SETTING_DEFS, getOperationSettings } from "@/lib/settings";
 import { AdminTokenPanel } from "@/components/AdminTokenPanel";
 import { ApiKeyPanel } from "@/components/ApiKeyPanel";
 import { OperationSettingsPanel } from "@/components/OperationSettingsPanel";
+import { RoleManagementPanel } from "@/components/RoleManagementPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,18 @@ export default async function SettingsPage() {
     label: `${s.name}(${s.apiKeyEnvName || "ENV未設定"})`,
   }));
 
+  const roleAssignments = await prisma.roleAssignment.findMany({
+    where: {
+      revokedAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    },
+    include: { role: { select: { name: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+  const roleOptions = (await prisma.role.findMany({ orderBy: { priority: "asc" } })).map(
+    (r) => r.name,
+  );
+
   return (
     <div className="flex max-w-[640px] flex-col gap-[14px]">
       <h1 className="m-0 text-[1.4rem] font-semibold">⚙️ 設定</h1>
@@ -69,6 +82,18 @@ export default async function SettingsPage() {
       <OperationSettingsPanel rows={settingRows} canEdit={canEdit} />
 
       <ApiKeyPanel sources={apiKeyOptions} />
+
+      <RoleManagementPanel
+        roles={roleOptions.length > 0 ? roleOptions : ["viewer", "engineer", "data-steward", "admin", "auditor", "api-consumer"]}
+        initialAssignments={roleAssignments.map((a) => ({
+          id: a.id,
+          userEmail: a.userEmail,
+          role: a.role.name,
+          scope: a.scope,
+          expiresAt: a.expiresAt ? a.expiresAt.toISOString() : null,
+          createdAt: a.createdAt.toISOString(),
+        }))}
+      />
 
       <div className="dc-card px-[18px] py-[17px]">
         <h2 className="mb-2.5 mt-0 text-sm font-semibold text-[var(--ink)]">🛡️ セキュリティ制約</h2>
