@@ -70,6 +70,44 @@ describe("validate-env release contract", () => {
     expect(result.stderr).toContain("CODIP_ACCEPT_SQLITE_PREVIEW=true");
   });
 
+  it("rejects the demo identity in production mode", () => {
+    const result = runValidateEnv("production", {
+      DATABASE_URL: "postgresql://codip:secret@ep-codip.aws.neon.tech/codip?schema=public&sslmode=require",
+      CODIP_ADMIN_TOKEN: "production-admin-token-1234567890",
+      CODIP_DEMO_IDENTITY: "true",
+      CODIP_DEMO_USER_EMAIL: "demo.engineer@example.com",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Production must not enable CODIP_DEMO_IDENTITY");
+  });
+
+  it("rejects a demo identity without a paired email", () => {
+    const result = runValidateEnv("preview", {
+      DATABASE_URL: "file:./dev.db",
+      CODIP_ACCEPT_SQLITE_PREVIEW: "true",
+      CODIP_ADMIN_TOKEN: "preview-admin-token-1234567890123",
+      CODIP_DEMO_IDENTITY: "true",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("CODIP_DEMO_IDENTITY=true と有効な CODIP_DEMO_USER_EMAIL");
+  });
+
+  it("accepts the demo identity in preview mode with a warning", () => {
+    const result = runValidateEnv("preview", {
+      DATABASE_URL: "file:./dev.db",
+      CODIP_ACCEPT_SQLITE_PREVIEW: "true",
+      CODIP_ADMIN_TOKEN: "preview-admin-token-1234567890123",
+      CODIP_DEMO_IDENTITY: "true",
+      CODIP_DEMO_USER_EMAIL: "demo.engineer@example.com",
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("[env] OK (preview)");
+    expect(result.stderr).toContain("CODIP_DEMO_IDENTITY は preview 専用");
+  });
+
   it("accepts SQLite preview only with the preview flag and a strong admin token", () => {
     const result = runValidateEnv("preview", {
       DATABASE_URL: "file:./dev.db",
