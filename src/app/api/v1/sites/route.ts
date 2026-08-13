@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAdminRequest } from "@/lib/admin-auth";
 import { auditLogCreateData } from "@/lib/audit";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 import { requestId } from "@/lib/v1-response";
+import { requireRoleOrAdmin } from "@/lib/rbac";
 
 const RATE_LIMIT = 120;
 const RATE_WINDOW_MS = 60_000;
@@ -21,7 +21,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const authError = requireAdminRequest(request);
+  // RBAC: engineer 以上が現場を登録できる（管理者認証は従来どおり許可）
+  const authError = await requireRoleOrAdmin(request, ["engineer", "data-steward", "admin"]);
   if (authError) return authError;
   const rate = checkRateLimit("api:v1:sites:write", clientIdentifier(request), 30, RATE_WINDOW_MS);
   if (!rate.allowed) return rateLimitResponse(rate);
