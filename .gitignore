@@ -13,6 +13,8 @@ next-env.d.ts
 .env*.local
 .dev.vars
 .dev.vars*
+# MVP review environment operator artifacts (admin token is a live secret)
+.mvp-admin-token.txt
 
 # Cloudflare Workers / OpenNext ビルド成果物
 .wrangler/

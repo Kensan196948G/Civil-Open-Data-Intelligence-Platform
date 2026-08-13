@@ -155,6 +155,61 @@ async function main() {
         "updatedAt" = EXCLUDED."updatedAt"
     `;
 
+    // --- MVP/プレビュー向けデモ識別子（prisma/seed.ts と対。本番では未使用） ---
+    // 公開レビュー環境 (codip-mvp) では CODIP_DEMO_IDENTITY + CODIP_DEMO_USER_EMAIL
+    // が demo.engineer@example.com を指すため、ウォッチリストUIを操作できる。
+    const demoRoleAssignments = [
+      { userEmail: "demo.engineer@example.com", role: "engineer" },
+      { userEmail: "demo.steward@example.com", role: "data-steward" },
+    ] as const;
+    for (const assignment of demoRoleAssignments) {
+      const role = await prisma.role.findUnique({ where: { name: assignment.role } });
+      if (!role) continue;
+      const existing = await prisma.roleAssignment.findFirst({
+        where: {
+          userEmail: assignment.userEmail,
+          roleId: role.id,
+          scope: "global",
+          revokedAt: null,
+        },
+      });
+      if (!existing) {
+        await prisma.roleAssignment.create({
+          data: {
+            userEmail: assignment.userEmail,
+            roleId: role.id,
+            scope: "global",
+            grantedBy: "seed(demo)",
+          },
+        });
+      }
+    }
+
+    const demoWatchEmail = "demo.engineer@example.com";
+    const demoSite = await prisma.constructionSite.findFirst({ orderBy: { code: "asc" } });
+    const demoSource = await prisma.dataSource.findFirst({ orderBy: { name: "asc" } });
+    const demoWatchTargets: Array<{ targetType: string; targetId: string }> = [];
+    if (demoSite) demoWatchTargets.push({ targetType: "site", targetId: demoSite.id });
+    if (demoSource) demoWatchTargets.push({ targetType: "dataSource", targetId: demoSource.id });
+    for (const target of demoWatchTargets) {
+      await prisma.watchlistEntry.upsert({
+        where: {
+          userEmail_targetType_targetId: {
+            userEmail: demoWatchEmail,
+            targetType: target.targetType,
+            targetId: target.targetId,
+          },
+        },
+        update: { enabled: true },
+        create: {
+          userEmail: demoWatchEmail,
+          targetType: target.targetType,
+          targetId: target.targetId,
+          enabled: true,
+        },
+      });
+    }
+
     const [sourceCount, standardRecordCount] = await Promise.all([
       prisma.dataSource.count(),
       prisma.standardRecord.count(),
