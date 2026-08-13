@@ -34,13 +34,23 @@ describe("データソースシードの整合性", () => {
     }
   });
 
-  test("APIキー不要かつ JSON/CSV/GeoJSON の公式ソースが一定数ある", () => {
+  test("APIキー不要かつ JSON/CSV/GeoJSON/XML の公式ソースが50種以上ある（実データ50種マイルストーン）", () => {
     const eligible = SOURCES.filter(
       (source) =>
         !source.requiresApiKey &&
-        ["JSON", "CSV", "GeoJSON"].includes(source.dataFormat) &&
-        Boolean(source.endpointUrl),
+        ["JSON", "CSV", "GeoJSON", "XML"].includes(source.dataFormat) &&
+        Boolean(source.endpointUrl?.startsWith("https://")),
     );
-    expect(eligible.length).toBeGreaterThanOrEqual(20);
+    expect(eligible.length).toBeGreaterThanOrEqual(50);
+  });
+
+  test("2026-08-12 追加分のエンドポイントが重複しない", () => {
+    const seen = new Set<string>();
+    for (const source of SOURCES) {
+      if (source.endpointUrl) {
+        expect(seen.has(source.endpointUrl), `${source.name} の endpointUrl 重複`).toBe(false);
+        seen.add(source.endpointUrl);
+      }
+    }
   });
 });

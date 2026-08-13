@@ -1,14 +1,16 @@
 /**
- * レポート出力フォーマット（CSV / Markdown / Excel 2003 XML / 印刷用HTML）。
+ * レポート出力フォーマット（CSV / Markdown / Excel OOXML .xlsx / 印刷用HTML）。
  *
- * Excel 出力は OOXML (.xlsx) ではなく SpreadsheetML 2003 XML を使用する。
- * 依存ライブラリを増やさず Excel / LibreOffice で開けることを優先したプロトタイプ
- * （docs/14-roadmap.md の PDF/Excel 出力 Phase 1 項目）。本格 .xlsx は
- * OOXML 生成ライブラリ導入と併せて別Issueで扱う。
+ * Excel 出力は OOXML (.xlsx) を fflate（Worker 互換・~15KB の zip 実装）で
+ * 生成する。依存を最小化しつつ、Excel / LibreOffice がネイティブに開ける
+ * 本格形式を提供する（docs/design/report-export-decision.md）。
  *
  * PDF 出力は印刷用 HTML（@media print）を返し、ブラウザの「印刷 → PDF に保存」で
- * 帳票化する。サーバー側 PDF 生成ライブラリは導入していない。
+ * 帳票化する。サーバー側 PDF 生成は日本語フォント埋め込みと Workers 制約のため
+ * 導入しない（docs/design/report-export-decision.md）。
  */
+
+import { zipSync } from "fflate";
 
 export type ReportFormat = "csv" | "markdown" | "xlsx" | "pdf";
 
@@ -35,50 +37,114 @@ function escapeHtml(value: unknown): string {
 
 function escapeXml(value: unknown): string {
   return escapeHtml(value)
+    // XML 1.0 で禁止されている制御文字（U+0000, U+000B, U+000C, U+000E–U+001F）は
+    // 実体参照でも表現できないため、置換文字（U+FFFD）へ置き換える。
+    .replace(/[\u0000\u000B\u000C\u000E-\u001F]/g, "\uFFFD")
     .replace(/\r/g, "&#13;")
     .replace(/\n/g, "&#10;");
 }
 
-/** Excel 2003 SpreadsheetML。Excel / LibreOffice で開ける依存なしのExcel出力。 */
-export function spreadsheetML(headers: string[], rows: unknown[][], template: string, siteId: string): string {
-  const cells = (values: unknown[]): string =>
-    values
-      .map((value) => {
-        const text = value == null ? "" : String(value);
-        // 数値は数値セルとして出力し、文字列はエスケープする。
-        const numeric = typeof value === "number" && Number.isFinite(value);
-        return numeric
-          ? `<Cell><Data ss:Type="Number">${value}</Data></Cell>`
-          : `<Cell><Data ss:Type="String">${escapeXml(text)}</Data></Cell>`;
-      })
-      .join("");
+function columnName(index: number): string {
+  let name = "";
+  let value = index + 1;
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    name = String.fromCharCode(65 + remainder) + name;
+    value = Math.floor((value - 1) / 26);
+  }
+  return name;
+}
 
-  const headerRow = `<Row>${cells(headers)}</Row>`;
-  const bodyRows = rows.map((row) => `<Row>${cells(row)}</Row>`).join("\n");
-  const generatedAt = new Date().toISOString();
+/**
+ * 実 OOXML (.xlsx) ワークブックを生成する。
+ * 最小構成（Content_Types / rels / workbook / worksheet / styles）を fflate で zip 化する。
+ * 数値セルは数値として、それ以外は inlineStr でエスケープして書き出す。
+ */
+export function xlsxWorkbook(headers: string[], rows: unknown[][]): Uint8Array {
+  const cells = (values: unknown[], startRow: number, header = false): string[] =>
+    values.map((value, index) => {
+      const ref = `${columnName(index)}${startRow}`;
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return `<c r="${ref}"${header ? ' s="1"' : ""}><v>${value}</v></c>`;
+      }
+      const text = value == null ? "" : String(value);
+      return `<c r="${ref}"${header ? ' s="1"' : ""} t="inlineStr"><is><t xml:space="preserve">${escapeXml(text)}</t></is></c>`;
+    });
 
-  return [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<?mso-application progid="Excel.Sheet"?>',
-    '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"',
-    ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">',
-    " <Worksheet ss:Name=\"report\">",
-    "  <Table>",
-    headerRow,
-    bodyRows,
-    "  </Table>",
-    " </Worksheet>",
-    "</Workbook>",
-    "",
-    `<!-- template=${escapeXml(template)} site=${escapeXml(siteId)} generated=${escapeXml(generatedAt)} -->`,
+  const headerCells = cells(headers, 1, true);
+  const bodyRowsXml = rows
+    .map((row, index) => `<row r="${index + 2}">${cells(row, index + 2).join("")}</row>`)
+    .join("");
+  const sheet = [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    `  <sheetData><row r="1">${headerCells.join("")}</row>${bodyRowsXml}</sheetData>`,
+    "</worksheet>",
   ].join("\n");
+
+  const workbook = [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"',
+    ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+    '  <sheets><sheet name="report" sheetId="1" r:id="rId1"/></sheets>',
+    "</workbook>",
+  ].join("\n");
+
+  const styles = [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    '  <fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>',
+    '  <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>',
+    '  <borders count="1"><border/></borders>',
+    '  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>',
+    '  <cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>',
+    "</styleSheet>",
+  ].join("\n");
+
+  const contentTypes = [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
+    '  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>',
+    '  <Default Extension="xml" ContentType="application/xml"/>',
+    '  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>',
+    '  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>',
+    '  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>',
+    "</Types>",
+  ].join("\n");
+
+  const rootRels = [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+    '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>',
+    "</Relationships>",
+  ].join("\n");
+
+  const workbookRels = [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+    '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>',
+    '  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>',
+    "</Relationships>",
+  ].join("\n");
+
+  const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
+  return zipSync(
+    {
+      "[Content_Types].xml": encode(contentTypes),
+      "_rels/.rels": encode(rootRels),
+      "xl/workbook.xml": encode(workbook),
+      "xl/_rels/workbook.xml.rels": encode(workbookRels),
+      "xl/worksheets/sheet1.xml": encode(sheet),
+      "xl/styles.xml": encode(styles),
+    },
+    { level: 6 },
+  );
 }
 
 /** 印刷用HTML。ブラウザの「印刷 → PDFに保存」で帳票PDFを生成する。 */
 export function printHtml(headers: string[], rows: unknown[][], template: string, siteId: string): string {
   const generatedAt = new Date().toISOString();
   const tableRows = [
-    `<tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr>`,
     ...rows.map(
       (row) => `<tr>${row.map((v) => `<td>${escapeHtml(v)}</td>`).join("")}</tr>`,
     ),
@@ -92,13 +158,19 @@ export function printHtml(headers: string[], rows: unknown[][], template: string
     "  <title>CODIP レポート印刷</title>",
     "  <style>",
     "    body { font-family: 'BIZ UDPGothic', 'Noto Sans JP', sans-serif; color: #111; margin: 24px; }",
+    "    @page { size: A4; margin: 14mm 12mm; }",
     "    h1 { font-size: 18px; margin: 0 0 8px; }",
     "    .meta { font-size: 12px; color: #444; margin-bottom: 16px; }",
     "    table { border-collapse: collapse; width: 100%; font-size: 11px; }",
     "    th, td { border: 1px solid #999; padding: 4px 6px; text-align: left; }",
     "    th { background: #eee; }",
+    "    thead { display: table-header-group; }",
+    "    tr { page-break-inside: avoid; }",
     "    .disclaimer { margin-top: 16px; font-size: 10px; color: #666; }",
-    "    @media print { body { margin: 8mm; } .no-print { display: none; } }",
+    "    .signature { margin-top: 28px; display: flex; justify-content: space-between; gap: 24px; }",
+    "    .signature div { border-top: 1px solid #555; padding-top: 4px; font-size: 11px; width: 220px; text-align: center; }",
+    "    .footer { margin-top: 20px; font-size: 9px; color: #888; border-top: 1px solid #ccc; padding-top: 6px; }",
+    "    @media print { body { margin: 0; } .no-print { display: none; } .disclaimer, .footer { color: #333; } }",
     "  </style>",
     "</head>",
     "<body>",
@@ -106,9 +178,20 @@ export function printHtml(headers: string[], rows: unknown[][], template: string
     `  <div class="meta">現場: ${escapeHtml(siteId)} ｜ 生成日時: ${escapeHtml(generatedAt)}</div>`,
     '  <p class="no-print"><button onclick="window.print()">このページを印刷 / PDF保存</button></p>',
     "  <table>",
+    "  <thead>",
+    `    <tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr>`,
+    "  </thead>",
+    "  <tbody>",
     tableRows,
+    "  </tbody>",
     "  </table>",
     "  <p class=\"disclaimer\">⚠️ 本レポートは確認支援です。施工可否・安全性・法令適合を断定しません。出典・基準日・取得日時を確認のうえ、最終判断は担当者が行ってください。</p>",
+    "  <div class=\"signature\">",
+    "    <div>作成者</div>",
+    "    <div>確認者</div>",
+    "    <div>承認者</div>",
+    "  </div>",
+    `  <p class="footer">CODIP ｜ 生成日時: ${generatedAt} ｜ 現場: ${escapeHtml(siteId)} ｜ テンプレート: ${escapeHtml(template)}</p>`,
     "</body>",
     "</html>",
     "",
@@ -132,7 +215,7 @@ export function toMarkdown(headers: string[], rows: unknown[][], template: strin
 }
 
 export interface ReportContent {
-  body: string;
+  body: string | Blob;
   contentType: string;
   extension: string;
 }
@@ -158,10 +241,16 @@ export function renderReport(
         extension: "md",
       };
     case "xlsx":
+      // ArrayBufferLike（SharedArrayBuffer含む）をそのまま渡すと型・実装が
+      // 環境依存になるため、ArrayBuffer 上の新しい Uint8Array へコピーして
+      // Blob 化する（Workers / Node 両対応）。
       return {
-        body: spreadsheetML(headers, rows, template, siteId),
-        contentType: "application/vnd.ms-excel; charset=utf-8",
-        extension: "xml",
+        body: new Blob([new Uint8Array(xlsxWorkbook(headers, rows))], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        }),
+        contentType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        extension: "xlsx",
       };
     case "pdf":
       return {

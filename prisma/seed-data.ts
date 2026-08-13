@@ -48,6 +48,16 @@ export const INITIAL_TAGS: { name: string; color: string }[] = [
   { name: "利用条件要確認", color: "#f59e0b" },
 ];
 
+/** RBAC既定ロール（docs/design/rbac-design.md §2）。priorityは高いほど強い。 */
+export const DEFAULT_ROLES: { name: string; priority: number; note: string }[] = [
+  { name: "viewer", priority: 10, note: "閲覧者（既定）。検索・地図・地形・気象・判定結果の閲覧" },
+  { name: "engineer", priority: 20, note: "技術者。現場登録・判定実行・レポート出力・ウォッチリスト" },
+  { name: "data-steward", priority: 30, note: "データ管理者。データソース登録・収集ジョブ・品質再計算" },
+  { name: "admin", priority: 40, note: "管理者。管理API・設定・タグ・ロール管理" },
+  { name: "auditor", priority: 35, note: "監査。監査ログ・判定スナップショット・証跡の参照のみ" },
+  { name: "api-consumer", priority: 15, note: "API利用者。契約済みAPIキー経由の read / 限定 write" },
+];
+
 export const PROVIDERS: SeedProvider[] = [
   { name: "国土交通省", organizationType: "national", officialUrl: "https://www.mlit.go.jp/", country: "日本" },
   { name: "国土地理院", organizationType: "national", officialUrl: "https://www.gsi.go.jp/", country: "日本" },
@@ -70,10 +80,191 @@ export const PROVIDERS: SeedProvider[] = [
   { name: "北海道", organizationType: "local", officialUrl: "https://www.pref.hokkaido.lg.jp/", country: "日本" },
   { name: "BODIK(オープンデータ推進)", organizationType: "community", officialUrl: "https://www.bodik.jp/", country: "日本" },
   { name: "Open-Meteo", organizationType: "private", officialUrl: "https://open-meteo.com/", country: "スイス" },
+  { name: "JIG", organizationType: "private", officialUrl: "https://ckan.odp.jig.jp/", country: "日本" },
 ];
+
+// ===== 2026-08-12 追加: 検証済み公式エンドポイント（HTTP 200 実測）から生成 =====
+// 気象庁 府県天気予報（主要17府県）・週間予報概況（4都市圏）・警報注意報（3都府県）・
+// 防災情報XMLフィード・自治体/コミュニティCKANカタログ。
+// 一覧性と保守性のため、同型エントリはテーブルから機械生成する。
+const JMA_FORECASTS: ReadonlyArray<{ code: string; name: string }> = [
+  { code: "010000", name: "北海道" },
+  { code: "040000", name: "宮城" },
+  { code: "110000", name: "埼玉" },
+  { code: "120000", name: "千葉" },
+  { code: "140000", name: "神奈川" },
+  { code: "150000", name: "新潟" },
+  { code: "200000", name: "長野" },
+  { code: "210000", name: "岐阜" },
+  { code: "230000", name: "愛知" },
+  { code: "250000", name: "滋賀" },
+  { code: "260000", name: "京都" },
+  { code: "270000", name: "大阪" },
+  { code: "280000", name: "兵庫" },
+  { code: "310000", name: "鳥取" },
+  { code: "330000", name: "岡山" },
+  { code: "340000", name: "広島" },
+  { code: "370000", name: "香川" },
+  { code: "380000", name: "愛媛" },
+  { code: "400000", name: "福岡" },
+  { code: "420000", name: "長崎" },
+  { code: "430000", name: "熊本" },
+];
+
+const JMA_OVERVIEWS: ReadonlyArray<{ code: string; name: string }> = [
+  { code: "130000", name: "東京" },
+  { code: "230000", name: "愛知" },
+  { code: "270000", name: "大阪" },
+  { code: "400000", name: "福岡" },
+];
+
+const JMA_WARNINGS: ReadonlyArray<{ code: string; name: string }> = [
+  { code: "130000", name: "東京" },
+  { code: "230000", name: "愛知" },
+  { code: "400000", name: "福岡" },
+];
+
+function jmaSource(
+  kind: "forecast" | "overview" | "warning",
+  code: string,
+  region: string,
+): SeedSource {
+  const label =
+    kind === "forecast" ? "府県天気予報" : kind === "overview" ? "週間予報概況" : "警報・注意報";
+  const path =
+    kind === "forecast"
+      ? "forecast/data/forecast"
+      : kind === "overview"
+        ? "forecast/data/overview_forecast"
+        : "warning/data/warning";
+  const endpointUrl = `https://www.jma.go.jp/bosai/${path}/${code}.json`;
+  return {
+    providerName: "気象庁",
+    name: `${label}（${region}）`,
+    nameEn: `JMA ${label} ${region}`,
+    description: `気象庁が提供する${label}のJSON（${region}）。土木建設の気象・防災確認に利用できる一次情報。`,
+    officialUrl: endpointUrl,
+    endpointUrl,
+    documentationUrl: "https://www.jma.go.jp/jma/kishou/info/",
+    category: "weather",
+    dataFormat: "JSON",
+    accessType: "API",
+    requiresApiKey: false,
+    licenseName: "気象庁ホームページ利用規約 (CC BY 4.0 互換)",
+    commercialUse: "restricted",
+    attributionRequired: true,
+    updateFrequency: "realtime",
+    trustLevel: 5,
+    qualityScore: 85,
+    note: "2026-08-12T02:27:55Z HTTP 200 実測確認。予報業務・警報は気象業務法の制約に準拠して利用すること（参考情報として扱う）。",
+    tags: ["気象", "災害", "施工判断"],
+    useCases: [{ useCaseName: `${label}の確認`, targetSystem: "Weather & Water Decision" }],
+  };
+}
 
 /** 初期10件 + 拡充40件 = 50件 */
 export const SOURCES: SeedSource[] = [
+  // ===== 2026-08-12 追加（検証済み公式API・機械生成30件） =====
+  ...JMA_FORECASTS.map((p) => jmaSource("forecast", p.code, p.name)),
+  ...JMA_OVERVIEWS.map((p) => jmaSource("overview", p.code, p.name)),
+  ...JMA_WARNINGS.map((p) => jmaSource("warning", p.code, p.name)),
+  ...[
+    ["防災情報XMLフィード", "extra.xml"],
+    ["地震・火山情報XMLフィード", "eqvol.xml"],
+  ].map(([name, file]) => {
+    const endpointUrl = `https://www.data.jma.go.jp/developer/xml/feed/${file}`;
+    return {
+      providerName: "気象庁",
+      name,
+      nameEn: `JMA XML Feed (${file})`,
+      description: `気象庁が提供する防災情報XMLフィード（${file}）。気象・地震・火山の防災情報を機械判読可能な一次情報として提供する。`,
+      officialUrl: endpointUrl,
+      endpointUrl,
+      documentationUrl: "https://www.data.jma.go.jp/developer/xml/",
+      category: "weather",
+      dataFormat: "XML",
+      accessType: "API",
+      requiresApiKey: false,
+      licenseName: "気象庁ホームページ利用規約 (CC BY 4.0 互換)",
+      commercialUse: "restricted",
+      attributionRequired: true,
+      updateFrequency: "realtime",
+      trustLevel: 5,
+      qualityScore: 85,
+      note: "2026-08-12T02:27:55Z HTTP 200 実測確認。XMLエンジンでパース可能（ingestion-xml.test.ts）。防災情報の利用は気象業務法・各提供条件に準拠すること。",
+      tags: ["気象", "災害", "施工判断"],
+      useCases: [{ useCaseName: "防災情報XMLの定期収集", targetSystem: "Weather & Water Decision" }],
+    } as SeedSource;
+  }),
+  {
+    providerName: "BODIK(オープンデータ推進)",
+    name: "BODIK オープンデータカタログ API",
+    nameEn: "BODIK Open Data Catalog API",
+    description: "BODIKが公開するオープンデータカタログのCKAN API。全国の自治体・団体のデータセット一覧を機械判読できる。",
+    officialUrl: "https://www.bodik.jp/",
+    endpointUrl: "https://data.bodik.jp/api/3/action/package_list",
+    documentationUrl: "https://data.bodik.jp/api/",
+    category: "gis",
+    dataFormat: "JSON",
+    accessType: "API",
+    requiresApiKey: false,
+    licenseName: "BODIK利用条件",
+    commercialUse: "restricted",
+    attributionRequired: true,
+    updateFrequency: "daily",
+    trustLevel: 4,
+    qualityScore: 75,
+    note: "2026-08-12T02:27:55Z HTTP 200 実測確認（package_list 約480KB）。",
+    tags: ["自治体", "統計"],
+    useCases: [{ useCaseName: "自治体データセットの発見", targetSystem: "Open Data Discovery" }],
+  },
+  {
+    providerName: "JIG",
+    name: "JIG オープンデータカタログ API",
+    nameEn: "JIG Open Data Catalog API",
+    description: "JIGが運用するオープンデータカタログのCKAN API。データセット一覧を機械判読できる。",
+    officialUrl: "https://ckan.odp.jig.jp/",
+    endpointUrl: "https://ckan.odp.jig.jp/api/3/action/package_list",
+    documentationUrl: "https://ckan.odp.jig.jp/api/",
+    category: "gis",
+    dataFormat: "JSON",
+    accessType: "API",
+    requiresApiKey: false,
+    licenseName: "JIG利用条件",
+    commercialUse: "restricted",
+    attributionRequired: true,
+    updateFrequency: "daily",
+    trustLevel: 4,
+    qualityScore: 70,
+    note: "2026-08-12T02:27:55Z HTTP 200 実測確認。",
+    tags: ["自治体", "統計"],
+    useCases: [{ useCaseName: "データカタログの定期取得", targetSystem: "Open Data Discovery" }],
+  },
+  {
+    providerName: "総務省統計局",
+    name: "e-Stat 統計表データ（国勢調査）",
+    nameEn: "e-Stat Statistics Data (Population Census)",
+    description:
+      "e-Stat APIで国勢調査等の統計表データ一覧を取得する。APIキー（ESTAT_APP_ID）が必要。",
+    officialUrl: "https://www.e-stat.go.jp/",
+    endpointUrl:
+      "https://api.e-stat.go.jp/rest/2.1/app/json/getStatsList?statsCode=00200502&appId=${ESTAT_APP_ID}",
+    documentationUrl: "https://www.e-stat.go.jp/api/",
+    category: "statistics",
+    dataFormat: "JSON",
+    accessType: "API",
+    requiresApiKey: true,
+    apiKeyEnvName: "ESTAT_APP_ID",
+    licenseName: "政府標準利用規約",
+    commercialUse: "allowed",
+    attributionRequired: true,
+    updateFrequency: "yearly",
+    trustLevel: 5,
+    qualityScore: 70,
+    note: "APIキー（ESTAT_APP_ID）登録後に実測・ジョブ有効化。2026-08-12 時点は未実測（キー待ち）。",
+    tags: ["統計", "APIキー必要"],
+    useCases: [{ useCaseName: "統計データの取得", targetSystem: "Open Data Discovery" }],
+  },
   // ===== 初期10件 =====
   {
     providerName: "国土交通省",
