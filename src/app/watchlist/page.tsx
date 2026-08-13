@@ -255,7 +255,7 @@ export default function WatchlistPage() {
           </ul>
         )}
         {message && (
-          <p className={`mb-0 mt-2 text-[12px] ${tone === "error" ? "text-[var(--red)]" : "text-[var(--green)]"}`} role="alert">
+          <p className={`mb-0 mt-2 text-[12px] ${tone === "error" ? "text-[var(--red)]" : "text-[var(--green)]"}`} role="status">
             {tone === "error" ? "⚠️ " : "✅ "}
             {message}
           </p>

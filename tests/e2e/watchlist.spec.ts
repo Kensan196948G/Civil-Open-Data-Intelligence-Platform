@@ -47,11 +47,11 @@ test.describe("ウォッチリストUI", () => {
     await expect(page.getByText("● 通知中").first()).toBeVisible();
 
     await page.getByRole("button", { name: "一時停止" }).first().click();
-    await expect(page.getByRole("alert")).toContainText("通知を一時停止しました");
+    await expect(page.getByRole("status")).toContainText("通知を一時停止しました");
     await expect(page.getByText("○ 一時停止").first()).toBeVisible();
 
     await page.getByRole("button", { name: "再開" }).first().click();
-    await expect(page.getByRole("alert")).toContainText("通知を再開しました");
+    await expect(page.getByRole("status")).toContainText("通知を再開しました");
     await expect(page.getByText("● 通知中").first()).toBeVisible();
   });
 
@@ -65,12 +65,12 @@ test.describe("ウォッチリストUI", () => {
 
     await page.getByLabel("対象").selectOption({ label: TARGET_SITE_LABEL });
     await page.getByRole("button", { name: "➕ 登録" }).click();
-    await expect(page.getByRole("alert")).toContainText("ウォッチリストへ登録しました");
+    await expect(page.getByRole("status")).toContainText("ウォッチリストへ登録しました");
     await expect(page.locator("li", { hasText: TARGET_SITE_LABEL })).toBeVisible();
 
     const row = page.locator("li", { hasText: TARGET_SITE_LABEL });
     await row.getByRole("button", { name: "解除" }).click();
-    await expect(page.getByRole("alert")).toContainText("解除しました");
+    await expect(page.getByRole("status")).toContainText("解除しました");
     await expect(page.locator("li", { hasText: TARGET_SITE_LABEL })).toHaveCount(0);
   });
 
