@@ -58,6 +58,10 @@ export class TtlCache<V> {
     this.store.set(key, { expiresAt: now + this.ttlMs, value });
   }
 
+  delete(key: string): boolean {
+    return this.store.delete(key);
+  }
+
   get size(): number {
     return this.store.size;
   }

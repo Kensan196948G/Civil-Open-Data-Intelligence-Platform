@@ -60,3 +60,6 @@ state.json
 # (lint / typecheck 側の除外は eslint.config.mjs と tsconfig.json)
 .worktrees/
 _worktrees/
+
+# Codex/agent runtime state (internal only, never commit)
+.omo/
