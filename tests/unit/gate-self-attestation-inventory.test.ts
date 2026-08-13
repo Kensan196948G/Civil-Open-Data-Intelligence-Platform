@@ -668,6 +668,12 @@ const NON_GATES: readonly NonGate[] = [
   { file: "scripts/tools/start-checked.js", why: "サーバ起動を待ち受けるヘルパー。合否判定を持たない" },
   { file: "scripts/tools/with-env.js", why: "環境変数を注入して他コマンドを起動するラッパー" },
   { file: "scripts/tools/run-ultrareview.js", why: "レビュー起動ツール。CI の合否には関与しない" },
+  {
+    file: "scripts/tools/contract-text.js",
+    why:
+      "契約文字列照合の述語ライブラリ（needle の端がトークン境界に一致するかを判定）。" +
+      "合否を作るのは呼び出し側 (check-github-actions-contract.js 等) であり、このファイル自体は証跡を受理・棄却しない",
+  },
   { file: "scripts/deploy/create-hyperdrive.mjs", why: "Hyperdrive のプロビジョニング操作。証跡の受理判定を持たない" },
   {
     file: "scripts/deploy/cloudflare-dns-record-policy.mjs",

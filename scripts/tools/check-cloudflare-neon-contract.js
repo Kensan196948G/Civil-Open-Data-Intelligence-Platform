@@ -2,6 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { createRequireText } = require("./contract-text.js");
 
 const root = process.cwd();
 const envExample = fs.readFileSync(path.join(root, ".env.example"), "utf8");
@@ -23,9 +24,7 @@ const pgSchema = fs.readFileSync(path.join(root, "prisma/postgresql/schema.prism
 
 const errors = [];
 
-function requireText(label, source, needle) {
-  if (!source.includes(needle)) errors.push(`${label} missing ${needle}`);
-}
+const requireText = createRequireText(errors);
 
 requireText(".env.example", envExample, "postgresql://user:password@host/db?schema=public&sslmode=require");
 requireText(".env.example", envExample, "CODIP_DEPLOY_TARGET");

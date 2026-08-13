@@ -2,6 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { createRequireText } = require("./contract-text.js");
 
 const root = process.cwd();
 function readNormalized(relativePath) {
@@ -52,11 +53,7 @@ const neonBackup = workflowSource(".github/workflows/neon-backup.yml");
 const productionSmoke = workflowSource(".github/workflows/production-smoke.yml");
 const packageJson = readNormalized("package.json");
 
-function requireText(label, source, needle) {
-  if (!source.includes(needle)) {
-    errors.push(`${label} missing ${needle}`);
-  }
-}
+const requireText = createRequireText(errors);
 
 /**
  * workflow 内の**全ジョブ**の step を切り出す。インデント幅は最初の step 行から取り、

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 "use strict";
 
+const { stripTagSpans } = require("./html-text");
+
 const net = require("node:net");
 const dns = require("node:dns/promises");
 const dnsCallback = require("node:dns");
@@ -318,9 +320,8 @@ function parseJsonPayload(bodyText) {
 }
 
 function stripXmlMarkup(value) {
-  return value
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-    .replace(/<[^>]+>/g, " ")
+  const unescaped = value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1");
+  return stripTagSpans(unescaped, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
