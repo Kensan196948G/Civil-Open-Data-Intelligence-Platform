@@ -16,6 +16,24 @@
 - 📦 `scripts/deploy/deploy-mvp.mjs`（secrets-safe、`--with-secrets` / `--skip-deploy`）
   と `docs/runbooks/cloudflare-mvp.md`、fail-closed 単体テストを追加
 
+## 2026-08-13: ウォッチリストUIとエスカレーションPR群の統合
+
+- 🔔 ウォッチリストUI（個人単位・垂直スライス実装）:
+  - `/watchlist` 画面: 一覧・追加・一時停止・再開・解除
+  - `WatchToggle` を現場一覧（`/sites`）とデータソース詳細へ配置
+  - `PATCH /api/v1/watchlist/{id}` で `enabled` 切替（日次通知ダイジェストは
+    enabled のみ対象）。GET は無効登録と識別子も返す
+  - ローカル/共有preview向けデモ識別子（`CODIP_DEMO_IDENTITY` +
+    `CODIP_DEMO_USER_EMAIL`）は明示 opt-in かつ管理認証済みのみ。本番では不使用
+  - `prisma/seed.ts` にデモRBAC割当とウォッチリスト登録（現場・データソース各1件）を追加
+  - 単体テスト追加（demo-identity / PATCH / フォールバック）+ E2E `watchlist.spec.ts`
+- 📋 エスカレーションPR群のレビュー・マージ（CTO代行）:
+  - #149 コネクタ hostname 判定、#146 xROAD、#148 CodeQL テスト4件、#157 release-gate
+    Windows 引用、#158 契約トークン境界、#150 CSP契約、#151 証跡棚卸し、#154（#151 stack）、
+    #155/#145 docs、#130 依存更新、#143 CodeQL findings ゲート
+  - #149/#151 は main 統合後に露見したテスト不整合（#160 の seed/workflow 追加由来）を
+    是正してから再検証・マージ
+
 ## 2026-08-09: 統合リリース候補 (terrain + weather-marine)
 
 - ⛰️ 地形分析 (Civil-Terrain-Slope-Risk-Viewer 統合):

@@ -4,6 +4,10 @@ const launchOptions = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
   : undefined;
 
 const e2eAdminToken = "e2e-admin-token-12345678901234567890";
+// ローカル実行時に 3000 を別プロセスが使用している場合へ対処できるよう、
+// ポートは環境変数で上書き可能にする（既定は 3000。CI では未指定）。
+const e2ePort = Number(process.env.PLAYWRIGHT_E2E_PORT ?? "3000");
+const e2eBaseUrl = `http://localhost:${e2ePort}`;
 
 export default defineConfig({
   testDir: "tests/e2e",
@@ -13,7 +17,7 @@ export default defineConfig({
   reporter: process.env.CI ? "github" : "list",
   timeout: 60_000,
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: e2eBaseUrl,
     trace: "retain-on-failure",
     locale: "ja-JP",
   },
@@ -31,8 +35,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `DATABASE_URL='file:./dev.db' CODIP_ENV_MODE=preview CODIP_ACCEPT_SQLITE_PREVIEW=true CODIP_ADMIN_TOKEN='${e2eAdminToken}' CODIP_ALLOW_INSECURE_ADMIN=false CODIP_ALLOWED_ORIGINS='http://localhost:3000' CODIP_DEMO_IDENTITY=true CODIP_DEMO_USER_EMAIL='demo.engineer@example.com' npm run dev`,
-    url: "http://localhost:3000",
+    command: `DATABASE_URL='file:./dev.db' CODIP_ENV_MODE=preview CODIP_ACCEPT_SQLITE_PREVIEW=true CODIP_ADMIN_TOKEN='${e2eAdminToken}' CODIP_ALLOW_INSECURE_ADMIN=false CODIP_ALLOWED_ORIGINS='${e2eBaseUrl}' CODIP_DEMO_IDENTITY=true CODIP_DEMO_USER_EMAIL='demo.engineer@example.com' npm run dev -- -p ${e2ePort}`,
+    url: e2eBaseUrl,
     // Playwrightはポート疎通しか見ず、DATABASE_URL/admin token/allowed-originが
     // このE2E用の値かは検証できない。既存サーバーを再利用すると別設定(本番相当DB等)へ
     // 誤って向く恐れがあるため、常に上記commandでサーバーを起動し直す
