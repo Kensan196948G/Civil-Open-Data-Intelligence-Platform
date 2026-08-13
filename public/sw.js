@@ -34,6 +34,31 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// オンライン復帰時のバックグラウンド再検証（PwaRegister が sync を登録）。
+// オフライン中に古くなった API キャッシュを、接続回復後にまとめて更新する。
+self.addEventListener("sync", (event) => {
+  if (event.tag === "codip-revalidate-apis") {
+    event.waitUntil(revalidateApiCache());
+  }
+});
+
+async function revalidateApiCache() {
+  const cache = await caches.open(API_CACHE);
+  const keys = await cache.keys();
+  await Promise.all(
+    keys.map(async (request) => {
+      try {
+        const response = await fetch(request);
+        if (response && response.ok) {
+          await cache.put(request, response);
+        }
+      } catch {
+        // まだオフライン → キャッシュを保持したまま次回に委ねる
+      }
+    }),
+  );
+}
+
 function shouldCacheApi(url) {
   return (
     url.pathname.startsWith("/api/v1/observations/") ||

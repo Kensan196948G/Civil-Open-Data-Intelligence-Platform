@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AppHeader } from "@/components/AppHeader";
 import { PwaRegister } from "@/components/PwaRegister";
+import { OfflineIndicator } from "@/components/OfflineIndicator";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -23,6 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ja">
       <body className="flex h-screen w-full overflow-hidden">
         <PwaRegister />
+        <OfflineIndicator />
         {/* デザイン正本指定の IBM Plex フォント。正本と同じ <link> 方式 (CSP は
             fonts.googleapis.com / fonts.gstatic.com のみ許可)。CDN 不達時は
             globals.css の font stack (system-ui 以下) へフォールバックする。
