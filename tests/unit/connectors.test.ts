@@ -130,12 +130,18 @@ describe("台帳の振り分け保存", () => {
    * 変更のときだけ更新が要る = 危険な変更にだけ速度制限がかかる。
    */
   const EXPECTED_SPECIALIZED: [string, string][] = [
+    [
+      "estat",
+      "https://api.e-stat.go.jp/rest/2.1/app/json/getStatsList?statsCode=00200502&appId=${ESTAT_APP_ID}",
+    ],
     ["estat", "https://api.e-stat.go.jp/rest/3.0/app/json/getStatsList"],
     [
       "gsi-elevation",
       "https://cyberjapandata2.gsi.go.jp/general/dem/scripts/getelevation.php?lon=140.08531&lat=36.103543&outtype=JSON",
     ],
     ["jma-xml", "https://www.data.jma.go.jp/developer/xml/feed/regular.xml"],
+    ["jma-xml", "https://www.data.jma.go.jp/developer/xml/feed/extra.xml"],
+    ["jma-xml", "https://www.data.jma.go.jp/developer/xml/feed/eqvol.xml"],
     ["jma-xml", "https://www.data.jma.go.jp/obd/stats/etrn/"],
     ["jma-xml", "https://www.data.jma.go.jp/svd/eqdb/data/shindo/"],
     ["ksj", "https://nlftp.mlit.go.jp/isj/"],
