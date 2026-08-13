@@ -1,5 +1,21 @@
 # リリースノート
 
+## 2026-08-13: MVP公開・関係者レビュー環境 (codip-mvp)
+
+- 🌐 公開レビュー用URL `https://codip-mvp.mirai-dx-platform.com` を追加
+  - Worker `codip-mvp`（`wrangler.jsonc` `env.mvp`、zone route + proxied AAAA `100::`）
+  - 本番 `odip` / `codip-production` / Hyperdrive / Neon production main には無変更
+- 🗄️ Neon branch `mvp-20260813`（main から copy-on-write）へ `migrate reset --force` +
+  `migrate deploy` + `db:pg:seed` で架空ダミーデータを投入・保持
+- 🔌 Hyperdrive 権限不足（code 10000）を回避する直接 TCP 接続を実装:
+  - `src/lib/cloudflare-connection.ts` で Hyperdrive binding → Worker secret
+    `DATABASE_URL` → `process.env.DATABASE_URL` の順に解決
+  - `@prisma/adapter-pg`（pg ドライバ）+ `nodejs_compat`（Prisma >= 6.15 の公式サポート）
+- 🛡️ 認証: `CODIP_ENV_MODE=preview` / 管理トークンセッション / デモ識別子
+  `demo.engineer@example.com`（seed 済み RBAC + ウォッチリスト）
+- 📦 `scripts/deploy/deploy-mvp.mjs`（secrets-safe、`--with-secrets` / `--skip-deploy`）
+  と `docs/runbooks/cloudflare-mvp.md`、fail-closed 単体テストを追加
+
 ## 2026-08-09: 統合リリース候補 (terrain + weather-marine)
 
 - ⛰️ 地形分析 (Civil-Terrain-Slope-Risk-Viewer 統合):

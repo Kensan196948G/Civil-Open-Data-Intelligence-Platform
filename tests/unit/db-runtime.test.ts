@@ -168,7 +168,7 @@ describe("database runtime selection", () => {
     const { prisma } = await import("@/lib/db");
 
     expect(() => Reflect.get(prisma, "$queryRaw")).toThrow(
-      "no PostgreSQL connection available: Hyperdrive binding is missing and DATABASE_URL is not set",
+      "no PostgreSQL connection available: Hyperdrive binding and DATABASE_URL (Worker secret / process.env) are both unavailable",
     );
     expect(runtimeMocks.PrismaPg).not.toHaveBeenCalled();
     expect(runtimeMocks.PostgreSQLWasmPrismaClient).not.toHaveBeenCalled();

@@ -623,6 +623,16 @@ const SCRIPT_GATES: readonly GateEntry[] = [
     },
   },
   {
+    file: "scripts/deploy/deploy-mvp.mjs",
+    grade: 0,
+    issue: "none",
+    why: "MVP公開環境 (codip-mvp.mirai-dx-platform.com) のデプロイパイプライン。resolveMvpEnv は必須クレデンシャル欠落を全件集めて throw し、DNS 計画は cloudflare-dns-record-policy.mjs の純関数へ委譲する。本番 deploy-production.mjs と同型の運用スクリプトであり、証跡の受理判定を独自に持たない",
+    signals: { substringDominant: false, probesExternal: true, probesFs: false },
+    runsOn: "unwired",
+    notRunMeans:
+      "workflow からは呼ばれず、人が手で実行する MVP デプロイ経路。CI で一度も実行されないため、この分岐の退行はデプロイ当日まで現れない",
+  },
+  {
     file: "scripts/tools/review-role-assignments.js",
     grade: 2,
     issue: "open",

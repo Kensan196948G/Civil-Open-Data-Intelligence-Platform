@@ -7,11 +7,12 @@
 | Local | 開発 | Next.js, SQLite |
 | 現行共有Preview | 関係者検証 | Node.jsコンテナ、SQLiteまたはPostgreSQL/PostGIS compose、Cloudflare Access相当の前段保護 |
 | Staging | Cloudflare/Neon検証 | Cloudflare Workers (`@opennextjs/cloudflare`)、Access、Neon PostgreSQL/PostGIS staging branch (実環境証跡は未完) |
+| MVP (レビュー公開) | 関係者レビュー | `https://codip-mvp.mirai-dx-platform.com`、Worker `codip-mvp`、zone route + proxied AAAA、Neon branch `mvp-20260813`（Hyperdrive 不使用・`DATABASE_URL` secret 直結）、架空ダミーデータ |
 | Production | 本番 | Cloudflare Workers、Hyperdrive、Neon PostgreSQL/PostGIS、Cloudflare Access、`https://odip.mirai-dx-platform.com`。2026-08-01以降Access配下で稼働中（未認証は302） |
 
 ## 2. デプロイ方針
 
-MVPではローカル、CI、Docker previewで品質を確認する。2026-07-19 時点の共有previewは `http://192.168.0.185:3100/` で稼働し、`/api/health`、`/api/ready`、`/api/dashboard`、`/api/sources`、`/api/openapi` のread-only smokeは成功している。Cloudflare WorkersとNeon/PostGISは本番目標構成であり、production FQDNは `odip.mirai-dx-platform.com` とする。`wrangler.jsonc`、`open-next.config.ts`、`infra/cloudflare/` (Terraformテンプレート) は導入済みで、`npm run cf:build` / `cf:preview` / `cf:deploy` / `cf:typegen` から実行できる。アプリケーションコード側では、SSRF事前DNS検証をWorkers互換の `resolve4` / `resolve6` へ更新し、PostgreSQL Prisma Clientに `@prisma/adapter-pg` を導入した。Prisma 6.19系ではdriver adapterにpreview flagは不要であり、deprecated warningを避けるため `previewFeatures = ["driverAdapters"]` は設定しない。Workers実行時は `CODIP_HYPERDRIVE_BINDING` (既定 `HYPERDRIVE`) のCloudflare Hyperdrive bindingから `connectionString` を取得できる場合にそれを優先し、Node.js/Docker/CIでは `DATABASE_URL` を使う。
+MVPではローカル、CI、Docker previewで品質を確認する。2026-07-19 時点の共有previewは `http://192.168.0.185:3100/` で稼働し、`/api/health`、`/api/ready`、`/api/dashboard`、`/api/sources`、`/api/openapi` のread-only smokeは成功している。Cloudflare WorkersとNeon/PostGISは本番目標構成であり、production FQDNは `odip.mirai-dx-platform.com` とする。公開レビュー用MVPは `codip-mvp.mirai-dx-platform.com`（`docs/runbooks/cloudflare-mvp.md`）。`wrangler.jsonc`、`open-next.config.ts`、`infra/cloudflare/` (Terraformテンプレート) は導入済みで、`npm run cf:build` / `cf:preview` / `cf:deploy` / `cf:typegen` から実行できる。アプリケーションコード側では、SSRF事前DNS検証をWorkers互換の `resolve4` / `resolve6` へ更新し、PostgreSQL Prisma Clientに `@prisma/adapter-pg` を導入した。Prisma 6.19系ではdriver adapterにpreview flagは不要であり、deprecated warningを避けるため `previewFeatures = ["driverAdapters"]` は設定しない。Workers実行時は `CODIP_HYPERDRIVE_BINDING` (既定 `HYPERDRIVE`) のCloudflare Hyperdrive bindingから `connectionString` を取得できる場合にそれを優先し、Hyperdrive が無い MVP/staging では Worker secret `DATABASE_URL` で Neon へ直接 TCP 接続する。Node.js/Docker/CIでは `DATABASE_URL` を使う。
 
 ただし以下は未解決のアプリケーションコード/実リソース側の制約であり、Workers本番切替前に解消または証跡化が必須:
 

@@ -17,9 +17,9 @@ import {
   PrismaClient as PostgreSQLWasmPrismaClient,
 } from ".prisma/client-postgresql/wasm";
 import { databaseProviderFromUrl, type DatabaseProvider } from "@/lib/database-url";
+import { resolveCloudflareConnectionString } from "@/lib/cloudflare-connection";
 
 type AppPrismaClient = SQLitePrismaClient;
-type HyperdriveBinding = { connectionString?: string };
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: AppPrismaClient;
@@ -31,8 +31,9 @@ const globalForPrisma = globalThis as unknown as {
 // cannot perform I/O for another, so clients are cached per request context.
 const perRequestClients = new WeakMap<object, AppPrismaClient>();
 
-// Cloudflare deployments carry no DATABASE_URL; the Hyperdrive binding is the
-// only PostgreSQL source there, keyed off the wrangler env vars.
+// Cloudflare deployments resolve the PostgreSQL source from the request env:
+// the Hyperdrive binding (production) or the DATABASE_URL Worker secret
+// (MVP/staging direct TCP). Keyed off the wrangler env vars.
 function isCloudflareDeployTarget(): boolean {
   const target = (process.env.CODIP_DEPLOY_TARGET ?? "").trim();
   return target === "production" || target === "staging";
@@ -47,16 +48,11 @@ function getCloudflareRequestContext(): { env: Record<string, unknown>; ctx: obj
   }
 }
 
-function getHyperdriveConnectionString(env: Record<string, unknown>): string | null {
-  const bindingName = (process.env.CODIP_HYPERDRIVE_BINDING ?? "HYPERDRIVE").trim() || "HYPERDRIVE";
-  const binding = env[bindingName] as HyperdriveBinding | undefined;
-  if (typeof binding?.connectionString === "string" && binding.connectionString.trim()) {
-    return binding.connectionString;
-  }
-  console.error(
-    `[db] Cloudflare Hyperdrive binding "${bindingName}" is missing or has no connectionString`,
-  );
-  return null;
+function getCloudflareConnectionString(env: Record<string, unknown>): string | null {
+  return resolveCloudflareConnectionString(env, {
+    bindingName: process.env.CODIP_HYPERDRIVE_BINDING,
+    processEnv: process.env,
+  });
 }
 
 function resolveNodeConnection(): { provider: DatabaseProvider; connectionString: string } {
@@ -74,7 +70,8 @@ function createNodePrismaClient(provider: DatabaseProvider, connectionString: st
 
 function createWorkersPrismaClient(connectionString: string): AppPrismaClient {
   // maxUses: 1 — a pooled pg connection must not be reused across requests on
-  // Workers. Hyperdrive does the real pooling at the edge, so this is cheap.
+  // Workers. Hyperdrive (production) or the Neon pooled endpoint (MVP) does the
+  // real pooling at the edge, so this is cheap.
   const adapter = new PrismaPg({ connectionString, maxUses: 1 });
   return new PostgreSQLWasmPrismaClient({ adapter }) as unknown as AppPrismaClient;
 }
@@ -91,11 +88,10 @@ function getPrisma(): AppPrismaClient {
       if (cached) {
         return cached;
       }
-      const connectionString =
-        getHyperdriveConnectionString(context.env) ?? process.env.DATABASE_URL ?? "";
+      const connectionString = getCloudflareConnectionString(context.env);
       if (!connectionString) {
         throw new Error(
-          "[db] no PostgreSQL connection available: Hyperdrive binding is missing and DATABASE_URL is not set",
+          "[db] no PostgreSQL connection available: Hyperdrive binding and DATABASE_URL (Worker secret / process.env) are both unavailable",
         );
       }
       const client = createWorkersPrismaClient(connectionString);
