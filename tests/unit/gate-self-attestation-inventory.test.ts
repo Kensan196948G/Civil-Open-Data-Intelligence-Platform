@@ -612,6 +612,20 @@ const SCRIPT_GATES: readonly GateEntry[] = [
       means: "欠落を拒否理由として述べる throw が現物に在る。既定値で穴埋めする経路へ戻せば消える",
     },
   },
+  {
+    file: "scripts/tools/review-role-assignments.js",
+    grade: 2,
+    issue: "open",
+    why: "期限切れ・期限間近のロール割当を DB から実測して --strict で合否を返せるが、既定は strict=false で、package.json の ops:review-roles は --strict を渡さず、どの workflow からも起動されていない。検査経路が閉塞しており、期限切れ割当があっても CI のどこからも失敗として現れない",
+    signals: { substringDominant: false, probesExternal: true, probesFs: false },
+    runsOn: "unwired",
+    notRunMeans:
+      "CI に結線されていないため、ロール割当の期限切れ・期限間近は人が手で ops:review-roles を実行するまで検知されない",
+    defect: {
+      pattern: /strict: false/,
+      means: "既定 strict=false を呼び出し側 (npm script / workflow) が上書きしておらず、期限切れ割当でも合否が失敗にならない",
+    },
+  },
 ];
 
 /**
@@ -786,6 +800,26 @@ const WORKFLOWS: readonly WorkflowEntry[] = [
     notRunMeans:
       "定期実行と workflow_dispatch でのみ動く。本番監視は PR では走らないため、この workflow 自身の結線が壊れても次の定期実行まで気付けない",
   },
+  {
+    file: ".github/workflows/sla-monitor.yml",
+    grade: "枠外",
+    issue: "none",
+    why: "枠外。SLA 鮮度監視とウォッチリスト通知ダイジェストの発行を行う運用バッチであり、証跡を受理・棄却するマージゲートを含まない (isGate === false)。continue-on-error は SLA/通知の結果を digest Issue と artifact に残すためのもので、結果によるジョブの成否は作らない",
+    isGate: false,
+    runsOn: "scheduled",
+    notRunMeans:
+      "定期実行と workflow_dispatch でのみ動く。SLA 違反と通知ダイジェストは次の定期実行まで現れない",
+  },
+  {
+    file: ".github/workflows/load-test.yml",
+    grade: "枠外",
+    issue: "none",
+    why: "枠外。k6 による負荷測定の手動実行バッチであり、証跡を受理・棄却するマージゲートを含まない (isGate === false)。入力検証 (max_vus) は実行時に入力が不正なら失敗するだけ",
+    isGate: false,
+    runsOn: "dispatch-only",
+    notRunMeans:
+      "workflow_dispatch でのみ動く。負荷測定は人が明示的に実行したときだけ走り、その失敗は dispatch した時点でしか現れない",
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -802,8 +836,12 @@ const WORKFLOWS: readonly WorkflowEntry[] = [
  * なので、空集合を「欠陥なし」の証拠にせず観測失敗として返す。
  */
 export function unpairedContinueOnError(yaml: string): Observation<string[]> {
-  const mentions = (yaml.match(/continue-on-error/g) ?? []).length;
-  const readable = (yaml.match(/^\s*continue-on-error:\s*(?:true|false)\s*$/gm) ?? []).length;
+  // 「言及」はキーとして現れた行だけを数える。コメント行や説明文に単語として
+  // 出てくる "continue-on-error" は YAML の指定ではないため、式形式の検出に
+  // 混ぜると production-smoke.yml の説明コメントだけで観測失敗に落ちる。
+  const keyForm = /^\s*(?:-\s+)?continue-on-error:/gm;
+  const mentions = (yaml.match(keyForm) ?? []).length;
+  const readable = (yaml.match(/^\s*(?:-\s+)?continue-on-error:\s*(?:true|false)\s*$/gm) ?? []).length;
   if (mentions !== readable) {
     return blind(
       `continue-on-error の言及 ${mentions} 件に対し true/false のリテラルとして読めたのは ${readable} 件。` +
