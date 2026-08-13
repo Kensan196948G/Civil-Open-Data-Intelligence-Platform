@@ -19,7 +19,11 @@
 export function demoIdentityEnabled(): boolean {
   // 本番では設定値に関係なく無効化する。validate-env は別プロセスで実行される
   // ゲートのため、検証されない起動経路でもランタイム側で二重に遮断する。
-  if (process.env.NODE_ENV === "production") return false;
+  //
+  // Workers 実行時は NODE_ENV が常に "production" になるため、NODE_ENV では
+  // 判定できない（MVP/preview env のデモ識別子まで止まる）。明示的なデプロイ
+  // モードである CODIP_ENV_MODE で判定する。
+  if (process.env.CODIP_ENV_MODE === "production") return false;
   return (process.env.CODIP_DEMO_IDENTITY ?? "").trim().toLowerCase() === "true";
 }
 

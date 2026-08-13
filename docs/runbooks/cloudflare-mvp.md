@@ -1,7 +1,7 @@
 # Cloudflare MVP Review Environment Runbook
 
 `codip-mvp.mirai-dx-platform.com` を **MVP公開・関係者レビュー用** のCloudflare Workers + Neon環境として有効化する手順である。
-本番（`odip.mirai-dx-platform.com`）と同じ zone route + proxied AAAA 方式だが、**本番 Worker / route / secret / Hyperdrive / Neon production branch には一切触れない**。
+本番（`odip.mirai-dx-platform.com`）と同じ Cloudflare 基盤だが、**本番 Worker / route / secret / Hyperdrive / Neon production branch には一切触れない**。
 
 ## 0. MVP target
 
@@ -11,7 +11,7 @@
 | FQDN | `codip-mvp.mirai-dx-platform.com` |
 | URL | `https://codip-mvp.mirai-dx-platform.com` |
 | Worker | `codip-mvp`（`wrangler.jsonc` の `env.mvp`） |
-| Routing | Zone route（`codip-mvp.mirai-dx-platform.com/*`）+ proxied AAAA `100::`、`workers_dev=false` |
+| Routing | Workers Custom Domains（`custom_domains: true`）+ proxied AAAA `100::`、`workers_dev=false`。zone route は現行 token に Workers Routes:Edit スコープが無いため不採用（2026-08-13 実測 code 10000） |
 | DB | Neon branch `mvp-20260813`（project `falling-dawn-93620497` の main から copy-on-write。**production main は不変**） |
 | 接続方式 | Hyperdrive 不使用。Worker secret `DATABASE_URL`（Neon pooled URI）を Prisma の `@prisma/adapter-pg`（pg ドライバ）で Worker から直接 TCP 接続（`nodejs_compat` + Prisma >= 6.15） |
 | 認証 | `CODIP_ENV_MODE=preview` / `CODIP_TRUST_PROXY_AUTH=false` / 管理トークン（`CODIP_ADMIN_TOKEN`）でセッション開始。ウォッチリストはデモ識別子 `demo.engineer@example.com`（seed 済み RBAC + ウォッチリスト） |
@@ -24,17 +24,19 @@
 - DNS レコードが既存で、かつ proxied AAAA `100::` でない場合はブロック（`planWorkerRouteDnsRecord`）。
 - 本番 `odip` の DNS / route / Worker / secret / Hyperdrive、Neon production branch を変更するコマンドを含まないこと。
 
-## 1.1 Route permission gate
+## 1.1 Routing permission decision
 
 zone route の登録には Cloudflare API token に **Zone > Workers Routes > Edit**
 スコープが必要である。2026-08-13 の初回デプロイでは token がこのスコープを持たず、
 `wrangler deploy --env mvp` の route 登録だけが `Authentication error [code: 10000]`
 で失敗した（Worker アップロードと DNS 作成は成功。本番リソースは無変更）。
 
-- 解除条件: 人間が Cloudflare Dashboard で token に Workers Routes:Edit を付与する
-  （または同等スコープの token を `CLOUDFLARE_API_TOKEN` へ設定する）
-- 付与後の再開: `node scripts/deploy/deploy-mvp.mjs --with-secrets`（冪等。
-  Worker 更新 / DNS 再作成 / secrets 登録まで1コマンドで完結する）
+一方で同 token には **Workers Custom Domains** スコープがあり、カスタムドメイン
+`codip-mvp.mirai-dx-platform.com` の Worker 紐付けは成功した。以降は
+`custom_domains: true` を正とし、zone route は使用しない。
+
+- 再デプロイ: `node scripts/deploy/deploy-mvp.mjs --with-secrets`（冪等。
+  Worker 更新 / DNS 確認 / secrets 登録まで1コマンドで完結する）
 - 検証: `npm run release:smoke -- --read-only --base-url https://codip-mvp.mirai-dx-platform.com`
 
 ## 2. Deploy
@@ -80,8 +82,7 @@ npm run release:smoke -- --read-only --base-url https://codip-mvp.mirai-dx-platf
 | --- | --- |
 | サブドメイン決定 | `codip-mvp`（既存命名 `civil-terrain-api-mvp` / `ccid-mvp-staging` に整合。ユーザー指示「MVP用サブドメイン＋規定ドメイン」の仮定として採用） |
 | Hostname conflict | 作成時点で DNS / Worker route / 既存 Worker 名の衝突なし |
-| DNS | proxied AAAA `100::`（`deploy-mvp.mjs` が冪等作成） |
-| DNS 状態 | 初回デプロイ時に作成→route 未作成のため一時削除済み（公開停止）。route 権限付与後の再デプロイで再作成 |
+| DNS | proxied AAAA `100::`（カスタムドメイン紐付け時に Cloudflare が自動作成。deploy-mvp.mjs が冪等確認） |
 | Worker | `codip-mvp`（`wrangler deploy --env mvp`） |
 | Neon | branch `mvp-20260813`（main から copy-on-write、production main 不変） |
 | Migration / seed | `prisma migrate reset --force` → `migrate deploy` → `db:pg:seed`（架空ダミーデータ保持） |

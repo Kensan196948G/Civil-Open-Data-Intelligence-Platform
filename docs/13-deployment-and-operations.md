@@ -7,7 +7,7 @@
 | Local | 開発 | Next.js, SQLite |
 | 現行共有Preview | 関係者検証 | Node.jsコンテナ、SQLiteまたはPostgreSQL/PostGIS compose、Cloudflare Access相当の前段保護 |
 | Staging | Cloudflare/Neon検証 | Cloudflare Workers (`@opennextjs/cloudflare`)、Access、Neon PostgreSQL/PostGIS staging branch (実環境証跡は未完) |
-| MVP (レビュー公開) | 関係者レビュー | `https://codip-mvp.mirai-dx-platform.com`、Worker `codip-mvp`、zone route + proxied AAAA、Neon branch `mvp-20260813`（Hyperdrive 不使用・`DATABASE_URL` secret 直結）、架空ダミーデータ。zone route は Cloudflare token への Workers Routes:Edit スコープ付与後に `deploy-mvp.mjs` で作成 |
+| MVP (レビュー公開) | 関係者レビュー | `https://codip-mvp.mirai-dx-platform.com`、Worker `codip-mvp`、Workers Custom Domains + proxied AAAA、Neon branch `mvp-20260813`（Hyperdrive 不使用・`DATABASE_URL` secret 直結）、架空ダミーデータ |
 | Production | 本番 | Cloudflare Workers、Hyperdrive、Neon PostgreSQL/PostGIS、Cloudflare Access、`https://odip.mirai-dx-platform.com`。2026-08-01以降Access配下で稼働中（未認証は302） |
 
 ## 2. デプロイ方針
