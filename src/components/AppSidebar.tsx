@@ -28,6 +28,7 @@ const NAV_GROUPS: { label: string; items: { href: string; icon: string; label: s
     items: [
       { href: "/logs", icon: "🧾", label: "取得ログ" },
       { href: "/audit", icon: "🔍", label: "監査ログ" },
+      { href: "/watchlist", icon: "🔔", label: "ウォッチリスト" },
       { href: "/tags", icon: "🏷️", label: "タグ管理" },
       { href: "/settings", icon: "⚙️", label: "設定" },
     ],

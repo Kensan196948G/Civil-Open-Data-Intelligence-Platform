@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import dynamic from "next/dynamic";
+import { WatchToggle } from "@/components/WatchToggle";
 
 const SiteMap = dynamic(() => import("./SiteMap").then((m) => m.SiteMap), {
   ssr: false,
@@ -540,8 +541,11 @@ export function WeatherWorkspace({ initialTab }: { initialTab: TabId }) {
                 <li key={site.id} className="mb-1 flex items-center gap-2 border-b border-[var(--line)] pb-1 text-[12.5px] last:border-0">
                   <span className="font-medium">{site.code}</span>
                   <span>{site.name}</span>
-                  <span className="ml-auto text-[10.5px] text-[var(--faint)]">
+                  <span className="text-[10.5px] text-[var(--faint)]">
                     {site.kind} / {site.lat.toFixed(4)}, {site.lon.toFixed(4)}
+                  </span>
+                  <span className="ml-auto">
+                    <WatchToggle targetType="site" targetId={site.id} />
                   </span>
                 </li>
               ))}

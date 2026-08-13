@@ -776,10 +776,10 @@ const openApiDocument = {
     "/api/v1/watchlist": {
       get: {
         tags: ["downstream"],
-        summary: "自分のウォッチリスト登録一覧を取得（engineer以上）",
+        summary: "自分のウォッチリスト登録一覧を取得（無効含む / engineer以上）",
         security: adminSecurity,
         responses: {
-          "200": { description: "ウォッチリスト登録一覧" },
+          "200": { description: "ウォッチリスト登録一覧（identity と entries）" },
           "401": { description: "管理認証エラーまたは識別ヘッダー不足" },
           "429": v1ErrorResponse,
         },
@@ -807,6 +807,21 @@ const openApiDocument = {
         security: adminSecurity,
         responses: {
           "200": { description: "解除成功" },
+          "401": { description: "管理認証エラーまたは識別ヘッダー不足" },
+          "404": { description: "登録が見つからない" },
+          "429": v1ErrorResponse,
+        },
+      },
+      patch: {
+        tags: ["downstream"],
+        summary: "自分のウォッチリスト登録の有効/無効を切り替え",
+        parameters: [
+          { in: "path", name: "id", required: true, schema: { type: "string" } },
+        ],
+        security: adminSecurity,
+        responses: {
+          "200": { description: "更新成功" },
+          "400": v1ErrorResponse,
           "401": { description: "管理認証エラーまたは識別ヘッダー不足" },
           "404": { description: "登録が見つからない" },
           "429": v1ErrorResponse,
