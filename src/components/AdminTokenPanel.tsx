@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-export function AdminTokenPanel() {
+export function AdminTokenPanel({ onAuthenticated }: { onAuthenticated?: () => void }) {
   const [token, setToken] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -36,6 +36,7 @@ export function AdminTokenPanel() {
       setAuthenticated(true);
       setMessage("管理セッションを開始しました");
       setMessageTone("success");
+      onAuthenticated?.();
     } catch {
       setMessage("管理セッション開始中に通信エラーが発生しました");
       setMessageTone("error");

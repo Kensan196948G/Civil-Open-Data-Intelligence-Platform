@@ -120,6 +120,21 @@ function main() {
     fail(errors, "CODIP_ALLOW_INSECURE_ADMIN=true is allowed only for local development");
   }
 
+  const demoIdentity = env.CODIP_DEMO_IDENTITY === "true";
+  const demoEmail = env.CODIP_DEMO_USER_EMAIL ?? "";
+  if (demoIdentity || demoEmail) {
+    if (!demoIdentity || !demoEmail.includes("@")) {
+      fail(
+        errors,
+        "CODIP_DEMO_IDENTITY=true と有効な CODIP_DEMO_USER_EMAIL は必ず対で設定してください",
+      );
+    } else if (mode === "production") {
+      fail(errors, "Production must not enable CODIP_DEMO_IDENTITY. ウォッチリストのデモ識別子は本番では使用しない");
+    } else if (mode === "preview") {
+      warn(warnings, "CODIP_DEMO_IDENTITY は preview 専用のデモ識別子です。本番では設定しないでください");
+    }
+  }
+
   if (mode !== "local" && allowInsecureLocalCookies) {
     fail(
       errors,

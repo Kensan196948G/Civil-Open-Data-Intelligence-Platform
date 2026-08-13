@@ -8,7 +8,8 @@ test.describe("ロール管理UI（/settings・管理者のみ）", () => {
     await page.goto("/settings");
 
     await expect(page.getByRole("heading", { name: "👥 ロール管理" })).toBeVisible();
-    await expect(page.getByText("割当はまだありません。既定は viewer です。")).toBeVisible();
+    // seed（prisma/seed.ts）が投入するデモ割当が表示される
+    await expect(page.getByRole("cell", { name: "demo.engineer@example.com", exact: true })).toBeVisible();
 
     const email = `e2e-role-${Date.now()}@example.com`;
     await page.getByLabel("メールアドレス").fill(email);

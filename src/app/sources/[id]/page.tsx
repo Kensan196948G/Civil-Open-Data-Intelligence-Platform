@@ -10,6 +10,7 @@ import { QualityScoreBadge, TrustLevelBadge } from "@/components/QualityScoreBad
 import { FetchLogTable } from "@/components/FetchLogTable";
 import { CheckPanel } from "@/components/CheckPanel";
 import { DeleteSourceButton } from "@/components/DeleteSourceButton";
+import { WatchToggle } from "@/components/WatchToggle";
 import { sanitizeUrl } from "@/lib/url-safety";
 
 export const metadata = {
@@ -66,6 +67,7 @@ export default async function SourceDetailPage({ params }: { params: Promise<{ i
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {canManage && <WatchToggle targetType="dataSource" targetId={source.id} />}
           <StatusBadge status={source.status} />
           <QualityScoreBadge score={source.qualityScore} />
           <TrustLevelBadge level={source.trustLevel} />

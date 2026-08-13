@@ -142,6 +142,25 @@ model RoleAssignment {
 | 既存 Access 認証の回帰 | proxy-auth-inject の既存テスト（4件）を維持し、ロール解決を追加する形で拡張 |
 | 600名分のメンテ工数 | グループ連携（Phase 2）まで `RoleAssignment` を CSV/管理UIで運用し、期限付き付与で棚卸し |
 
+## 8.5 ウォッチリストUI（Phase 1 実装・2026-08-13）
+
+権限マトリクスの「ウォッチリスト・通知設定」を UI まで垂直スライスで実装した。
+
+- **画面**: `/watchlist`（一覧・追加・一時停止・再開・解除）。現場一覧（`/sites`）と
+  データソース詳細に `WatchToggle` を配置
+- **API**: `GET/POST /api/v1/watchlist`、`DELETE/PATCH /api/v1/watchlist/{id}`。
+  PATCH で `enabled` を切替え、日次の通知ダイジェスト（`scripts/ingestion/notification-check.js`）は
+  `enabled=true` の登録のみ対象にする
+- **識別子**: 本番は Access の `cf-access-authenticated-user-email` を信頼境界検証して利用。
+  ローカル/共有preview は `CODIP_DEMO_IDENTITY=true` + `CODIP_DEMO_USER_EMAIL` の明示 opt-in
+  （`src/lib/demo-identity.ts`）で、管理セッション認証済みリクエストに限りデモ識別子へ落とす。
+  どちらかの変数が欠ければ既存どおり 401 で fail-closed
+- **個人単位の隔離**: 全操作は `userEmail` でスコープし、他ユーザーの登録は参照・変更できない
+  （`where: { id, userEmail }` / 複合一意キー）
+- **監査**: add / remove / toggle を `auditLog` へ記録
+- **seed**: `prisma/seed.ts` が `demo.engineer@example.com` 向け登録（現場・データソース各1件）と
+  デモRBAC割当を投入（本番 DB の seed 経路では投入しない）
+
 ## 9. 参照
 
 - docs/09-security-and-compliance.md（既存セキュリティ設計）

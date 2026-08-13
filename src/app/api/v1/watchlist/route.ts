@@ -3,14 +3,17 @@ import { prisma } from "@/lib/db";
 import { auditLogCreateData } from "@/lib/audit";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 import { requireRoleOrAdmin, userEmailFromRequest } from "@/lib/rbac";
+import { demoUserEmailFromEnv } from "@/lib/demo-identity";
 
 const TARGET_TYPES = new Set(["site", "dataSource", "ingestionJob"]);
-const WATCH_ROLES = ["engineer", "data-steward", "admin", "auditor"] as const;
+// auditor は rbac-design.md で「ウォッチリスト・通知設定」が禁止されている。
+// 監査ロールは読み取り専用とし、ここでは許可しない。
+const WATCH_ROLES = ["engineer", "data-steward", "admin"] as const;
 
 export async function GET(request: NextRequest) {
   const authError = await requireRoleOrAdmin(request, WATCH_ROLES);
   if (authError) return authError;
-  const email = userEmailFromRequest(request);
+  const email = userEmailFromRequest(request) ?? demoUserEmailFromEnv();
   if (!email) {
     return NextResponse.json(
       { error: { code: "unauthorized", message: "管理認証が必要です（ウォッチリストは個人単位のため識別ヘッダーが必要）" } },
@@ -21,16 +24,16 @@ export async function GET(request: NextRequest) {
   if (!rate.allowed) return rateLimitResponse(rate);
 
   const entries = await prisma.watchlistEntry.findMany({
-    where: { userEmail: email, enabled: true },
+    where: { userEmail: email },
     orderBy: { createdAt: "desc" },
   });
-  return NextResponse.json({ data: { entries } });
+  return NextResponse.json({ data: { identity: email, entries } });
 }
 
 export async function POST(request: NextRequest) {
   const authError = await requireRoleOrAdmin(request, WATCH_ROLES);
   if (authError) return authError;
-  const email = userEmailFromRequest(request);
+  const email = userEmailFromRequest(request) ?? demoUserEmailFromEnv();
   if (!email) {
     return NextResponse.json(
       { error: { code: "unauthorized", message: "管理認証が必要です（ウォッチリストは個人単位のため識別ヘッダーが必要）" } },
