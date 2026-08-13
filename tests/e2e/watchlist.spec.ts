@@ -70,7 +70,9 @@ test.describe("ウォッチリストUI", () => {
     await expect(page.getByRole("status")).toContainText("ウォッチリストへ登録しました");
     await expect(page.locator("li", { hasText: TARGET_SITE_LABEL })).toBeVisible();
 
-    const row = page.locator("li", { hasText: TARGET_SITE_LABEL });
+    // /sites の行は code と name が別 span（DOM 上は空白なし）のため、
+    // 空白を含む完全ラベルではなく code で行を特定する。
+    const row = page.locator("li", { hasText: "TYO-02" });
     await row.getByRole("button", { name: "解除" }).click();
     await expect(page.getByRole("status")).toContainText("解除しました");
     await expect(page.locator("li", { hasText: TARGET_SITE_LABEL })).toHaveCount(0);
