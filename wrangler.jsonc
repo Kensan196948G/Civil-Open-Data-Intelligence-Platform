@@ -56,11 +56,11 @@
       // Prisma pg ドライバで直接 TCP 接続する（account token に Hyperdrive 作成
       // スコープが無いため。docs/runbooks/cloudflare-production.md §1.1 参照）。
       // 本番 Worker (codip-production) / route / secret / Hyperdrive には触れない。
-      // ルーティングは Workers Custom Domains（zone route は現行 token に
-      // Workers Routes:Edit スコープが無いため 2026-08-13 実測で code 10000）。
-      // DNS は proxied AAAA 100::（カスタムドメイン紐付け時に Cloudflare が作成）。
+      // ルーティングは Workers Custom Domains。zone route は現行 token に
+      // Workers Routes:Edit スコープが無いため 2026-08-13 実測で code 10000。
+      // カスタムドメインの登録は scripts/deploy/deploy-mvp.mjs が API で行う
+      // (wrangler 4.120 は custom_domains 設定キーを未対応のため)。
       "workers_dev": false,
-      "custom_domains": true,
       "vars": {
         "CODIP_ENV_MODE": "preview",
         "CODIP_DEPLOY_TARGET": "staging",
