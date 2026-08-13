@@ -56,13 +56,11 @@
       // Prisma pg ドライバで直接 TCP 接続する（account token に Hyperdrive 作成
       // スコープが無いため。docs/runbooks/cloudflare-production.md §1.1 参照）。
       // 本番 Worker (codip-production) / route / secret / Hyperdrive には触れない。
+      // ルーティングは Workers Custom Domains（zone route は現行 token に
+      // Workers Routes:Edit スコープが無いため 2026-08-13 実測で code 10000）。
+      // DNS は proxied AAAA 100::（カスタムドメイン紐付け時に Cloudflare が作成）。
       "workers_dev": false,
-      "routes": [
-        {
-          "pattern": "codip-mvp.mirai-dx-platform.com/*",
-          "zone_name": "mirai-dx-platform.com"
-        }
-      ],
+      "custom_domains": true,
       "vars": {
         "CODIP_ENV_MODE": "preview",
         "CODIP_DEPLOY_TARGET": "staging",

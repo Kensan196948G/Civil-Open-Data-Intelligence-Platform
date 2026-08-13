@@ -38,11 +38,20 @@ describe("demo identity", () => {
     expect(demoUserEmailFromEnv()).toBeNull();
   });
 
-  it("本番では設定値に関係なくランタイムで無効化する", () => {
-    vi.stubEnv("NODE_ENV", "production");
+  it("本番モード (CODIP_ENV_MODE=production) では設定値に関係なくランタイムで無効化する", () => {
+    vi.stubEnv("CODIP_ENV_MODE", "production");
     vi.stubEnv("CODIP_DEMO_IDENTITY", "true");
     vi.stubEnv("CODIP_DEMO_USER_EMAIL", "demo.engineer@example.com");
     expect(demoIdentityEnabled()).toBe(false);
     expect(demoUserEmailFromEnv()).toBeNull();
+  });
+
+  it("Workers の NODE_ENV=production でも preview モードなら有効のまま", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("CODIP_ENV_MODE", "preview");
+    vi.stubEnv("CODIP_DEMO_IDENTITY", "true");
+    vi.stubEnv("CODIP_DEMO_USER_EMAIL", "demo.engineer@example.com");
+    expect(demoIdentityEnabled()).toBe(true);
+    expect(demoUserEmailFromEnv()).toBe("demo.engineer@example.com");
   });
 });
