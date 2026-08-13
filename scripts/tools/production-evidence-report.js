@@ -285,7 +285,12 @@ function evidenceFormatState(key, value, now) {
   if (!presence.startsWith("✅")) return presence;
 
   const spec = EVIDENCE_FORMATS[key];
-  if (!spec) return presence;
+  // A key with no spec used to fall through and return the presence verdict,
+  // which contradicted the paragraph above: presence alone reached a readiness
+  // check. The failure mode is adding a key to the report tables and forgetting
+  // the spec -- the extra row then reads as more checking while being less.
+  // Refuse instead. The name is a key, never a value, so it is safe to print.
+  if (!spec) return `⚠️ no format spec registered for ${key}`;
 
   const trimmed = value.trim();
   const problems = [
@@ -519,4 +524,8 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { buildReport, evidenceFormatState, EVIDENCE_FORMATS };
+// evidenceState is exported so the audit-scenario tests can observe the
+// pre-#128 presence-only judgement directly. They used to reach it by handing
+// evidenceFormatState a key with no spec, which made a probe out of a defect:
+// hardening that fallthrough would have broken the probe.
+module.exports = { buildReport, evidenceState, evidenceFormatState, EVIDENCE_FORMATS };

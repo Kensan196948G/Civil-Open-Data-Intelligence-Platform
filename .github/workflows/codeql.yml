@@ -44,3 +44,35 @@ jobs:
           path: sarif-results
           if-no-files-found: error
           retention-days: 14
+
+  # `upload: never` の下では analyze が落ちるのはアナライザ自身が失敗したときだけで、
+  # 検出結果では落ちない。それだけでは「スキャンが走った」ことしか示せず、「何も
+  # 見つからなかった」ことは誰も検証していない (等級3 / presence-only)。このジョブが
+  # SARIF を読み、security-severity 7.0 以上 (high/critical) の検出で落ちる。
+  #
+  # analyze と**別ジョブ**にしてあるのは意図的である。analyze は branch protection の
+  # 必須チェックであり、そこを赤にすると main への全マージが凍結する。現時点で high は
+  # 実在し (ADR 0003「既知の残課題」)、そのうち src/ の 1 件は backend の所有外で
+  # backend には解除できない。解除できない凍結を一方的に作らないため、判定は分離して
+  # 「本物の赤を出すが、まだマージ阻止はしない」状態に置く。
+  #
+  # ⏳ 必須化の条件: Issue #142 (ADR 0003「既知の残課題」の 6 件) が完了した時点で、
+  # branch protection の required status checks へ `codeql-findings` を追加する
+  # (これは §17 の保護規則変更にあたるため人間の決裁が要る)。それまでこのジョブの緑を
+  # 「high 脆弱性ゼロ」の根拠として使わないこと。
+  codeql-findings:
+    needs: analyze
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: codeql-sarif
+          path: sarif-results
+
+      - name: Fail on CodeQL findings at or above high severity
+        run: node scripts/tools/check-codeql-sarif.js sarif-results
