@@ -2,9 +2,39 @@
 
 const { spawnSync } = require("node:child_process");
 
+// Windows only. The command line is parsed twice, by two different parsers:
+//
+//   1. cmd.exe, because shell: true makes Node run `cmd /d /s /c "<line>"`
+//   2. the child process's CRT, following CommandLineToArgvW rules
+//
+// Layer 2 is what this function quotes for. There a backslash is a
+// metacharacter *only* when it precedes a quote:
+//   2n backslashes + '"'   -> n backslashes, quote toggles
+//   2n+1 backslashes + '"' -> n backslashes, literal '"'
+//   backslashes not followed by '"' -> literal, no doubling
+// So escaping every backslash would corrupt ordinary paths (C:\a\b), while
+// escaping none lets a trailing backslash consume the closing quote and let the
+// rest of the line run unquoted. Double only the runs that reach a quote or the
+// end of the token — this is the ArgvQuote algorithm.
+//
+// Layer 1 is mostly handled by the surrounding double quotes: cmd.exe does not
+// interpret & | < > ^ inside them. Two characters survive quoting and cannot be
+// escaped reliably on a cmd command line:
+//   %  — %VAR% is expanded inside double quotes as well
+//   !  — expanded too when DelayedExpansion is enabled in the registry
+// Emitting a token whose value we cannot vouch for would be the same class of
+// defect this function exists to fix, so those fail closed instead.
+const CMD_EXPANDS_INSIDE_QUOTES = /[%!]/;
+
 function quoteShellArg(value) {
-  if (/^[A-Za-z0-9_./:@=:-]+$/.test(value)) return value;
-  return `"${value.replace(/"/g, '\\"')}"`;
+  if (/^[A-Za-z0-9_./:@=-]+$/.test(value)) return value;
+  if (CMD_EXPANDS_INSIDE_QUOTES.test(value)) {
+    // The value is deliberately not included: it may carry a secret, and the
+    // character class alone identifies the problem.
+    throw new Error("[release-gate] cannot safely quote an argument containing '%' or '!' for cmd.exe");
+  }
+  const escaped = value.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\*)$/, "$1$1");
+  return `"${escaped}"`;
 }
 
 function run(name, command, args, options = {}) {
@@ -82,4 +112,8 @@ function main() {
   console.log("\n[release-gate] OK");
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = { quoteShellArg };

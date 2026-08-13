@@ -589,6 +589,16 @@ const SCRIPT_GATES: readonly GateEntry[] = [
     notRunMeans: "",
   },
   {
+    file: "scripts/tools/check-codeql-sarif.js",
+    grade: 0,
+    issue: "none",
+    why: "CodeQL SARIF の検出結果を実ファイルから評価する。severity 閾値（security-severity 7.0 以上）のほか、runs/results の実在・解析成否・抑制チャネルを照合し、『検出0件』と『読めなかった』を区別して空集合を合格として扱わない",
+    signals: { substringDominant: false, probesExternal: false, probesFs: true },
+    runsOn: "scheduled",
+    notRunMeans:
+      "codeql.yml の codeql-findings ジョブ（if: always() の条件付き）にのみ結線され、workflow が schedule トリガーを含むため deriveRunsOn の単純化では scheduled 扱いになる。PR でも実走するが『PR で毎回走る』母集団には含めない",
+  },
+  {
     file: "scripts/tools/validate-production-target-env.js",
     grade: 0,
     issue: "none",
@@ -668,6 +678,12 @@ const NON_GATES: readonly NonGate[] = [
   { file: "scripts/tools/start-checked.js", why: "サーバ起動を待ち受けるヘルパー。合否判定を持たない" },
   { file: "scripts/tools/with-env.js", why: "環境変数を注入して他コマンドを起動するラッパー" },
   { file: "scripts/tools/run-ultrareview.js", why: "レビュー起動ツール。CI の合否には関与しない" },
+  {
+    file: "scripts/tools/contract-text.js",
+    why:
+      "契約文字列照合の述語ライブラリ（needle の端がトークン境界に一致するかを判定）。" +
+      "合否を作るのは呼び出し側 (check-github-actions-contract.js 等) であり、このファイル自体は証跡を受理・棄却しない",
+  },
   { file: "scripts/deploy/create-hyperdrive.mjs", why: "Hyperdrive のプロビジョニング操作。証跡の受理判定を持たない" },
   {
     file: "scripts/deploy/cloudflare-dns-record-policy.mjs",

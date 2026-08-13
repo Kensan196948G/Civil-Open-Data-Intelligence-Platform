@@ -14,11 +14,18 @@ const REQUIRED_STRING_FIELDS = [
   "lastPgDumpStatus",
   "lastPgDumpArtifact",
   "restoreDrillStatus",
+  "restoreDrillStatusSource",
   "owner",
   "historyRetentionSource",
 ];
 
 const REQUIRED_DATE_FIELDS = ["checkedAt", "lastPgDumpAt", "lastRestoreDrillAt"];
+
+// Recognised provenance for the drill outcome. A closed vocabulary: an
+// unrecognised token is reported as unrecognised rather than read for its
+// prefix, so a future provenance has to be added here deliberately instead of
+// being accepted because it happened to start with the right characters.
+const KNOWN_RESTORE_DRILL_STATUS_SOURCES = new Set(["declared:--restore-drill-status"]);
 
 const SECRET_PATTERNS = [
   /postgres(?:ql)?:\/\/[^\s|]+/gi,
@@ -250,6 +257,18 @@ function checkEvidence(evidence, options) {
     "restoreDrillRecord referenced",
     String(evidence.restoreDrillRecord ?? "").trim().length > 0,
     safeValue(evidence.restoreDrillRecord ?? "(not recorded)"),
+  );
+  // Deliberately not "was measured": a drill outcome has no measured path, so
+  // claiming one would be the misreading this row exists to prevent. What is
+  // checkable is whether the provenance is one this gate recognises.
+  const drillStatusSource = String(evidence.restoreDrillStatusSource ?? "").trim();
+  const drillStatusSourceKnown = KNOWN_RESTORE_DRILL_STATUS_SOURCES.has(drillStatusSource);
+  note(
+    "restoreDrillStatusSource is a recognised provenance",
+    drillStatusSourceKnown,
+    drillStatusSourceKnown
+      ? `${safeValue(drillStatusSource)} (declared by the operator; no measured path exists for a drill outcome)`
+      : `${safeValue(drillStatusSource || "(not recorded)")} (not in the recognised vocabulary; the provenance cannot be graded)`,
   );
 
   return { ok: failures.length === 0, rows, failures };

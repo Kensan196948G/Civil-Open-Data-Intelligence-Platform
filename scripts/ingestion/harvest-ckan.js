@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 "use strict";
 
+const { stripTagSpans } = require("./html-text");
+
 /**
  * CKAN オープンデータカタログのハーベスト（BODIK / JIG 等）。
  *
@@ -54,9 +56,10 @@ function buildSourceFromPackage(pkg, catalogUrl, providerName, now = new Date())
     providerName,
     name: String(pkg.title || pkg.name || pkg.id || "CKAN dataset").slice(0, 200),
     nameEn: String(pkg.name || "").slice(0, 200) || undefined,
-    description: String(pkg.notes || pkg.title || "オープンデータカタログのデータセット")
-      .replace(/<[^>]+>/g, "")
-      .slice(0, 500),
+    description: stripTagSpans(pkg.notes || pkg.title || "オープンデータカタログのデータセット").slice(
+      0,
+      500,
+    ),
     officialUrl,
     endpointUrl: resource ? resource.url : undefined,
     documentationUrl: datasetUrl,

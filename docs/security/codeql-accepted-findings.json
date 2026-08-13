@@ -1,0 +1,17 @@
+{
+  "documentation": "docs/security/codeql-accepted-findings.md",
+  "entries": [
+    {
+      "path": "data/Civil Open Data Intelligence Platform (1).html",
+      "ruleId": "js/cross-window-information-leak",
+      "count": 4,
+      "justification": "Design reference export (AI Studio single-file HTML) kept in the repository as the source of truth for the UI, not as application code. It is not imported from src/, not under public/, not listed in wrangler assets, and not copied by next build, so the flagged script never reaches a browser through this product. Accepted at level=error / security-severity 4.3. Revisit if the file is ever served, imported, or moved under public/."
+    },
+    {
+      "path": "data/Civil Open Data Intelligence Platform (1).html",
+      "ruleId": "js/xss-through-dom",
+      "count": 1,
+      "justification": "Same artifact and same reasoning as the js/cross-window-information-leak entry above: the finding is inside a design reference export that is not shipped. Recorded separately because it is a different query at security-severity 7.8, and a single record per (path, ruleId) is what makes the consumption count mean anything. Revisit if the file is ever served, imported, or moved under public/."
+    }
+  ]
+}

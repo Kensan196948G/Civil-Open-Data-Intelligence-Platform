@@ -2,6 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { createRequireText } = require("./contract-text.js");
 
 const root = process.cwd();
 const errors = [];
@@ -10,9 +11,7 @@ function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8");
 }
 
-function requireText(label, source, needle) {
-  if (!source.includes(needle)) errors.push(`${label} missing ${needle}`);
-}
+const requireText = createRequireText(errors);
 
 const adr = read("docs/adr/0002-audit-log-guarantee.md");
 const docsIndex = read("docs/README.md");

@@ -38,6 +38,7 @@
     "release:check-cloudflare-build-artifact": "node scripts/tools/check-cloudflare-build-artifact.js",
     "release:check-production-placeholders": "node scripts/tools/check-production-placeholders.js",
     "release:check-github-actions-contract": "node scripts/tools/check-github-actions-contract.js",
+    "release:check-codeql-sarif": "node scripts/tools/check-codeql-sarif.js",
     "db:pg:check-postgis-ddl": "node scripts/tools/check-postgis-standard-record-ddl.js",
     "db:generate": "node scripts/tools/with-env.js DATABASE_URL=file:./dev.db -- prisma generate && npm run db:pg:generate",
     "db:compare-schemas": "node scripts/tools/compare-prisma-models.js",
