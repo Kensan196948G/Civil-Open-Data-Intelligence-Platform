@@ -21,6 +21,7 @@ import { main } from "../../scripts/deploy/deploy-production.mjs";
  */
 
 const HEAD = "a".repeat(40);
+const ghCalls: string[][] = [];
 const OTHER = "b".repeat(40);
 
 type GitResponses = {
@@ -44,6 +45,7 @@ function wireGit({ head = HEAD, porcelain = "", originMain = HEAD, lsRemote, che
       if (sub === "ls-remote") return { status: 0, stdout: `${remote}\n`, stderr: "" };
     }
     if (command === "gh") {
+      ghCalls.push(args);
       return checkRuns ?? { status: 0, stdout: "verify=success\ne2e=success\n", stderr: "" };
     }
     // ここへ到達したら、ゲートを抜けて後段の子プロセスが起きている。
@@ -56,6 +58,7 @@ const PAST_GATE = /NEON_API_KEY|CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID/;
 
 beforeEach(() => {
   spawnSyncMock.mockReset();
+  ghCalls.length = 0;
   process.argv = ["node", "deploy-production.mjs", "--skip-deploy"];
   for (const k of ["NEON_API_KEY", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"]) delete process.env[k];
 });
@@ -107,6 +110,60 @@ describe("deploy 対象 commit の素性ゲート", () => {
   it("clean・origin/main 一致・CI 緑なら通過する", async () => {
     wireGit();
     await expect(main()).rejects.toThrow(PAST_GATE);
+  });
+
+  // 既定の30件だけを見ると、2ページ目以降の failure を取りこぼして
+  // 「CI 失敗 commit をデプロイ」できてしまう。
+  it("check-runs は全ページを読む（--paginate と per_page=100）", async () => {
+    wireGit();
+    await expect(main()).rejects.toThrow(PAST_GATE);
+    expect(ghCalls).toHaveLength(1);
+    const args = ghCalls[0];
+    expect(args).toContain("--paginate");
+    expect(args.some((a) => a.includes("per_page=100"))).toBe(true);
+  });
+
+  it("2ページ目に failure があれば停止する（連結された全ページを評価する）", async () => {
+    // --paginate は各ページの jq 出力を連結する。1ページ目が全て success でも、
+    // 後続ページの failure を見落とさないこと。
+    const page1 = Array.from({ length: 100 }, (_, i) => `check-${i}=success`).join("\n");
+    wireGit({ checkRuns: { status: 0, stdout: `${page1}\nlate-check=failure\n`, stderr: "" } });
+    await expect(main()).rejects.toThrow(/CI is not green[\s\S]*late-check=failure/);
+  });
+
+  // ネットワーク停止で deploy が無限待機しないこと。
+  // 「応答が無い」は「検証に通った」ではない。
+  it("外部CLIがタイムアウトしたら fail-closed で停止する", async () => {
+    spawnSyncMock.mockImplementation((command: string) => {
+      if (command === "git") {
+        const err = new Error("spawnSync git ETIMEDOUT") as NodeJS.ErrnoException;
+        err.code = "ETIMEDOUT";
+        return { status: null, stdout: "", stderr: "", error: err, signal: "SIGKILL" };
+      }
+      throw new Error("must not reach gh after a git timeout");
+    });
+    await expect(main()).rejects.toThrow(/timed out after \d+ms/);
+  });
+
+  it("外部CLIがシグナルで落ちた場合も停止する", async () => {
+    spawnSyncMock.mockImplementation((command: string) => {
+      if (command === "git") return { status: null, stdout: "", stderr: "", signal: "SIGKILL" };
+      throw new Error("must not reach gh");
+    });
+    await expect(main()).rejects.toThrow(/killed by SIGKILL/);
+  });
+
+  it("素性検証の外部呼び出しには必ずタイムアウトが設定されている", async () => {
+    wireGit();
+    await expect(main()).rejects.toThrow(PAST_GATE);
+    const probeCalls = spawnSyncMock.mock.calls.filter((c) => c[0] === "git" || c[0] === "gh");
+    expect(probeCalls.length).toBeGreaterThan(0);
+    for (const call of probeCalls) {
+      expect(call[2], `${call[0]} ${(call[1] as string[]).join(" ")} に timeout が無い`).toMatchObject({
+        timeout: expect.any(Number),
+        killSignal: "SIGKILL",
+      });
+    }
   });
 
   it("--allow-dirty-deploy は git 検査だけを外し、CI 検査は残す", async () => {
