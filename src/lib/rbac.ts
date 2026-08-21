@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { TtlCache } from "@/lib/ttl-cache";
-import { requireAdminRequest, safeTokenEqual } from "@/lib/admin-auth";
+import { ACCESS_USER_EMAIL_HEADER } from "@/lib/proxy-auth-inject";
+import {
+  requireAdminRequest,
+  safeTokenEqual,
+  sameOriginRequest,
+  unsafeMethod,
+} from "@/lib/admin-auth";
 
 /**
  * RBAC（docs/design/rbac-design.md の Phase 1 実装）。
@@ -55,12 +61,20 @@ export function proxyIdentityTrusted(request: NextRequest): boolean {
   return Boolean(presented && safeTokenEqual(presented, configured));
 }
 
-/** Cloudflare Access / proxy 認証済みユーザーの識別ヘッダーからメールを取得する。 */
+/**
+ * Cloudflare Access / proxy 認証済みユーザーの識別ヘッダーからメールを取得する。
+ *
+ * 主体は Access が付与する cf-access-authenticated-user-email のみを採用する。
+ * かつて併用していた x-codip-user は「リクエスト送信者が自由に設定できる値」で
+ * あり、Access を通過した任意の利用者が管理者のメールアドレスを名乗って
+ * ロール解決を通せる権限昇格経路になっていた（本番コード側にこのヘッダーを
+ * 付与する箇所は存在せず、テストの便宜以外の用途が無かった）。
+ * 送信されてきた x-codip-user は middleware 側で除去する
+ * （src/lib/proxy-auth-inject.ts）。
+ */
 export function userEmailFromRequest(request: NextRequest): string | null {
   if (!proxyIdentityTrusted(request)) return null;
-  const email =
-    request.headers.get("x-codip-user") ??
-    request.headers.get("cf-access-authenticated-user-email");
+  const email = request.headers.get(ACCESS_USER_EMAIL_HEADER);
   return email ? normalizeEmail(email) : null;
 }
 
@@ -149,6 +163,16 @@ export async function requireRole(
       401,
       "unauthorized",
       "管理認証が必要です（認証済みユーザー識別ヘッダーがありません）",
+    );
+  }
+  // proxy 認証は Cloudflare Access の Cookie に依存するため、ブラウザは
+  // クロスサイトのフォーム送信でも識別ヘッダー付きのリクエストを送出できる。
+  // requireAdminRequest() と同じ同一Origin検証をロール単独経路にも課す。
+  if (unsafeMethod(request.method) && !sameOriginRequest(request)) {
+    return errorResponse(
+      403,
+      "csrf_check_failed",
+      "proxy 認証を使う変更操作は同一Originからのみ実行できます",
     );
   }
   const role = await resolver(email, scope);
