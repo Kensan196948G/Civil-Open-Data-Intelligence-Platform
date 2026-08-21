@@ -13,25 +13,34 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 
 ## 1. SLO・アラート基準（暫定）
 
-> 📎 実装から導出した SLI / SLO の一覧は
-> [`docs/runbooks/incident-response.md`](../runbooks/incident-response.md) §7 を正本とする
-> （閾値の出典を実ファイルの行へ紐付けてある）。RPO / RTO は同 §8。
-> 本節は運用体制側の基準として残す。
+> 📎 **実装が実際に判定している閾値**は
+> [`docs/runbooks/incident-response.md`](../runbooks/incident-response.md) §7（SLI/SLO）・§8（RPO/RTO）を
+> 正本とする（閾値の出典を実ファイルの行へ紐付けてある）。
+> 本節は**運用体制側の管理目標**であり、粒度が異なる。下表で対応関係を明示する。
 
-| 指標 | 目標 | 計測 |
-| --- | --- | --- |
-| 可用性 | 月間 99.9% | production-smoke 成功割合（15分毎） |
-| `/api/ready` | 監視時刻 100% `status=ready` / `db=ok` | `release:post-release-status --strict-production` |
-| 応答時間 | P95 5秒以内 | probe responseTimeMs |
-| 検知〜初動 | P1: 15分 / P2: 30分 / P3: 1営業日 | **計測不能**（2026-08-11 Issue #90 検証。下記注記を参照） |
-| 復旧 | P1: 60分 / P2: 4時間 / P3: 次回改善サイクル | rollback / forward-fix |
+| 管理目標（本節） | 実装が判定している閾値（正本 §7/§8） | 関係 | 現状 |
+| --- | --- | --- | --- |
+| 可用性 月間 99.9% | 15分毎 probe の成功／失敗 | 本節は probe 成功率の**月次集計**。実装は個々の probe しか見ない | ⚠️ **集計は未実装**。月次可用性を算出する仕組みが無い |
+| `/api/ready` 監視時刻 100% `ready` / `db=ok` | `checks.database=ok` | 同一 | ✅ 実装が判定 |
+| 応答時間 P95 5秒以内 | **単一 probe** `responseTimeMs ≤ 5000ms` | 別物。実装は P95 を計算していない | ⚠️ **P95 は未計測**。実効は「1回でも 5000ms 超なら not ready」 |
+| 検知〜初動 P1: 15分 | 連続2回以上で P1 昇格＋incident Issue 起票 | 起票までは自動。**初動の開始時刻は記録されない** | ⚠️ 計測不能（下記注記） |
+| 復旧 P1: 60分 / P2: 4時間 | RTO: コードのみ 30分 / DB 含む 4時間 | 本節は**インシデント全体**、§8 は**復旧操作単体** | ⚠️ どちらも未実測 |
+
+> ⚠️ **数値が食い違って見える箇所は、粒度が違うだけで矛盾ではない。**
+> ただし「月間 99.9%」「P95 5秒」は**集計する仕組みが無いため現在は測れていない**。
+> 目標値は維持するが、達成を主張しない。集計を実装した時点で本表の「現状」列を更新する。
 
 > ⚠️ **「検知〜初動」が計測不能である理由（2026-08-11 read-only 検証、Issue #90）**
 >
 > 従来この計測欄はアラート未設定とだけ記載していたが、実態は「通知先が未設定」ではなく**通知経路そのものが実装されていない**。
 >
-> 1. `.github/workflows/production-smoke.yml` に失敗時の通知step・Issue起票step・webhookのいずれも存在しない。失敗は `exit 1` によって**表明**されるが、どこへも**伝達**されない。実際に届くのは各GitHubユーザー個人の既定通知設定に依存する範囲のみで、運用上の検知経路として計測できない。
-> 2. §1 の「連続2回以上」といった*連続性*の条件を評価する自動化が存在しない。`scripts/tools/post-release-status.js` は1回の実行内で判定して終了し、workflowはrun間の状態を保持しない。
+> 1. ~~`production-smoke.yml` に失敗時の通知step・Issue起票stepが存在しない~~
+>    → **是正済み（2026-08-21 時点で実装あり）**。`production-smoke.yml:81-224` が
+>    incident Issue を起票する。ただし**外部通知先（メール / Webhook）は依然として未設定**であり、
+>    到達範囲は GitHub Issue と Actions の既定通知に限られる。
+> 2. ~~「連続2回以上」を評価する自動化が存在しない~~
+>    → **是正済み**。`production-smoke.yml:109-136` が GitHub の run 履歴から
+>    連続失敗数を算出し、2回以上で P1 へ昇格させる。
 > 3. 通知テストの受信記録が存在しない（送信APIの成功のみが記録されている）。
 >
 > したがって P1: 15分 という目標値は**現時点では達成/未達を判定できない**。目標値そのものは維持し、計測可能になるまで「未達」ではなく「計測不能」として扱う。
@@ -64,18 +73,18 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 
 ### 3.2 週次
 
-**実施状況（2026-08-22 時点）**
+**実施状況（2026-08-21T16:12Z UTC = 2026-08-22 01:12 JST 時点）**
 
 | 項目 | 最終実施 | 状態 | 次回予定 |
 | --- | --- | --- | --- |
 | PITR window | 2026-08-11 | 🔴 **期限超過**（11日） | 要実施 |
-| pg_dump鮮度 | **2026-08-22** | 🔴 **判定 NG**（§5 参照） | 2026-08-29 |
+| pg_dump鮮度 | **2026-08-21Z** | 🔴 **判定 NG**（§5 参照） | 2026-08-29 |
 | restore drill 鮮度 | 2026-08-12 | 🟡 基準内。ただし pg_restore 型は未実施 | 2026-09-11 |
 | 監査ログ抽出 | 2026-08-12 | 🔴 **期限超過**（10日） | 要実施 |
-| 依存監査 | **2026-08-22** | ✅ **本番0件へ是正**（§5 参照） | 2026-08-29 |
+| 依存監査 | **2026-08-21Z** | ✅ **本番0件へ是正**（§5 参照） | 2026-08-29 |
 | Secret/証明書棚卸し | 2026-08-12 | 🔴 **期限超過**（10日）。§4 は10件中6件が「不明」のまま | 要実施 |
 
-> 2026-08-22 のサイクルで実施したのは **依存監査** と **pg_dump鮮度** の2項目のみである。
+> 2026-08-21Z（JST 08-22）のサイクルで実施したのは **依存監査** と **pg_dump鮮度** の2項目のみである。
 > 残る4項目は未実施のため「期限超過」と明記する（§6 の更新ルールに従い、
 > 実施していない点検を実施済みと記載しない）。
 
@@ -128,12 +137,12 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 
 | 日時 | 項目 | 結果 | 証跡 |
 | --- | --- | --- | --- |
-| 2026-08-22 | 週次点検「依存監査」 | 🔴→✅ 是正 | `npm audit --audit-level=moderate --omit=dev` が **exit 1**（GHSA-2v37-7h3g-55p8 / nanoid、GHSA-ggr8-5vv4-36mx / deepmerge-ts。いずれも high）。`verify` と `docker-image-security` が失敗し **2026-08-13 以降 main への統合が停止**していた。override を実アップグレードして解消し `found 0 vulnerabilities` / `[dependency-audit] OK` を実測。PR #171 |
-| 2026-08-22 | 週次点検「pg_dump鮮度」 | ❌ **判定 NG** | `neon-backup.yml` が **2026-08-13 から8回連続 failure**。失敗 step は `Validate backup inputs` で、必須 Secrets/Variables 未登録による fail-closed 停止（設計どおりの挙動）。**欠けていたのは通知経路**であり9日間誰も気づかなかった。失敗時 incident Issue 起票を追加（PR #173）。本体の復旧は Secrets 登録（人間決裁事項・PR #144）待ち |
-| 2026-08-22 | 監視「SLA monitor」の実態確認 | ❌ **一度も成功していない** | `sla-monitor.yml` 直近10回すべて failure。実ログの原因は `POST /repos/{owner}/{repo}/labels` の **HTTP 403 `Resource not accessible by integration`**。job に `issues: write` が無かった。付与して是正（PR #173）。README が謳う日次ダイジェストは**一度も利用者に届いていない**（`data-watch-digest` ラベルの Issue が 0 件） |
-| 2026-08-22 | 復旧手順の実行可能性検証 | ❌ **動作しない手順を検出** | `cloudflare-mvp.md` の公開MVP切り戻し `npx wrangler rollback codip-mvp --env mvp` は、位置引数が **version-id** であるため失敗する（wrangler 4.120.0 の `--help` で実測）。`--name` 形へ修正し `rollback.md` へ codip-mvp の手順を追加（PR #181） |
-| 2026-08-22 | インシデント Runbook の実行可能性検証 | ⚠️ **コードフェンス0** | 障害時に最初に開く `incident-response.md` にコマンドが名前としてしか出ていなかった（0→14フェンス）。Docker/GHCR の誤った復旧経路・陳腐化した通知記述・codip-mvp の不在を是正。SLI/SLO と RPO/RTO を実装から導出して追加（PR #181） |
-| 2026-08-22 | main 統合経路の復旧 | ✅ | 停止は3つの独立した原因の重なりだった。(1) 依存 advisory (2) ruleset の実在しないチェック名 `"verify\n"` (3) commit が GitHub ユーザーに未帰属。いずれも実測で切り分けて解消し、PR 11本が `CLEAN` に到達 |
+| 2026-08-21Z | 週次点検「依存監査」 | 🔴→✅ 是正 | `npm audit --audit-level=moderate --omit=dev` が **exit 1**（GHSA-2v37-7h3g-55p8 / nanoid、GHSA-ggr8-5vv4-36mx / deepmerge-ts。いずれも high）。`verify` と `docker-image-security` が失敗し **2026-08-13 以降 main への統合が停止**していた。override を実アップグレードして解消し `found 0 vulnerabilities` / `[dependency-audit] OK` を実測。PR #171 |
+| 2026-08-21Z | 週次点検「pg_dump鮮度」 | ❌ **判定 NG** | `neon-backup.yml` が **2026-08-13 から8回連続 failure**。失敗 step は `Validate backup inputs` で、必須 Secrets/Variables 未登録による fail-closed 停止（設計どおりの挙動）。**欠けていたのは通知経路**であり9日間誰も気づかなかった。失敗時 incident Issue 起票を追加（PR #173）。本体の復旧は Secrets 登録（人間決裁事項・PR #144）待ち |
+| 2026-08-21Z | 監視「SLA monitor」の実態確認 | ❌ **一度も成功していない** | `sla-monitor.yml` 直近10回すべて failure。実ログの原因は `POST /repos/{owner}/{repo}/labels` の **HTTP 403 `Resource not accessible by integration`**。job に `issues: write` が無かった。付与して是正（PR #173）。README が謳う日次ダイジェストは**一度も利用者に届いていない**（`data-watch-digest` ラベルの Issue が 0 件） |
+| 2026-08-21Z | 復旧手順の実行可能性検証 | ❌ **動作しない手順を検出** | `cloudflare-mvp.md` の公開MVP切り戻し `npx wrangler rollback codip-mvp --env mvp` は、位置引数が **version-id** であるため失敗する（wrangler 4.120.0 の `--help` で実測）。`--name` 形へ修正し `rollback.md` へ codip-mvp の手順を追加（PR #181） |
+| 2026-08-21Z | インシデント Runbook の実行可能性検証 | ⚠️ **コードフェンス0** | 障害時に最初に開く `incident-response.md` にコマンドが名前としてしか出ていなかった（0→14フェンス）。Docker/GHCR の誤った復旧経路・陳腐化した通知記述・codip-mvp の不在を是正。SLI/SLO と RPO/RTO を実装から導出して追加（PR #181） |
+| 2026-08-21Z | main 統合経路の復旧 | ✅ | 停止は3つの独立した原因の重なりだった。(1) 依存 advisory (2) ruleset の実在しないチェック名 `"verify\n"` (3) commit が GitHub ユーザーに未帰属。いずれも実測で切り分けて解消し、PR 11本が `CLEAN` に到達 |
 | 2026-08-11 | 監視・通知実態の read-only 再検証（Issue #90） | ⚠️ 一部BLOCKED | `docs/runbooks/monitoring.md` §0.1。確認できた事実（zone active / DNS解決 / Access境界302 / production smoke直近20件success / Neon PITR 86400秒 / ローカル品質ゲートPASS）と、Cloudflare read権限不足で検証できなかった項目（Access設定・通知ポリシー・Workers Observability等）を分離して記録。**AC#7「/api/ready継続失敗がP1として通知される」は不成立**のためIssue #90はクローズせず |
 | 2026-08-11 | 通知テスト記録様式の新設 | ✅ | [`docs/runbooks/notification-test-record.md`](../runbooks/notification-test-record.md)。送信API成功ではなく**人間の受信**を合否条件とする様式。現在の台帳は `cloudflare-alert-policy`=`NOT RUN`（受信記録なし）/ `github-actions-failure`=`BLOCKED` / `neon-alert`=`BLOCKED` |
 | 2026-08-11 | 監視Runbookの契約テスト追加 | ✅ | `tests/unit/monitoring-runbook-contract.test.ts`。runbookの記述とworkflow・probe scriptの実装が乖離したらCIで落ちる。特に「通知stepは存在しない」という記述は、実装されると同時にテストが失敗して文書更新を強制する |

@@ -68,13 +68,24 @@ service token は Secrets にあり、値をターミナルへ展開しない。
 
 ```bash
 # GitHub Actions 側で実行する（ローカルに token を降ろさない）
-gh workflow run production-smoke.yml
-sleep 5
+# ⚠️ このワークフローは15分毎の scheduled run も走る。さらに他の当番が
+#    同時に dispatch している可能性もある。--limit 1 では取り違える。
+#    dispatch **前**の最新 dispatch run を控え、それより新しいものを自分の run とする。
+BEFORE=$(gh run list --workflow=production-smoke.yml --event=workflow_dispatch \
+  --limit 1 --json databaseId -q '.[0].databaseId // 0')
 
-# ⚠️ このワークフローは15分毎の scheduled run も走る。--limit 1 だけでは
-#    別の scheduled run を掴む。--event=workflow_dispatch で自分の run に固定する。
-RUN_ID=$(gh run list --workflow=production-smoke.yml \
-  --event=workflow_dispatch --limit 1 --json databaseId -q '.[0].databaseId')
+gh workflow run production-smoke.yml
+
+RUN_ID=""
+for _ in $(seq 1 30); do
+  sleep 4
+  CANDIDATE=$(gh run list --workflow=production-smoke.yml --event=workflow_dispatch \
+    --limit 1 --json databaseId -q '.[0].databaseId // 0')
+  if [ "$CANDIDATE" != "$BEFORE" ] && [ "$CANDIDATE" != "0" ]; then RUN_ID="$CANDIDATE"; break; fi
+done
+# 空の RUN_ID で先へ進まない（gh run watch "" は別 run を掴みうる）
+[ -n "$RUN_ID" ] || { echo "dispatch した run を特定できなかった。手動で確認すること" >&2; exit 1; }
+
 echo "watching run: $RUN_ID"
 gh run watch "$RUN_ID" --exit-status
 ```
@@ -147,17 +158,20 @@ DB の復旧（Neon PITR restore）は**上書きであり取り消しが困難*
 
 ### 3.7 検証
 
-```bash
-# 本番の復旧確認は §3.2 と同じ「認証つき probe を dispatch して、その run の成否を見る」
-gh workflow run production-smoke.yml
-sleep 5
-RUN_ID=$(gh run list --workflow=production-smoke.yml \
-  --event=workflow_dispatch --limit 1 --json databaseId -q '.[0].databaseId')
-gh run watch "$RUN_ID" --exit-status
+本番の復旧確認は §3.2 と同じ手順（**dispatch した run を特定して、その成否を見る**）を使う。
+§3.2 のブロックをそのまま再実行すること。
 
-# 以降の scheduled run が継続して成功していることも確認する
-gh run list --workflow=production-smoke.yml --limit 5
+そのうえで、以降の **scheduled** run が継続して成功していることを別に確認する。
+
+```bash
+# 復旧後に自動で回る scheduled run だけを見る（dispatch した自分の run と混ぜない）
+gh run list --workflow=production-smoke.yml --event=schedule --limit 5 \
+  --json databaseId,createdAt,status,conclusion \
+  -q '.[] | "\(.createdAt) \(.status) \(.conclusion) #\(.databaseId)"'
 ```
+
+`status=completed` かつ `conclusion=success` が続いていることを確認する。
+`status` が `in_progress` のものは判定に含めない。
 
 `/api/ready=200`（Access 経由）、主要画面 / API、管理系の negative ケース、
 直近 smoke の継続成功を確認する。
