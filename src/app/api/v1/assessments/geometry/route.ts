@@ -18,6 +18,79 @@ function intOrNull(value: unknown) {
   return value;
 }
 
+/** bufferM の上限。radiusM(最大100km)へ加算されるため、合計が非現実的にならない値に留める。 */
+const MAX_BUFFER_M = 10_000;
+
+/** GeoJSON polygon の総頂点数上限。ST_GeomFromGeoJSON と後続の空間演算の負荷を有界にする。 */
+const MAX_POLYGON_VERTICES = 10_000;
+
+function validBboxTuple(bbox: Array<number | null>): boolean {
+  const [minLng, minLat, maxLng, maxLat] = bbox as [number, number, number, number];
+  return (
+    minLng >= -180 &&
+    maxLng <= 180 &&
+    minLat >= -90 &&
+    maxLat <= 90 &&
+    minLng < maxLng &&
+    minLat < maxLat
+  );
+}
+
+type PolygonVerdict = { ok: true } | { ok: false; message: string };
+
+function countRingVertices(rings: unknown): number | null {
+  if (!Array.isArray(rings)) return null;
+  let total = 0;
+  for (const ring of rings) {
+    if (!Array.isArray(ring) || ring.length < 4) return null;
+    for (const position of ring) {
+      if (!Array.isArray(position) || position.length < 2) return null;
+      const [lng, lat] = position;
+      if (typeof lng !== "number" || typeof lat !== "number") return null;
+      if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+      if (lng < -180 || lng > 180 || lat < -90 || lat > 90) return null;
+    }
+    total += ring.length;
+  }
+  return total;
+}
+
+function validatePolygonGeoJson(value: unknown): PolygonVerdict {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { ok: false, message: "polygon はGeoJSONオブジェクトが必要です" };
+  }
+  const geo = value as { type?: unknown; coordinates?: unknown };
+  if (geo.type !== "Polygon" && geo.type !== "MultiPolygon") {
+    return { ok: false, message: "polygon.type は Polygon または MultiPolygon です" };
+  }
+  let vertices: number | null = 0;
+  if (geo.type === "Polygon") {
+    vertices = countRingVertices(geo.coordinates);
+  } else {
+    if (!Array.isArray(geo.coordinates)) return { ok: false, message: "polygon.coordinates の形式が不正です" };
+    let total = 0;
+    for (const polygon of geo.coordinates) {
+      const count = countRingVertices(polygon);
+      if (count === null) {
+        total = -1;
+        break;
+      }
+      total += count;
+    }
+    vertices = total >= 0 ? total : null;
+  }
+  if (vertices === null) {
+    return {
+      ok: false,
+      message: "polygon.coordinates は各リング4点以上・経度-180〜180・緯度-90〜90の数値配列が必要です",
+    };
+  }
+  if (vertices > MAX_POLYGON_VERTICES) {
+    return { ok: false, message: `polygon の頂点数は${MAX_POLYGON_VERTICES}以下です（指定: ${vertices}）` };
+  }
+  return { ok: true };
+}
+
 function buildSummary(records: Array<{ category: string; sourceId: string; geometry: unknown; properties: { dataSource?: { title?: string } } }>) {
   const map = new Map<string, { category: string; recordCount: number; layers: Map<string, { layerId: string; title: string; count: number }> }>();
   for (const record of records) {
@@ -62,6 +135,11 @@ export async function POST(request: NextRequest) {
         }
       : null;
   const radiusM = numberOrNull(body.radiusM);
+  // bufferM は radiusM に加算されて ST_DWithin の距離になる
+  // (src/lib/standard-records.ts の `radiusM + bufferM`)。上限が無いと
+  // radiusM の 100km 制限を加算で突破でき、GIST インデックスが効かない
+  // 測地距離計算が standard_records 全行に走る。未認証で到達できるため
+  // 単独で DB の CPU を枯渇させられた。
   const bufferM = numberOrNull(body.bufferM) ?? 0;
   const bbox =
     mode === "bbox" && Array.isArray(body.bbox) && body.bbox.length === 4
@@ -77,11 +155,39 @@ export async function POST(request: NextRequest) {
   if (mode === "circle" && (radiusM == null || radiusM < 1 || radiusM > 100_000)) {
     return NextResponse.json({ error: { code: "invalid_body", message: "radiusM は1〜100000です" } }, { status: 400 });
   }
+  if (bufferM < 0 || bufferM > MAX_BUFFER_M) {
+    return NextResponse.json(
+      { error: { code: "invalid_body", message: `bufferM は0〜${MAX_BUFFER_M}です` } },
+      { status: 400 },
+    );
+  }
   if (mode === "bbox" && (!bbox || bbox.some((value) => value == null))) {
     return NextResponse.json({ error: { code: "invalid_body", message: "bbox は [minLng,minLat,maxLng,maxLat] の数値4つです" } }, { status: 400 });
   }
+  // 数値4つであることに加えて、地理座標として成立していることを要求する。
+  // 範囲検査が無いと [-1e9,-1e9,1e9,1e9] のような包絡矩形が通り、
+  // 全件走査と同義になる。判定は layers/[id]/features の parseBbox と同じ形。
+  if (mode === "bbox" && bbox && !validBboxTuple(bbox)) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "invalid_body",
+          message: "bbox は経度-180〜180・緯度-90〜90で、minLng<maxLng かつ minLat<maxLat が必要です",
+        },
+      },
+      { status: 400 },
+    );
+  }
   if (mode === "polygon" && (!body.polygon || typeof body.polygon !== "object")) {
     return NextResponse.json({ error: { code: "invalid_body", message: "polygon はGeoJSONオブジェクトが必要です" } }, { status: 400 });
+  }
+  // typeof === "object" だけでは {} や [] が ST_GeomFromGeoJSON へ到達し、
+  // 未処理の例外で 500 になる。型と頂点数をここで確定させる。
+  if (mode === "polygon") {
+    const verdict = validatePolygonGeoJson(body.polygon);
+    if (!verdict.ok) {
+      return NextResponse.json({ error: { code: "invalid_body", message: verdict.message } }, { status: 400 });
+    }
   }
   if (limit < 1 || limit > 5000 || cursor < 0 || cursor > 100_000) {
     return NextResponse.json(
