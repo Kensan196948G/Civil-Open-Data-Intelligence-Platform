@@ -277,12 +277,19 @@ docker compose -f docker-compose.preview.yml up -d
 
 切り戻し後は必ず read-only スモークで復旧を確認する。**書き込みを伴う検証は本番で実行しない。**
 
-```bash
-# 本番（Access 保護下。認証つき probe は GitHub Actions 側で実行する）
-npm run release:smoke -- --read-only --base-url "https://odip.mirai-dx-platform.com"
+**本番（`odip`）の合否はローカル smoke で判定しない。**
+Access service token を持たないローカル実行は Access 境界しか見ておらず、
+「302 が返る」以上のことは分からない。判定は GitHub Actions 側の認証つき probe で行う
+（手順は [`incident-response.md`](incident-response.md) §3.2。dispatch した run を
+特定して `gh run watch --exit-status` で成否を取る）。
 
-# 公開MVP（Access 無し。直接叩ける）
+```bash
+# 公開MVP（Access 無し。ローカルから直接叩けるので、これは本当に検証になる）
 npm run release:smoke -- --read-only --base-url "https://codip-mvp.mirai-dx-platform.com"
+
+# 本番へローカルから叩く場合は「Access 境界が生きていること」の確認に限定される
+curl -sS -o /dev/null -w 'HTTP %{http_code}\n' https://odip.mirai-dx-platform.com/api/health
+# → 302 は Access 境界が機能している証拠にすぎず、アプリの復旧確認ではない
 ```
 
 | 確認項目 | 期待 |
