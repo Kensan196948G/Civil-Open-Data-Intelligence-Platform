@@ -233,14 +233,22 @@ curl -sS -w '\nHTTP %{http_code}\n' https://codip-mvp.mirai-dx-platform.com/api/
 
 ## 8. RPO / RTO
 
-| 指標 | 目標 | 根拠 | 実測 |
+| 指標 | 目標 | 根拠 | 実測（**操作単体**。適用範囲に注意） |
 | --- | --- | --- | --- |
-| RPO（許容データ損失） | 24時間 | 日次 pg_dump（`neon-backup.yml`） | 未実測 |
-| RPO（PITR 利用時） | Neon の保持窓に依存 | `create-neon-backup-evidence.js` が実測して記録 | 実行時に取得 |
-| RTO（コードのみの復旧） | 30分 | `wrangler rollback` + smoke 再実行 | 未実測 |
-| RTO（DB を含む復旧） | 4時間 | PITR restore + 検証 + human 承認 | 未実測 |
+| RPO（許容データ損失） | 24時間 | 日次 pg_dump（`neon-backup.yml`） | ⚠️ 未実測。かつ **2026-08-13 以降 backup が失敗中**のため現状は達成していない |
+| RPO（PITR 利用時） | Neon の保持窓に依存 | `create-neon-backup-evidence.js` が実測して記録 | 実行時に取得（直近実測 `history_retention_seconds=86400`） |
+| RTO（コードのみ） | 30分 | `wrangler rollback` + smoke 再実行 | ✅ **4秒**（2026-08-10 ドリル。`--env production` で d1528b5d へ切戻し）＋ smoke。復旧デプロイは **25秒** |
+| RTO（DB を含む） | 4時間 | PITR restore + 検証 + human 承認 | ✅ **約14分**（2026-08-12 PITR ドリル。branch 作成〜検証〜後片付けまで）。別途 2026-08-10 に PITR→初回クエリ **3.1秒** |
 
-⚠️ **実測列が「未実測」である項目は、訓練で測るまで達成を主張しない。**
-`docs/runbooks/restore-drill-record.md` に訓練の記録を残し、実測値が取れた時点で
-本表を更新する。pg_dump からの `pg_restore` 型の訓練は**まだ一度も実施していない**ため、
-暗号化 dump の復号可否とパスフレーズの有効性は未検証である。
+> ⚠️ **実測列は「復旧操作そのもの」の所要時間であり、インシデント全体の RTO ではない。**
+> 検知・切り分け・判断・human 承認の時間を含まない。目標値（30分 / 4時間）は
+> インシデント全体を想定しているため、実測値が目標を大きく下回っていても
+> 「目標達成」を意味しない。エンドツーエンドの実測はまだ無い。
+>
+> 実測の出典は `docs/operations/operations-ledger.md` §5 の実行記録、および
+> `docs/runbooks/restore-drill-record.md`。
+
+⚠️ **pg_dump からの `pg_restore` 型の訓練は一度も実施していない。**
+上記の DB 復旧実測はすべて **Neon PITR** 経由であり、
+暗号化 dump の復号可否とパスフレーズの有効性は**未検証**である。
+バックアップが失効した場合に頼る経路が、検証されていないことを意味する。
