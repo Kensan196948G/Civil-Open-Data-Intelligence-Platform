@@ -256,6 +256,34 @@ async function ensureDnsRecord(token) {
 // that only exercises resolveEvidenceEnv() proves the function is fail-closed
 // while saying nothing about whether main() still calls it: replacing the line
 // below with `const evidenceEnv = {}` left the whole suite green (T-B12).
+/** 素性検証で外部 CLI を叩くときの上限。ネットワーク停止で deploy が無限待機しないため。 */
+const PROBE_TIMEOUT_MS = 60_000;
+
+/**
+ * 素性検証用の外部コマンド実行。**タイムアウトは fail-closed** にする。
+ *
+ * `git fetch` / `git ls-remote` / `gh api` はいずれもネットワークを触る。
+ * 時間制限なしで spawnSync すると、上流が無応答のとき deploy が黙って止まり続ける。
+ * 「応答が無い」は「検証に通った」ではないので、必ず例外にする。
+ */
+function runProbe(command, args) {
+  const r = spawnSync(command, args, {
+    encoding: "utf8",
+    timeout: PROBE_TIMEOUT_MS,
+    killSignal: "SIGKILL",
+  });
+  if (r.error) {
+    const code = r.error.code === "ETIMEDOUT" ? `timed out after ${PROBE_TIMEOUT_MS}ms` : r.error.code;
+    throw new Error(`${command} ${args.join(" ")} failed: ${code}`);
+  }
+  // timeout で kill された場合 status は null になる。0 以外と同様に失敗として扱う。
+  if (r.status !== 0) {
+    const why = r.status === null ? `killed by ${r.signal ?? "signal"}` : `exit=${r.status}`;
+    throw new Error(`${command} ${args.join(" ")} failed (${why}): ${(r.stderr || "").trim()}`);
+  }
+  return r;
+}
+
 /**
  * デプロイ対象 commit の素性を検証する。
  *
@@ -279,10 +307,7 @@ function verifyCommitProvenance() {
   // raw=true は porcelain 用。全体を trim すると1行目の先頭スペース
   // （`git status --porcelain` の XY フィールド）が消え、パスの先頭を削ってしまう。
   const git = (args, { raw = false } = {}) => {
-    const r = spawnSync("git", args, { encoding: "utf8" });
-    if (r.status !== 0) {
-      throw new Error(`git ${args.join(" ")} failed: ${(r.stderr || "").trim()}`);
-    }
+    const r = runProbe("git", args);
     const out = r.stdout || "";
     return raw ? out.replace(/\n$/, "") : out.trim();
   };
@@ -335,14 +360,20 @@ function verifyCommitProvenance() {
 
   // CI 結果は GitHub を単一の真実として引く。gh が無い / 認証されていない場合は
   // 「確認できなかった」であって「成功した」ではないため、停止する。
-  const gh = spawnSync(
-    "gh",
-    ["api", `repos/{owner}/{repo}/commits/${head}/check-runs`, "--jq", ".check_runs[] | \"\(.name)=\(.conclusion)\""],
-    { encoding: "utf8" },
-  );
-  if (gh.status !== 0) {
+  // --paginate + per_page=100 で全ページを見る。既定の30件だけを見ると、
+  // 2ページ目以降の failure を取りこぼして「CI 失敗 commit をデプロイ」できてしまう。
+  let gh;
+  try {
+    gh = runProbe("gh", [
+      "api",
+      "--paginate",
+      `repos/{owner}/{repo}/commits/${head}/check-runs?per_page=100`,
+      "--jq",
+      '.check_runs[] | "\(.name)=\(.conclusion)"',
+    ]);
+  } catch (error) {
     throw new Error(
-      `could not read CI results for ${head} via gh (${(gh.stderr || "").trim() || "unknown error"}). ` +
+      `could not read CI results for ${head} via gh (${error.message}). ` +
         "Fix gh auth, or pass --skip-ci-check to deploy without this gate.",
     );
   }
