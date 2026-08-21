@@ -69,8 +69,20 @@ service token は Secrets にあり、値をターミナルへ展開しない。
 ```bash
 # GitHub Actions 側で実行する（ローカルに token を降ろさない）
 gh workflow run production-smoke.yml
-gh run watch "$(gh run list --workflow=production-smoke.yml --limit 1 --json databaseId -q '.[0].databaseId')"
+sleep 5
+
+# ⚠️ このワークフローは15分毎の scheduled run も走る。--limit 1 だけでは
+#    別の scheduled run を掴む。--event=workflow_dispatch で自分の run に固定する。
+RUN_ID=$(gh run list --workflow=production-smoke.yml \
+  --event=workflow_dispatch --limit 1 --json databaseId -q '.[0].databaseId')
+echo "watching run: $RUN_ID"
+gh run watch "$RUN_ID" --exit-status
 ```
+
+**本番の判定はこの run の成否だけを根拠にする。** `post-release-status.js` は
+`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` が設定されているときにだけ
+Access ヘッダーを付ける（`scripts/tools/post-release-status.js:24-25`）。
+認証情報を持たないローカル実行では **Access の外側しか見えず、本番復旧の確認にならない**。
 
 ### 3.3 切り分け（Worker → DB → Access の順）
 
@@ -81,12 +93,24 @@ npx wrangler deployments list --env production
 # --- Worker: エラーのみを追う（Ctrl-C で終了）---
 npx wrangler tail --env production --status error --format pretty
 
-# --- DB: /api/ready の checks.database が唯一の機械的判定 ---
-curl -sS https://codip-mvp.mirai-dx-platform.com/api/ready | jq '.checks, .responseTimeMs'
 ```
 
-DB の詳細（branch / 容量 / 接続数 / slow query）は Neon Console で確認する。
+🚫 **本番 DB の状態を `codip-mvp` で代用してはならない。**
+`codip-mvp` は Neon branch `mvp-20260813` を使う独立環境であり
+（`scripts/deploy/deploy-mvp.mjs:5,39`。production の `main` branch には触れない）、
+その `/api/ready` が `ok` でも**本番 DB については何も言っていない**。
+障害中にこれを見ると「DB は正常」という誤った切り分けになる。
+
+本番 DB の機械的判定は `/api/ready` の `checks.database` だが、本番は Access 配下に
+あるため §3.2 の認証つき probe（GitHub Actions 側）で取得する。
+詳細（branch / 容量 / 接続数 / slow query）は Neon Console で確認する。
 `sla-monitor` の鮮度閾値は §7 の SLO 表を参照。
+
+公開MVPの手動確認（**本番の切り分けではない**。MVP 自体の障害時のみ）:
+
+```bash
+curl -sS https://codip-mvp.mirai-dx-platform.com/api/ready | jq '.checks, .responseTimeMs'
+```
 
 ### 3.4 Cloudflare 522 / routing の診断
 
@@ -114,7 +138,7 @@ npm run release:post-release-status -- \
   --production-url https://odip.mirai-dx-platform.com --strict-production
 ```
 
-DB の復旧（Neon PITR restore）は**上書きであり取り消しに近い**ため、
+DB の復旧（Neon PITR restore）は**上書きであり取り消しが困難**ため、
 `rollback.md` §4 に従い human 承認を得てから実行する。復旧前に必ず現状 branch を保存する。
 
 > 🚫 **Docker / GHCR は本番の復旧経路ではない。** 本番は Cloudflare Workers であり、
@@ -124,13 +148,25 @@ DB の復旧（Neon PITR restore）は**上書きであり取り消しに近い*
 ### 3.7 検証
 
 ```bash
-npm run release:post-release-status -- \
-  --production-url https://odip.mirai-dx-platform.com --strict-production
-curl -sS https://codip-mvp.mirai-dx-platform.com/api/ready
-gh run list --workflow=production-smoke.yml --limit 3
+# 本番の復旧確認は §3.2 と同じ「認証つき probe を dispatch して、その run の成否を見る」
+gh workflow run production-smoke.yml
+sleep 5
+RUN_ID=$(gh run list --workflow=production-smoke.yml \
+  --event=workflow_dispatch --limit 1 --json databaseId -q '.[0].databaseId')
+gh run watch "$RUN_ID" --exit-status
+
+# 以降の scheduled run が継続して成功していることも確認する
+gh run list --workflow=production-smoke.yml --limit 5
 ```
 
-`/api/ready=200`、主要画面 / API、管理系の negative ケース、直近 smoke の成功を確認する。
+`/api/ready=200`（Access 経由）、主要画面 / API、管理系の negative ケース、
+直近 smoke の継続成功を確認する。
+
+公開MVPを戻した場合は、それとは別に直接確認する。
+
+```bash
+curl -sS -w '\nHTTP %{http_code}\n' https://codip-mvp.mirai-dx-platform.com/api/ready
+```
 
 ### 3.8 記録
 
@@ -146,7 +182,7 @@ gh run list --workflow=production-smoke.yml --limit 3
 
 - 原則 **forward-fix**（SQL/アプリ修正で正しく直す）とする。audit_logsとともにIssue・PRへ証跡を残す。
 - 一括UPDATE/DELETEは事前に `pg_dump` またはPITR復元可能時点を確保し、dry-run→実行者・確認者を明記する。
-- PITR restoreは最終手段（上書きであり取り消し不可に近い）。`rollback.md` §4に従い、復旧前に必ず現状branchを保存する。
+- PITR restoreは最終手段（上書きであり取り消しが困難）。`rollback.md` §4に従い、復旧前に必ず現状branchを保存する。
 - 個人情報・会社データに関わる訂正はhuman承認必須。
 
 ## 6. ポストモーテム
