@@ -313,6 +313,11 @@ curl -sS -o /dev/null -w 'HTTP %{http_code}\n' https://odip.mirai-dx-platform.co
 
 ## 🔗 関連文書
 
+- [段階的本番デプロイ計画（2026-08 サイクル）](staged-production-deploy-2026-08.md)
+  — 未デプロイ 28 commits + 本サイクル 12 PR を段階的に出す手順と、各段の判定・停止条件。
+  **本デプロイは migration を伴わない**（本番 DB は既に目標 schema）ため、
+  rollback はコードのみで完結する。
+
 | 文書 | 役割 |
 | --- | --- |
 | `docs/13-deployment-and-operations.md` | デプロイ方針・障害対応の初動 |
