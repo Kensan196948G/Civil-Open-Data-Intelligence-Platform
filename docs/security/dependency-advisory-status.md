@@ -70,6 +70,47 @@ allowlist は `scripts/tools/check-dependency-audit.js` の `ALLOWLIST` が唯�
 したがって「本番ランタイムの脆弱性」ではないが、「本番グラフゲートが検出する対象」ではある。
 allowlist が使えない以上、修正はバージョンを上げる以外にない。
 
+### override 適用後の依存グラフ（実測）
+
+`npm ci` 後のクリーンな依存グラフで、override が意図どおり効いていることを確認した。
+
+```
+$ npm ls --omit=dev nanoid --all
+civil-open-data-intelligence-platform@0.1.0
+└─┬ next@15.5.23
+  └─┬ postcss@8.5.26 overridden
+    └── nanoid@3.3.18 overridden
+
+$ npm ls @prisma/config deepmerge-ts --all
+civil-open-data-intelligence-platform@0.1.0
+└─┬ prisma@6.19.3
+  └─┬ @prisma/config@6.19.3
+    └── deepmerge-ts@8.0.2 overridden
+```
+
+`npm ls --omit=dev nanoid --all` が `next` → `postcss` → `nanoid` を示すことは、
+`postcss` の直接宣言が `devDependencies` であっても本番グラフから到達することの
+直接的な証拠である。
+
+### 非破壊の互換性検証（prisma CLI に回帰が無いこと）
+
+`deepmerge-ts` は `@prisma/config` の設定読み込みで使われるため、prisma CLI の
+動作で回帰の有無を測る。次はいずれもデータを変更しない。
+
+| コマンド | 結果 |
+| --- | --- |
+| `npm ci` | exit 0（lockfile と package.json が同期） |
+| `npm audit --audit-level=moderate --omit=dev` | `found 0 vulnerabilities` |
+| `node scripts/tools/check-dependency-audit.js` | `[dependency-audit] OK` |
+| `npm run db:generate` | exit 0 |
+| `npm run db:compare-schemas` | `[prisma-compare] OK` |
+| `npm run db:pg:validate` | exit 0 |
+| `npm run db:pg:generate` | exit 0 |
+
+`prisma migrate deploy` と `prisma db seed` はデータを変更するため、上記の
+互換性検証とは分けて扱う。CI の `verify` job では使い捨ての SQLite に対して
+実行しており、本番 DB へは適用しない（本番 migration は人間の決裁事項）。
+
 prisma 側のアップグレードでは解消しない。`@prisma/config` は 6.19.3 から最新 7.9.1 まで
 一貫して `deepmerge-ts: "7.1.5"` を**完全固定**しているため、上流に修正版が存在しない。
 
