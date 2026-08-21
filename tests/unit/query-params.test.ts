@@ -46,6 +46,22 @@ describe("dateParam", () => {
     expect(parsed?.toISOString()).toBe("2026-01-02T03:04:05.000Z");
   });
 
+  // 回帰: 暦として存在しない日は Invalid Date にならず翌月へ正規化される。
+  // そのまま通すと、利用者が指定したつもりのない期間を無言で検索する。
+  it("暦として存在しない日を拒否する（正規化を素通ししない）", () => {
+    // 実測: new Date("2026-02-30") -> 2026-03-02、new Date("2026-02-29") -> 2026-03-01
+    expect(dateParam(sp("t1=2026-02-30"), "t1", fallback)).toBeNull();
+    expect(dateParam(sp("t1=2026-02-29"), "t1", fallback)).toBeNull();
+    expect(dateParam(sp("t1=2026-04-31"), "t1", fallback)).toBeNull();
+    expect(dateParam(sp("t1=2026-06-31T12:00:00Z"), "t1", fallback)).toBeNull();
+  });
+
+  it("実在する暦日は通す（うるう年を含む）", () => {
+    expect(dateParam(sp("t1=2026-02-28"), "t1", fallback)?.toISOString().slice(0, 10)).toBe("2026-02-28");
+    expect(dateParam(sp("t1=2024-02-29"), "t1", fallback)?.toISOString().slice(0, 10)).toBe("2024-02-29");
+    expect(dateParam(sp("t1=2026-12-31T23:59:59Z"), "t1", fallback)?.toISOString().slice(0, 10)).toBe("2026-12-31");
+  });
+
   // 回帰: new Date("notadate") は例外を投げず Invalid Date を返すため、
   // 素通しすると lte: Invalid Date が Prisma へ到達する。
   it("解釈できない日時は null（Invalid Date を素通ししない）", () => {

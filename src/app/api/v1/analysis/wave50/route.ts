@@ -10,7 +10,17 @@ export async function GET(request: NextRequest) {
   if (!rate.allowed) return rateLimitResponse(rate);
   const sp = request.nextUrl.searchParams;
   const siteId = sp.get("siteId");
-  const method = sp.get("method") === "weibull" ? "weibull" : "gumbel";
+  // OpenAPI は enum: [gumbel, weibull] を公開契約として宣言している。
+  // 未知の値を黙って gumbel へ倒すと、契約外の入力に 200 を返して
+  // 「利用者が weibull のつもりで gumbel の結果を受け取る」事故になる。
+  const rawMethod = sp.get("method");
+  if (rawMethod !== null && rawMethod !== "gumbel" && rawMethod !== "weibull") {
+    return NextResponse.json(
+      { error: { code: "invalid_query", message: "method は gumbel または weibull です" } },
+      { status: 400 },
+    );
+  }
+  const method = rawMethod === "weibull" ? "weibull" : "gumbel";
   if (!siteId) {
     return NextResponse.json({ error: { code: "invalid_query", message: "siteId を指定してください" } }, { status: 400 });
   }

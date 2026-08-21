@@ -38,18 +38,32 @@ function validBboxTuple(bbox: Array<number | null>): boolean {
 
 type PolygonVerdict = { ok: true } | { ok: false; message: string };
 
+/**
+ * GeoJSON の LinearRing 集合を検証し、総頂点数を返す。不正なら null。
+ *
+ * RFC 7946 の LinearRing は「4点以上」かつ「先頭と末尾が一致（閉じている）」
+ * であることを要求する。閉鎖条件を見ないと未閉鎖のリングが PostGIS へ渡り、
+ * ST_GeomFromGeoJSON 側の挙動に委ねることになる。
+ * position は3要素目（標高）を許すが、**全要素が有限数値である**ことを求める
+ * （先頭2要素だけ見ると `[139, 35, "invalid"]` を受け入れてしまう）。
+ */
 function countRingVertices(rings: unknown): number | null {
-  if (!Array.isArray(rings)) return null;
+  if (!Array.isArray(rings) || rings.length === 0) return null;
   let total = 0;
   for (const ring of rings) {
     if (!Array.isArray(ring) || ring.length < 4) return null;
     for (const position of ring) {
-      if (!Array.isArray(position) || position.length < 2) return null;
-      const [lng, lat] = position;
-      if (typeof lng !== "number" || typeof lat !== "number") return null;
-      if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+      if (!Array.isArray(position) || position.length < 2 || position.length > 3) return null;
+      for (const component of position) {
+        if (typeof component !== "number" || !Number.isFinite(component)) return null;
+      }
+      const [lng, lat] = position as number[];
       if (lng < -180 || lng > 180 || lat < -90 || lat > 90) return null;
     }
+    // 閉鎖条件: 先頭と末尾の position が一致すること
+    const first = ring[0] as number[];
+    const last = ring[ring.length - 1] as number[];
+    if (first.length !== last.length || first.some((value, i) => value !== last[i])) return null;
     total += ring.length;
   }
   return total;
@@ -67,7 +81,9 @@ function validatePolygonGeoJson(value: unknown): PolygonVerdict {
   if (geo.type === "Polygon") {
     vertices = countRingVertices(geo.coordinates);
   } else {
-    if (!Array.isArray(geo.coordinates)) return { ok: false, message: "polygon.coordinates の形式が不正です" };
+    if (!Array.isArray(geo.coordinates) || geo.coordinates.length === 0) {
+      return { ok: false, message: "polygon.coordinates の形式が不正です" };
+    }
     let total = 0;
     for (const polygon of geo.coordinates) {
       const count = countRingVertices(polygon);
@@ -82,7 +98,9 @@ function validatePolygonGeoJson(value: unknown): PolygonVerdict {
   if (vertices === null) {
     return {
       ok: false,
-      message: "polygon.coordinates は各リング4点以上・経度-180〜180・緯度-90〜90の数値配列が必要です",
+      message:
+        "polygon.coordinates は1つ以上のリングを持ち、各リングは4点以上・先頭と末尾が一致（閉じている）・" +
+        "各座標は有限数値で経度-180〜180・緯度-90〜90である必要があります",
     };
   }
   if (vertices > MAX_POLYGON_VERTICES) {
