@@ -196,7 +196,7 @@ function allowedOrigins(): Set<string> {
   );
 }
 
-function sameOriginRequest(request: NextRequest): boolean {
+export function sameOriginRequest(request: NextRequest): boolean {
   const origin = requestOrigin(request);
   if (!origin) return false;
 
@@ -209,7 +209,7 @@ function sameOriginRequest(request: NextRequest): boolean {
   );
 }
 
-function unsafeMethod(method: string): boolean {
+export function unsafeMethod(method: string): boolean {
   return !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase());
 }
 
