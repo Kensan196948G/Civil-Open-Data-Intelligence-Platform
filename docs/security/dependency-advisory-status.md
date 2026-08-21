@@ -1,6 +1,6 @@
 # 依存advisory対応状況
 
-最終更新: 2026-08-11
+最終更新: **2026-08-21T16:12Z (UTC)** = 2026-08-22 01:12 JST（本文の日付は JST 表記。CI ログは UTC のため1日ずれて見える）
 
 `npm audit` が検出する advisory の対応状況と、allowlist に残す判断の根拠を記録する。
 CI ゲートの実体は次の2段構成であり、本ドキュメントはその判断材料を提供する。
@@ -13,13 +13,115 @@ CI ゲートの実体は次の2段構成であり、本ドキュメントはそ�
 allowlist は `scripts/tools/check-dependency-audit.js` の `ALLOWLIST` が唯一の正本である。
 期限切れエントリは、対象 advisory が検出されていなくてもゲートを FAIL させる（受容が無期限に生き延びないため）。
 
-## 現況サマリ (2026-08-11 時点)
+## 現況サマリ (2026-08-21T16:12Z UTC = 2026-08-22 01:12 JST 時点)
 
 | 項目 | 結果 |
 | --- | --- |
-| 本番グラフ (`--omit=dev`) | 脆弱性 0 件 |
-| 全グラフ (dev込み) | 脆弱性 0 件 |
+| 本番グラフ (`--omit=dev`) | 脆弱性 0 件（`found 0 vulnerabilities`） |
+| 全グラフ (dev込み) | `[dependency-audit] OK` |
 | 有効な allowlist エントリ | 1件 (GHSA-mh99-v99m-4gvg) |
+
+本監査 (2026-08-22 JST) の時点で advisory 2件が CI をブロックしていたため、いずれも **実アップグレードで解消**した。
+経緯は「2026-08-22 の再燃と新規検出」を参照。
+
+## 2026-08-22 (JST) の再燃と新規検出
+
+2026-08-13 の main CI は green だったが (以下、日付は JST。CI ログの時刻は UTC のため1日ずれて見えることがある)、その後 advisory DB 側が更新され、
+**コード変更なしに `verify` と `docker-image-security` が失敗する状態**になっていた。
+過去の green は「現時点でも green」の証拠にならない典型例として記録する。
+
+### GHSA-2v37-7h3g-55p8 — nanoid（再燃 / CVE-2026-67213）
+
+| 項目 | 内容 |
+| --- | --- |
+| severity | high |
+| 検出経路 | `next`（本番依存）→ `postcss` → `nanoid`。**本番グラフ**であり `--omit=dev` の対象に入る |
+| 影響版 | `<3.3.18`（2026-08-11 時点の影響版は `<3.3.17` だった） |
+| 実測 | `npm audit --omit=dev` が exit 1 / Trivy が `CVE-2026-67213 HIGH` を検出（PR #169 の両ジョブ失敗） |
+
+**根本原因は `overrides` の完全固定 pin である。**
+`"nanoid": "3.3.17"` と厳密固定していたため、advisory の影響範囲が
+`<3.3.17` から `<3.3.18` へ広がった時点で、固定値そのものが脆弱版になった。
+
+- 対応: `overrides` を `3.3.18` へ更新（`package.json` + `package-lock.json` の当該エントリのみ）
+- 教訓: **完全固定 pin は「その版が将来も安全」を暗黙に仮定する。** 影響範囲は後から広がりうるため、
+  固定 pin を採用した依存は advisory 再燃の監視対象として扱う。
+
+### GHSA-ggr8-5vv4-36mx — deepmerge-ts（新規）
+
+| 項目 | 内容 |
+| --- | --- |
+| severity | high |
+| 内容 | 再帰的オブジェクトグラフの merge で stack exhaustion |
+| 影響版 | `<8.0.0`（検出時の解決版は 7.1.5） |
+| 検出経路 | `@prisma/client`（本番依存）の peerDependency `prisma` → `@prisma/config` → `deepmerge-ts` |
+| lockfile の印 | `devOptional: true`（dev または optional の辺だけで到達する、の意） |
+
+分類は「本番ランタイムに同梱される」という意味ではない。正確には次の3点である。
+
+1. **lockfile 上は `devOptional`。** `prisma` は `devDependencies` 宣言であり、
+   `@prisma/client` からの辺は optional な peerDependency である。
+2. **それでも `npm audit --audit-level=moderate --omit=dev` は本 advisory を報告し exit 1 になる**
+   （実測）。`--omit=dev` が落とすのは「dev の辺だけで到達する」ものであり、
+   本番依存からの optional な辺で到達できる本件は残る。CI で落ちていたゲートはこれである。
+3. **実行時の露出はない。** `@prisma/config` は CLI 専用の設定読み込みであり、
+   Cloudflare Worker のバンドルには含まれない。
+
+したがって「本番ランタイムの脆弱性」ではないが、「本番グラフゲートが検出する対象」ではある。
+allowlist が使えない以上、修正はバージョンを上げる以外にない。
+
+### override 適用後の依存グラフ（実測）
+
+`npm ci` 後のクリーンな依存グラフで、override が意図どおり効いていることを確認した。
+
+```console
+$ npm ls --omit=dev nanoid --all
+civil-open-data-intelligence-platform@0.1.0
+└─┬ next@15.5.23
+  └─┬ postcss@8.5.26 overridden
+    └── nanoid@3.3.18 overridden
+
+$ npm ls @prisma/config deepmerge-ts --all
+civil-open-data-intelligence-platform@0.1.0
+└─┬ prisma@6.19.3
+  └─┬ @prisma/config@6.19.3
+    └── deepmerge-ts@8.0.2 overridden
+```
+
+`npm ls --omit=dev nanoid --all` が `next` → `postcss` → `nanoid` を示すことは、
+`postcss` の直接宣言が `devDependencies` であっても本番グラフから到達することの
+直接的な証拠である。
+
+### 非破壊の互換性検証（prisma CLI に回帰が無いこと）
+
+`deepmerge-ts` は `@prisma/config` の設定読み込みで使われるため、prisma CLI の
+動作で回帰の有無を測る。次はいずれもデータを変更しない。
+
+| コマンド | 結果 |
+| --- | --- |
+| `npm ci` | exit 0（lockfile と package.json が同期） |
+| `npm audit --audit-level=moderate --omit=dev` | `found 0 vulnerabilities` |
+| `node scripts/tools/check-dependency-audit.js` | `[dependency-audit] OK` |
+| `npm run db:generate` | exit 0 |
+| `npm run db:compare-schemas` | `[prisma-compare] OK` |
+| `npm run db:pg:validate` | exit 0 |
+| `npm run db:pg:generate` | exit 0 |
+
+`prisma migrate deploy` と `prisma db seed` はデータを変更するため、上記の
+互換性検証とは分けて扱う。CI の `verify` job では使い捨ての SQLite に対して
+実行しており、本番 DB へは適用しない（本番 migration は人間の決裁事項）。
+
+prisma 側のアップグレードでは解消しない。`@prisma/config` は 6.19.3 から最新 7.9.1 まで
+一貫して `deepmerge-ts: "7.1.5"` を**完全固定**しているため、上流に修正版が存在しない。
+
+- 対応: `overrides` に `"deepmerge-ts": "8.0.2"` を追加
+- 互換性の実測: 8.0.2 は 7.1.5 と `type` / `exports` マップが同一、依存・peer ともに空、
+  engines のみ `>=16.0.0` → `>=16.9.0`（CI/本番の Node 22 は範囲内）。
+  `@prisma/config` が使用する API は `deepmerge` のみ。
+  `db:generate` / `db:compare-schemas` / `db:pg:validate` / `db:pg:generate` /
+  `prisma migrate deploy` / `prisma db seed` の全通過で prisma CLI 側の回帰なしを確認した。
+- allowlist へは登録しない（本番グラフゲートは allowlist を参照しないため、
+  そもそも登録しても `verify` は通らない。実アップグレードのみが解になる）。
 
 ## 解消済み advisory
 
@@ -40,7 +142,10 @@ allowlist は `scripts/tools/check-dependency-audit.js` の `ALLOWLIST` が唯�
 ### GHSA-2v37-7h3g-55p8 — nanoid (Issue #108)
 
 - 内容: `size=0` の特殊呼び出しでのみ影響。postcss は hash 生成 (size>0) に使用
-- 依存経路: devDependencies (postcss 経由)
+- 依存経路: **本番グラフ** (`next` → `postcss` → `nanoid`)。
+  当初この節は「devDependencies (postcss 経由)」と記載していたが、これは誤りである。
+  `postcss` は `devDependencies` にも宣言されているが、本番依存 `next` が自身の依存として
+  `postcss` を引くため、`npm audit --omit=dev` の対象に入る (2026-08-22 の再燃時に実測して判明)
 - 対応: 依存更新により advisory 自体が検出されなくなったため、allowlist エントリを削除 (2026-08-11)
 
 ## 有効な allowlist エントリ
