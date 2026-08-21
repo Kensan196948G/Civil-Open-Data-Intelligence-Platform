@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 import { requestId } from "@/lib/v1-response";
 import { returnPeriods } from "@/lib/analysis/return-period";
+import { dateParam } from "@/lib/query-params";
 
 export async function GET(request: NextRequest) {
   const rate = checkRateLimit("api:v1:analysis:wave50", clientIdentifier(request), 120, 60_000);
@@ -13,10 +14,44 @@ export async function GET(request: NextRequest) {
   if (!siteId) {
     return NextResponse.json({ error: { code: "invalid_query", message: "siteId を指定してください" } }, { status: 400 });
   }
+  // 期間は任意。未指定なら全履歴を対象とする（従来どおり）。
+  const from = dateParam(sp, "from", EPOCH_START);
+  if (!from) {
+    return NextResponse.json({ error: { code: "invalid_query", message: "from は解釈可能な日時で指定してください" } }, { status: 400 });
+  }
+  const to = dateParam(sp, "to", FAR_FUTURE);
+  if (!to) {
+    return NextResponse.json({ error: { code: "invalid_query", message: "to は解釈可能な日時で指定してください" } }, { status: 400 });
+  }
+  if (from.getTime() > to.getTime()) {
+    return NextResponse.json({ error: { code: "invalid_query", message: "from は to 以前を指定してください" } }, { status: 400 });
+  }
+
+  // 年最大値しか使わないので観測日時と波高だけを取り出す。
+  // 上限を1件超えて取得し、超過を「黙って切り捨てる」のではなく 422 で知らせる。
+  // 静かな truncation は推算結果を無言で誤らせるため採用しない。
   const rows = await prisma.marineObservation.findMany({
-    where: { siteId, sigWaveHM: { not: null }, source: { not: "open_meteo_marine_info" } },
+    where: {
+      siteId,
+      sigWaveHM: { not: null },
+      observedAt: { gte: from, lte: to },
+      source: { not: "open_meteo_marine_info" },
+    },
     orderBy: { observedAt: "asc" },
+    select: { observedAt: true, sigWaveHM: true },
+    take: MAX_OBSERVATIONS + 1,
   });
+  if (rows.length > MAX_OBSERVATIONS) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "range_too_large",
+          message: `対象観測が${MAX_OBSERVATIONS}件を超えます。from / to で期間を絞って再実行してください`,
+        },
+      },
+      { status: 422 },
+    );
+  }
   if (rows.length < 2) {
     return NextResponse.json(
       { error: { code: "insufficient_data", message: "波高データが2件未満のため確率波推算を実行できません" } },
@@ -61,6 +96,17 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+/**
+ * 1リクエストで扱う観測件数の上限。
+ * 10分間隔なら1年で約52,560件なので、およそ10年分に相当する。
+ * Cloudflare Workers の 128MB 制限に対して余裕を残すための有界化。
+ */
+const MAX_OBSERVATIONS = 600_000;
+
+/** from / to の既定値。未指定時は従来どおり全履歴を対象とする。 */
+const EPOCH_START = new Date(0);
+const FAR_FUTURE = new Date("9999-12-31T23:59:59.999Z");
 
 function round(value: number): number {
   return Math.round(value * 1000) / 1000;
