@@ -31,6 +31,9 @@ function observation(year: number, waveHM: number) {
   return { observedAt: new Date(Date.UTC(year, 0, 1)), sigWaveHM: waveHM };
 }
 
+/** 推算が成立する程度の年最大値系列（10年分）。 */
+const TEN_YEARS = Array.from({ length: 10 }, (_, i) => observation(2015 + i, 1 + i * 0.3));
+
 describe("wave50 のクエリ有界化", () => {
   it("take と select を付けて発行する（全列・全件ロードをしない）", async () => {
     findMany.mockResolvedValue([observation(2020, 1.2), observation(2021, 2.4)]);
@@ -67,6 +70,25 @@ describe("wave50 のクエリ有界化", () => {
     findMany.mockResolvedValue([]);
     const res = await wave50GET(get("siteId=SITE01&from=2026-01-02T00:00:00Z&to=2026-01-01T00:00:00Z"));
     expect(res.status).toBe(400);
+  });
+
+  // OpenAPI は enum: [gumbel, weibull] を宣言している。未知の値を黙って
+  // gumbel へ倒すと、契約外の入力に 200 を返してしまう。
+  it("method が契約外の値なら 400（黙って gumbel へ倒さない）", async () => {
+    findMany.mockResolvedValue([observation(2020, 1.2), observation(2021, 2.4)]);
+    const res = await wave50GET(get("siteId=SITE01&method=invalid"));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe("invalid_query");
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it("契約内の method と未指定は通る", async () => {
+    findMany.mockResolvedValue(TEN_YEARS);
+    for (const qs of ["siteId=SITE01", "siteId=SITE01&method=gumbel", "siteId=SITE01&method=weibull"]) {
+      findMany.mockClear();
+      const res = await wave50GET(get(qs));
+      expect(res.status, qs).toBe(200);
+    }
   });
 
   it("siteId 未指定は従来どおり 400", async () => {
