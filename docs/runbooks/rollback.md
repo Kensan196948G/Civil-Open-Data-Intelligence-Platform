@@ -10,7 +10,7 @@
 
 | 区分 | 内容 |
 | --- | --- |
-| 対象 | 共有プレビュー / staging / production |
+| 対象 | 共有プレビュー / staging / **codip-mvp（公開レビュー環境）** / production |
 | 実行者 | **人間**。ロールバックは本番状態を変更するため、AI エージェントは判断材料の提示までとし実行しない |
 | 事前確認 | 本書の各手順は「影響」「不可逆性」を明記している。実行前に必ず読むこと |
 | 記録 | 実行後は §7 の記録欄と該当 Issue に、実行者・時刻・対象・結果を残す |
@@ -69,6 +69,26 @@ npx wrangler rollback <VERSION_ID> --name codip --env production --message "inci
 
 `--message` を指定すると対話確認プロンプトが省略される。無人実行以外では省略して確認画面を読むこと。
 
+### 2.2.1 codip-mvp（公開レビュー環境）を戻す
+
+`codip-mvp` は 2026-08-13 から公開しており、`odip`（本番）とは target が完全に分離している。
+同じ機構（`wrangler rollback`）で戻せるが、**`--env` が異なる**。
+
+```bash
+npx wrangler deployments list --name codip --env mvp
+npx wrangler rollback --name codip --env mvp --message "incident: <Issue番号> による切り戻し"
+```
+
+検証は Access を通らないため直接叩ける。
+
+```bash
+curl -sS -w '\nHTTP %{http_code}\n' https://codip-mvp.mirai-dx-platform.com/api/ready
+```
+
+> ⚠️ `codip-mvp` は `production-smoke.yml` の probe 対象に**含まれていない**。
+> 戻したあとの継続確認は手動で行うこと。DB・公開停止の手順は
+> [cloudflare-mvp.md](cloudflare-mvp.md) §4 を参照する。
+
 ### 2.3 制約 (Cloudflare 公式仕様)
 
 | 制約 | 内容 |
@@ -94,6 +114,12 @@ npx wrangler deploy --env production   # ⚠️ 人間承認必須
 ## 🐳 3. Docker / GHCR イメージのロールバック
 
 > 適用: コンテナ実行環境 (共有プレビュー等) の切り戻し。
+>
+> 🚫 **本番（`odip`）と公開MVP（`codip-mvp`）の復旧経路ではない。** どちらも
+> Cloudflare Workers であり、Docker イメージはデプロイに使用していない。
+> 障害時に GHCR digest を差し戻しても、これらの環境は変わらない。
+> 本節はコンテナで動かしている共有プレビューに限って有効である。
+> Docker 依存そのものの撤去は Issue #35 で追跡している。
 
 ### 3.1 戻せるイメージを特定する
 
@@ -252,7 +278,11 @@ docker compose -f docker-compose.preview.yml up -d
 切り戻し後は必ず read-only スモークで復旧を確認する。**書き込みを伴う検証は本番で実行しない。**
 
 ```bash
-npm run release:smoke -- --read-only --base-url "https://<対象URL>"
+# 本番（Access 保護下。認証つき probe は GitHub Actions 側で実行する）
+npm run release:smoke -- --read-only --base-url "https://odip.mirai-dx-platform.com"
+
+# 公開MVP（Access 無し。直接叩ける）
+npm run release:smoke -- --read-only --base-url "https://codip-mvp.mirai-dx-platform.com"
 ```
 
 | 確認項目 | 期待 |
