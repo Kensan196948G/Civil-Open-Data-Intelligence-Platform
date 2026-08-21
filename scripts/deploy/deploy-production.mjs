@@ -394,8 +394,20 @@ function verifyCommitProvenance() {
 }
 
 export async function main() {
-  const deployCommit = verifyCommitProvenance();
-  console.log(`[deploy-production] deploying fixed commit ${deployCommit}`);
+  // --skip-deploy は DNS 変更・migration・seed・deploy・secrets のいずれにも
+  // 到達せず return する読取り専用の preflight である（下の skipDeploy 分岐が
+  // ensureDnsRecord() より前にある）。何もデプロイしないので素性ゲートは課さない。
+  // ここで止めると、接続先・権限・migration 状態を事前に確かめる手段が失われる。
+  // 証跡ゲート（resolveEvidenceEnv）が --skip-deploy を免除しているのと同じ理由。
+  // 既存の skipDeploy はモジュール読込時に固定される。ゲートの免除判定は
+  // 呼び出し時に読み直す（既存定数の評価タイミングは変えない。他の分岐が依存しているため）。
+  const readOnlyPreflight = skipDeploy || process.argv.includes("--skip-deploy");
+  if (!readOnlyPreflight) {
+    const deployCommit = verifyCommitProvenance();
+    console.log(`[deploy-production] deploying fixed commit ${deployCommit}`);
+  } else {
+    console.log("[deploy-production] --skip-deploy: read-only preflight (provenance gate not applied)");
+  }
 
   const neonKey = requiredEnv("NEON_API_KEY");
   const cfToken = requiredEnv("CLOUDFLARE_API_TOKEN");

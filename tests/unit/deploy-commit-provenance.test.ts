@@ -59,7 +59,9 @@ const PAST_GATE = /NEON_API_KEY|CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID/;
 beforeEach(() => {
   spawnSyncMock.mockReset();
   ghCalls.length = 0;
-  process.argv = ["node", "deploy-production.mjs", "--skip-deploy"];
+  // 素性ゲートは deploy 経路のためのもの。--skip-deploy は読取り専用 preflight で
+  // 免除されるため、ゲート自体を測るテストでは付けない。
+  process.argv = ["node", "deploy-production.mjs"];
   for (const k of ["NEON_API_KEY", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"]) delete process.env[k];
 });
 
@@ -164,6 +166,22 @@ describe("deploy 対象 commit の素性ゲート", () => {
         killSignal: "SIGKILL",
       });
     }
+  });
+
+  // 読取り専用 preflight は DNS 変更・migration・seed・deploy・secrets の
+  // いずれにも到達しない。何もデプロイしないので素性ゲートは課さない。
+  // ここで止めると、接続先・権限・migration 状態を事前に確かめる手段が失われる。
+  it("--skip-deploy（読取り専用 preflight）では素性ゲートを課さない", async () => {
+    process.argv.push("--skip-deploy");
+    // 汚れた作業ツリー・未マージ・CI 赤 でも、preflight は素性で止まらない
+    wireGit({
+      porcelain: " M src/app/page.tsx",
+      originMain: OTHER,
+      checkRuns: { status: 0, stdout: "verify=failure\n", stderr: "" },
+    });
+    await expect(main()).rejects.toThrow(PAST_GATE);
+    // git / gh を一度も呼んでいない = ゲートを通っていない
+    expect(spawnSyncMock.mock.calls.filter((c) => c[0] === "git" || c[0] === "gh")).toEqual([]);
   });
 
   it("--allow-dirty-deploy は git 検査だけを外し、CI 検査は残す", async () => {
