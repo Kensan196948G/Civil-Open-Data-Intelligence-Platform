@@ -66,11 +66,11 @@ Issue #127 でこの構造は撤去した。既定値を削除し、`--restore-d
 | # | ゲート名（検査項目） | 供給元（ファイル:行） | 分類 | 偽陰性シナリオ | 是正案 |
 | ---: | --- | --- | :---: | --- | --- |
 | 1 | `measured PITR retention meets minimum`（`check-neon-backup-evidence.js:162-166`） | `create-neon-backup-evidence.js:142` `measureHistoryRetention()` が Neon control-plane API を `fetch` し、`:194` で `project.history_retention_seconds` を読む。測定できなければ `:224-226` で証跡を書かずに異常終了する。閾値は `check-*.js:5` の定数 `24` | 🟢 | — | **是正済み（Issue #126）。** dispatch input は `historyWindowHoursDeclared` として記録のみへ降格し、実測との差は非ゲートの `declared window agrees with measurement`（`check-*.js:203-207`）で可視化する。閾値 24 は据え置き（[monitoring.md §1.2.1(5)](../runbooks/monitoring.md) に変更仕様あり） |
-| 2 | `restoreDrillStatus is success`（`check-neon-backup-evidence.js:241-245`） | `neon-backup.yml:60` の `inputs.restore_drill_status` または `vars.CODIP_LAST_RESTORE_DRILL_STATUS` → `:186` `--restore-drill-status` → `create-neon-backup-evidence.js:297`。既定値は撤廃され、未指定なら `:277-279` で異常終了する | 🔴 | 訓練を実施せずに `success` と申告すればゲートは通る。**ただし「何もしない」では通らない**: 値が無ければ `neon-backup.yml:105` の `Validate backup inputs` でジョブが落ちる | 分類は 🔴 のまま（**是正漏れではない**）。訓練は人間の手順であり実測へ変換できない。到達点は申告の裏付けであり、`--restore-drill-record` で [復旧訓練 実施記録](../runbooks/restore-drill-record.md) の台帳行を参照させ、`check-*.js:256-260` が非ゲートで可視化する |
+| 2 | `restoreDrillStatus is success`（`check-neon-backup-evidence.js:241-245`） | `neon-backup.yml:69` の `inputs.restore_drill_status` または `vars.CODIP_LAST_RESTORE_DRILL_STATUS` → `:195` `--restore-drill-status` → `create-neon-backup-evidence.js:297`。既定値は撤廃され、未指定なら `:277-279` で異常終了する | 🔴 | 訓練を実施せずに `success` と申告すればゲートは通る。**ただし「何もしない」では通らない**: 値が無ければ `neon-backup.yml:114` の `Validate backup inputs` でジョブが落ちる | 分類は 🔴 のまま（**是正漏れではない**）。訓練は人間の手順であり実測へ変換できない。到達点は申告の裏付けであり、`--restore-drill-record` で [復旧訓練 実施記録](../runbooks/restore-drill-record.md) の台帳行を参照させ、`check-*.js:256-260` が非ゲートで可視化する |
 | 3 | `lastPgDumpStatus` の success 判定（`check-neon-backup-evidence.js:236-240`） | `create-neon-backup-evidence.js:255-256` — #5 の `fs.statSync`（`:119-121` で通常ファイルかつ非空を確認）が成功した場合にのみ `"success"` を導出し、供給元を `lastPgDumpStatusSource: "artifact-stat:regular-file,size>0"` として記録する。申告値が実測と矛盾すれば `:261` で異常終了する | 🟢 | — | **是正済み（Issue #127）。** #5 の実測経路を status の供給元へ接続した。workflow から定数 `success` を渡す案は採らなかった（定数の置き場所が JS から YAML へ移るだけで分類は 🔴 のまま） |
-| 4 | `lastRestoreDrillAt is fresh`（30日以内。`check-neon-backup-evidence.js:223-227`、閾値は `:7`） | `neon-backup.yml:59` の `inputs.restore_drill_at` または `vars.CODIP_LAST_RESTORE_DRILL_AT` → `:185` `--restore-drill-at` | 🔴 | 復旧訓練を実施していなくても、dispatch 時に本日の日付を入力するか `vars.CODIP_LAST_RESTORE_DRILL_AT` を更新すれば「30日以内」を満たす | 訓練実施の証跡（訓練 workflow の run ID・成果物）を供給元とし、自己申告の日付は上書き扱いで記録だけ残す。現状の緩和は #2 と同じく台帳参照のみ |
+| 4 | `lastRestoreDrillAt is fresh`（30日以内。`check-neon-backup-evidence.js:223-227`、閾値は `:7`） | `neon-backup.yml:68` の `inputs.restore_drill_at` または `vars.CODIP_LAST_RESTORE_DRILL_AT` → `:194` `--restore-drill-at` | 🔴 | 復旧訓練を実施していなくても、dispatch 時に本日の日付を入力するか `vars.CODIP_LAST_RESTORE_DRILL_AT` を更新すれば「30日以内」を満たす | 訓練実施の証跡（訓練 workflow の run ID・成果物）を供給元とし、自己申告の日付は上書き扱いで記録だけ残す。現状の緩和は #2 と同じく台帳参照のみ |
 | 5 | `lastPgDumpAt is fresh` + artifact 実在・非空（`check-neon-backup-evidence.js:213-217` / `create-neon-backup-evidence.js:118-128`） | `create-neon-backup-evidence.js:119` `fs.statSync(filePath)`、`:121` サイズ0で例外、`stats.mtime` を `lastPgDumpAt` へ | 🟢 | — | 現状維持。QA 調査時点で**同一スクリプト内で唯一の実測経路**であり、Issue #127 でこの経路を #3 の供給元へ接続した（#1 の Neon API 実測は Issue #126 で追加） |
-| 6 | `owner` 必須（`check-neon-backup-evidence.js:10-20` の必須フィールド） | `neon-backup.yml:62` の `inputs.owner` または `vars.CODIP_BACKUP_OWNER` → `:175` 既定値 `release-manager` | 🔴 | 実在しない担当者名でも通る。ただし責任者の記録が目的であり、機械検証の対象として設計されていない | 分類は 🔴 だが是正不要。**証跡の記録**であって**状態の検査**ではないことを文書側で明示する |
+| 6 | `owner` 必須（`check-neon-backup-evidence.js:10-20` の必須フィールド） | `neon-backup.yml:71` の `inputs.owner` または `vars.CODIP_BACKUP_OWNER` → `:184` 既定値 `release-manager` | 🔴 | 実在しない担当者名でも通る。ただし責任者の記録が目的であり、機械検証の対象として設計されていない | 分類は 🔴 だが是正不要。**証跡の記録**であって**状態の検査**ではないことを文書側で明示する |
 
 > 💡 QA 調査時点で #2 と #3 は「定数 vs 定数」ですらなかった。**同じ定数が生成側と検査側の両方を通過していた**（`create` が書いた `"success"` を `check` が読んで `"success"` と比較する）。当時はゲートを削除しても CI の合否は一切変わらなかった。Issue #127 で #3 は artifact の実測へ、#2 は「未指定ならジョブを落とす」申告へ置き換わり、いずれも合否を左右する経路を持つ。
 > 🔍 **是正で追加された判定行（本表では採番していない）**
@@ -365,7 +365,7 @@ for f in scripts/tools/check-*.js scripts/tools/*-evidence*.js; do
 done
 
 # #2 の根拠: 上書きフラグがどの workflow からも渡されていないこと
-# 是正後は neon-backup.yml:186 に --restore-drill-status がヒットする（= 供給経路が存在する）
+# 是正後は neon-backup.yml:195 に --restore-drill-status がヒットする（= 供給経路が存在する）
 grep -rn "restore-drill-status\|pg-dump-status" --include=*.yml --include=*.js . | grep -v node_modules
 
 # 是正後の #3 の根拠: 生成側に status のリテラル既定値が残っていないこと（0件であること）
