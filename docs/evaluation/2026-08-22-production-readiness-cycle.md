@@ -361,6 +361,58 @@ PostgreSQL 用のゲートが SQLite 側の migration を見ているように�
 何もデプロイしない経路にデプロイ用のゲートを課していた。
 証跡ゲートが同じ理由で `--skip-deploy` を免除しているのと揃えて修正した。
 
+## 📌 6.9 本番の実測（Cloudflare MCP・読取りのみ）
+
+デプロイをしなくても、**現に動いている本番の状態は実測できる**。
+Cloudflare MCP（Code Mode の `execute`）で読取りのみを行った。
+
+### 使用した MCP と用途
+
+| MCP / ツール | 用途 | 種別 | 結果 |
+| --- | --- | --- | --- |
+| `mcp__cloudflare-api__execute` | アカウント・Worker 実体の特定 | 読取り | ✅ `codip-production` / `codip-mvp` の存在を確認 |
+| 同上 | Worker deployments 履歴 | 読取り | ✅ 現行 version と日時を取得 |
+| 同上 | GraphQL Analytics（`workersInvocationsAdaptive`） | 読取り | ✅ リクエスト数・エラー数・CPU 時間を取得 |
+| `mcp__cloudflare-api__search` / `docs` | 未使用 | — | 必要な endpoint が判明していたため呼ばなかった |
+| Neon MCP | 未使用 | — | `deploy-production.mjs --skip-deploy` が Neon API を直接読むため、そちらで代替した |
+
+**書込み系は一切呼んでいない。** アカウントは `4f1e888469df7e0b896bb4e211b12633`
+（`Kensan1969@gmail.com's Account`）で、対象環境が本番であることを実体で確認してから読んだ。
+
+### 稼働メトリクス（直近24時間）
+
+| Worker | requests | errors | エラー率 | status 内訳 | CPU P99 |
+| --- | ---: | ---: | ---: | --- | ---: |
+| `codip-production` | 151 | **0** | **0%** | success 151 | 278ms |
+| `codip-mvp` | 49 | **0** | **0%** | success 49 | 800ms |
+
+health / ready の実測（本文書 §1 参照）と合わせ、**現在稼働中の本番は健全**である。
+
+### 🚨 ただし本番は 2026-08-09 から未デプロイである
+
+| Worker | 現行 version | デプロイ日時 |
+| --- | --- | --- |
+| `codip-production` | `fc732a4a-5352-4b8a-9bb0-ab7db5a43c0f` | **2026-08-09T23:20:56Z** |
+| `codip-mvp` | `a916f5aa-56da-4f91-a7df-e045c4f4a2cb` | 2026-08-13T14:02:30Z |
+
+main の HEAD は `7c2707d`（2026-08-13）であり、**本番デプロイ以降に 28 commits が
+マージされている**。その中には次のセキュリティ修正が含まれる。
+
+| commit | 内容 |
+| --- | --- |
+| `ac03e04` | 全コネクタのホスト検証をパース済み hostname へ（Issue #147。部分文字列判定の欠陥） |
+| `fb9d75e` | CodeQL `js/incomplete-url-substring-sanitization` 4件の解消 |
+| `7ce9580` | 不完全な正規表現サニタイザの除去（`js/incomplete-multi-character-sanitization`） |
+| `7f72626` | 証跡ゲートの実測化・fail-closed 化 |
+| `4db850c` / `6783eff` / `64f5954` | RBAC 実装・ウォッチリスト API・ロール管理 UI |
+
+つまり **マージ済みのセキュリティ修正が本番へ一度も到達していない**。
+「本番が健全」であることと「本番が最新の修正を持っている」ことは別である。
+
+この差分は本サイクルで新たに作ったものではなく、**サイクル開始前から存在していた**。
+本サイクルの 12 PR はさらにこの上へ積まれるため、デプロイ時には
+28 + 12 PR 分がまとめて反映されることになる。段階的デプロイの計画が要る。
+
 ## 📌 7. 未解決のブロッカー
 
 ### 🚫 B-1: マージが Claude Code の権限機構でブロックされている
@@ -423,6 +475,15 @@ legacy branch protection に `required_conversation_resolution: {"enabled": true
 
 ruleset の必須チェックは変更していない（変更する必要が無かった）。
 実際に必要だった修正は `verify\n` の1文字と、レビュー指摘への対応だけである。
+
+### 🚫 B-4: 本番が 2026-08-09 から未デプロイ（マージ済みセキュリティ修正が未到達）
+
+本サイクルの 12 PR とは独立に、**サイクル開始前から 28 commits が未デプロイ**である。
+デプロイは B-1（マージ）の解除が前提であり、解除後は 28 + 12 PR 分を
+まとめて反映することになるため、段階的な計画が要る。
+
+**解除条件**: B-1 の解除。その後 `deploy-production.mjs` で固定 commit からデプロイし、
+スモーク・エラー率・ログを確認する（preflight で経路の到達性は確認済み）。
 
 ### 🚫 B-3: バックアップの復旧に Secrets 登録が必要
 
