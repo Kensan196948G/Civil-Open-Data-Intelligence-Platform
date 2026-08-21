@@ -1,6 +1,6 @@
 # 依存advisory対応状況
 
-最終更新: 2026-08-11
+最終更新: 2026-08-22
 
 `npm audit` が検出する advisory の対応状況と、allowlist に残す判断の根拠を記録する。
 CI ゲートの実体は次の2段構成であり、本ドキュメントはその判断材料を提供する。
@@ -13,13 +13,64 @@ CI ゲートの実体は次の2段構成であり、本ドキュメントはそ�
 allowlist は `scripts/tools/check-dependency-audit.js` の `ALLOWLIST` が唯一の正本である。
 期限切れエントリは、対象 advisory が検出されていなくてもゲートを FAIL させる（受容が無期限に生き延びないため）。
 
-## 現況サマリ (2026-08-11 時点)
+## 現況サマリ (2026-08-22 時点)
 
 | 項目 | 結果 |
 | --- | --- |
-| 本番グラフ (`--omit=dev`) | 脆弱性 0 件 |
-| 全グラフ (dev込み) | 脆弱性 0 件 |
+| 本番グラフ (`--omit=dev`) | 脆弱性 0 件（`found 0 vulnerabilities`） |
+| 全グラフ (dev込み) | `[dependency-audit] OK` |
 | 有効な allowlist エントリ | 1件 (GHSA-mh99-v99m-4gvg) |
+
+2026-08-22 に advisory 2件が新たに CI をブロックしていたため、いずれも **実アップグレードで解消**した。
+経緯は「2026-08-22 の再燃と新規検出」を参照。
+
+## 2026-08-22 の再燃と新規検出
+
+2026-08-13 の main CI は green だったが、その後 advisory DB 側が更新され、
+**コード変更なしに `verify` と `docker-image-security` が失敗する状態**になっていた。
+過去の green は「現時点でも green」の証拠にならない典型例として記録する。
+
+### GHSA-2v37-7h3g-55p8 — nanoid（再燃 / CVE-2026-67213）
+
+| 項目 | 内容 |
+| --- | --- |
+| severity | high |
+| 検出経路 | `next` → `postcss` → `nanoid`（本番グラフ） |
+| 影響版 | `<3.3.18`（2026-08-11 時点の影響版は `<3.3.17` だった） |
+| 実測 | `npm audit --omit=dev` が exit 1 / Trivy が `CVE-2026-67213 HIGH` を検出（PR #169 の両ジョブ失敗） |
+
+**根本原因は `overrides` の完全固定 pin である。**
+`"nanoid": "3.3.17"` と厳密固定していたため、advisory の影響範囲が
+`<3.3.17` から `<3.3.18` へ広がった時点で、固定値そのものが脆弱版になった。
+
+- 対応: `overrides` を `3.3.18` へ更新（`package.json` + `package-lock.json` の当該エントリのみ）
+- 教訓: **完全固定 pin は「その版が将来も安全」を暗黙に仮定する。** 影響範囲は後から広がりうるため、
+  固定 pin を採用した依存は advisory 再燃の監視対象として扱う。
+
+### GHSA-ggr8-5vv4-36mx — deepmerge-ts（新規）
+
+| 項目 | 内容 |
+| --- | --- |
+| severity | high |
+| 内容 | 再帰的オブジェクトグラフの merge で stack exhaustion |
+| 影響版 | `<8.0.0`（検出時の解決版は 7.1.5） |
+| 検出経路 | `@prisma/client`（本番依存）の peerDependency `prisma` → `@prisma/config` → `deepmerge-ts` |
+
+`prisma` は `devDependencies` に宣言しているが、**本番依存 `@prisma/client` が
+`peerDependencies: { prisma: "*" }` を宣言しているため本番グラフから到達可能**であり、
+`npm audit --omit=dev` の対象に入る（`npm ls prisma` で `@prisma/client` 配下に出現することを実測）。
+
+prisma 側のアップグレードでは解消しない。`@prisma/config` は 6.19.3 から最新 7.9.1 まで
+一貫して `deepmerge-ts: "7.1.5"` を**完全固定**しているため、上流に修正版が存在しない。
+
+- 対応: `overrides` に `"deepmerge-ts": "8.0.2"` を追加
+- 互換性の実測: 8.0.2 は 7.1.5 と `type` / `exports` マップが同一、依存・peer ともに空、
+  engines のみ `>=16.0.0` → `>=16.9.0`（CI/本番の Node 22 は範囲内）。
+  `@prisma/config` が使用する API は `deepmerge` のみ。
+  `db:generate` / `db:compare-schemas` / `db:pg:validate` / `db:pg:generate` /
+  `prisma migrate deploy` / `prisma db seed` の全通過で prisma CLI 側の回帰なしを確認した。
+- allowlist へは登録しない（本番グラフゲートは allowlist を参照しないため、
+  そもそも登録しても `verify` は通らない。実アップグレードのみが解になる）。
 
 ## 解消済み advisory
 
