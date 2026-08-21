@@ -24,16 +24,14 @@ const MAX_BUFFER_M = 10_000;
 /** GeoJSON polygon の総頂点数上限。ST_GeomFromGeoJSON と後続の空間演算の負荷を有界にする。 */
 const MAX_POLYGON_VERTICES = 10_000;
 
+/** 地理座標の範囲。境界値は有効とする。 */
+function validLngLat(lng: number, lat: number): boolean {
+  return lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90;
+}
+
 function validBboxTuple(bbox: Array<number | null>): boolean {
   const [minLng, minLat, maxLng, maxLat] = bbox as [number, number, number, number];
-  return (
-    minLng >= -180 &&
-    maxLng <= 180 &&
-    minLat >= -90 &&
-    maxLat <= 90 &&
-    minLng < maxLng &&
-    minLat < maxLat
-  );
+  return validLngLat(minLng, minLat) && validLngLat(maxLng, maxLat) && minLng < maxLng && minLat < maxLat;
 }
 
 type PolygonVerdict = { ok: true } | { ok: false; message: string };
@@ -58,7 +56,7 @@ function countRingVertices(rings: unknown): number | null {
         if (typeof component !== "number" || !Number.isFinite(component)) return null;
       }
       const [lng, lat] = position as number[];
-      if (lng < -180 || lng > 180 || lat < -90 || lat > 90) return null;
+      if (!validLngLat(lng, lat)) return null;
     }
     // 閉鎖条件: 先頭と末尾の position が一致すること
     const first = ring[0] as number[];
@@ -169,6 +167,14 @@ export async function POST(request: NextRequest) {
 
   if (mode === "circle" && (!center || center.lat == null || center.lng == null)) {
     return NextResponse.json({ error: { code: "invalid_body", message: "circle は center.lat/lng が必要です" } }, { status: 400 });
+  }
+  // bbox と polygon には地理座標の範囲検査を入れたが、circle の中心だけ
+  // 有限数値の検査しか無く、lat:91 / lng:181 が ST_MakePoint へ渡っていた。
+  if (mode === "circle" && center && !validLngLat(center.lng as number, center.lat as number)) {
+    return NextResponse.json(
+      { error: { code: "invalid_body", message: "center は経度-180〜180・緯度-90〜90で指定してください" } },
+      { status: 400 },
+    );
   }
   if (mode === "circle" && (radiusM == null || radiusM < 1 || radiusM > 100_000)) {
     return NextResponse.json({ error: { code: "invalid_body", message: "radiusM は1〜100000です" } }, { status: 400 });
