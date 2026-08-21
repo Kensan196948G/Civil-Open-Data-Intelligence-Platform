@@ -313,6 +313,54 @@ CI 結果は GitHub を単一の真実として引く。`gh` が使えない場�
 **順序を変えるとき、既存テストを「通るように」直すのではなく、
 何を測っていたのかを読んでから直す。** 前者をやると検出力が静かに落ちる。
 
+## 📌 6.8 本番への読取り専用 preflight（実測）
+
+マージがブロックされている状態でも、**変更を伴わない範囲で本番への到達性は確認できる**。
+`deploy-production.mjs --skip-deploy` は DNS 変更・migration・seed・deploy・secrets の
+いずれにも到達せず return する（`skipDeploy` の分岐が `ensureDnsRecord()` より前）。
+
+実行結果（exit=0）:
+
+```console
+[deploy-production] --skip-deploy: read-only preflight (provenance gate not applied)
+=== resolve Neon connection targets (in-process) ===
+Neon project=falling-dawn-93620497 branch=main
+=== prisma migrate status (read-only gate) ===
+Datasource "db": PostgreSQL database "neondb" at ep-still-feather-afoyv69p...
+8 migrations found
+Database schema is up to date!
+--skip-deploy: stopping before DNS mutation and cf:deploy:production
+```
+
+**確認できたこと**: 本番 Neon（project `falling-dawn-93620497` / branch `main`）へ
+到達でき、production の schema が migration と同期している。
+デプロイ資格情報（`NEON_API_KEY` / `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`）は
+環境に存在する（値は確認していない。存在の有無のみ）。
+
+**確認していないこと**: Worker のデプロイ、DNS、Access、secrets の投入。
+これらは `--skip-deploy` の到達範囲外である。
+
+### 正しい migration セットを見ているかの検算
+
+Prisma は `"N migrations found in prisma/migrations"` と**汎用のパス文言**を出すため、
+PostgreSQL 用のゲートが SQLite 側の migration を見ているように読めてしまう。
+件数で区別できる。
+
+| スキーマ | 報告件数 | 実ディレクトリ |
+| --- | ---: | --- |
+| `prisma/schema.prisma` | 10 | `prisma/migrations`（10） |
+| `prisma/postgresql/schema.prisma` | 8 | `prisma/postgresql/migrations`（8） |
+
+本番ゲートは 8 を報告するため、**正しい PostgreSQL の migration セットを見ている**。
+パス表示は解決先ではない。表示だけを見て「SQLite 側を見ている」と判断しないこと。
+
+### 副産物: ゲートが preflight を塞いでいた
+
+素性ゲート（#182）を追加した時点では `--skip-deploy` にも適用されており、
+**接続先・権限・migration 状態を事前に確かめる手段を潰していた**。
+何もデプロイしない経路にデプロイ用のゲートを課していた。
+証跡ゲートが同じ理由で `--skip-deploy` を免除しているのと揃えて修正した。
+
 ## 📌 7. 未解決のブロッカー
 
 ### 🚫 B-1: マージが Claude Code の権限機構でブロックされている
