@@ -12,7 +12,7 @@ CODIPを共有プレビューまたは本番相当環境へ出す前に、次の
 | Application health / DB readiness | ✅ | Access service token付きprobeで `/api/health` `/api/ready` 200（デプロイ後 run 31325075110: health 200・788ms / ready 200 db=ok・1421ms） |
 | 統合機能のE2E回帰 | ✅ | `tests/e2e/integrated-screens.spec.ts`（地形/気象海象/判定/現場/レポート・16件）を新設し、CI `e2e` ジョブpass（run 31324701074） |
 | Monitoring / Alerts | 🟡 Cloudflare通知作成済み・他は設定待ち | Cloudflare `CODIP Worker Error Alert` 作成＋テスト送信済み。GitHub/Neon/Teamsは手順書どおり設定待ち |
-| Backup | ✅ | 日次AES256 pg_dump成功（直近 run 31271930146）。2026-08-07の1回はrunner未獲得で失敗→翌日復旧（運用台帳§5） |
+| Backup | ❌ | **2026-08-13以降 連続失敗中**（`Validate backup inputs` が必須Secrets/Variables未登録で fail-closed 停止）。最後の成功は 2026-08-11（run 31523393496）。artifact の保持期限は14日で、失効後の復旧手段は Neon PITR の保持窓のみになる。失敗通知は追加済み、本体の復旧はSecrets登録（人間の決裁事項）待ち |
 | RTO実測 | ✅ | 2026-08-10 PITR→初回クエリ 3.1秒（branch `br-broad-meadow-af4eugg9`、検証56ソース/PostGIS 3.5） |
 | Worker切戻しRTO | ✅ | 2026-08-10 `wrangler rollback` **4秒**・復旧デプロイ **25秒**。切戻し後・復旧後の両方でProduction Smoke成功（run 31341608599 / 31341677558） |
 | Access proxy認証 | ✅ | PR #120のミドルウェア注入で有効化。ローカル検証 ユーザーヘッダーあり→200 / なし→401 |

@@ -10,7 +10,7 @@
 
 **CODIP** は、国土交通省、国土地理院、気象庁、自治体、道路、河川、防災、都市計画、インフラ、環境などに分散している公開データを、土木建設業務で再利用しやすい形に整理するための共通データ基盤です。
 
-現行MVPは **データソース台帳、取得確認、取得ログ、地図プレビュー、品質状態、後続API、PostgreSQL/PostGIS標準レコード読取経路** を中心に実装しています。共有preview `http://192.168.0.185:3100/` は稼働中です。本番Cloudflare Workers + Hyperdrive + Neonも配備済みで、**本番 `https://odip.mirai-dx-platform.com` は2026-08-05以降 Access 保護下で継続稼働中**（15分毎のstrict read-only smoke成功、日次暗号化バックアップ・復元ドリル実施済み）。公開レビュー用MVPは **`https://codip-mvp.mirai-dx-platform.com`** で稼働中です（架空ダミーデータ99件・管理トークンでセッション開始・Workers Custom Domains。詳細は [docs/runbooks/cloudflare-mvp.md](docs/runbooks/cloudflare-mvp.md)）。本番稼働状況は [docs/16-release-readiness-checklist.md](docs/16-release-readiness-checklist.md) を参照してください。
+現行MVPは **データソース台帳、取得確認、取得ログ、地図プレビュー、品質状態、後続API、PostgreSQL/PostGIS標準レコード読取経路** を中心に実装しています。共有preview `http://192.168.0.185:3100/` は稼働中です。本番Cloudflare Workers + Hyperdrive + Neonも配備済みで、**本番 `https://odip.mirai-dx-platform.com` は2026-08-05以降 Access 保護下で継続稼働中**（15分毎のstrict read-only smoke成功）。⚠️ **日次暗号化バックアップは2026-08-13から連続失敗中**（必須Secrets/Variables未登録によるfail-closed停止。詳細と復旧手順は [docs/operations/operations-ledger.md](docs/operations/operations-ledger.md)）。公開レビュー用MVPは **`https://codip-mvp.mirai-dx-platform.com`** で稼働中です（架空ダミーデータ99件・管理トークンでセッション開始・Workers Custom Domains。詳細は [docs/runbooks/cloudflare-mvp.md](docs/runbooks/cloudflare-mvp.md)）。本番稼働状況は [docs/16-release-readiness-checklist.md](docs/16-release-readiness-checklist.md) を参照してください。
 
 > 公開データを探すだけのサイトではなく、土木建設システムが公開データを安全に再利用するための共通データハブです。
 
@@ -292,7 +292,9 @@ flowchart LR
 - **AIの本格化**: ルールベース推薦（`/api/v1/recommendations`）は実装済み。LLM/RAG、AI品質監視、コネクタ自動生成、自然文検索は未導入（P1）
 - **GIS分析の深化**: レイヤー重ね合わせ・計測・出力・矩形検索・属性検索・時間フィルタは実装済み。ポリゴンUI・バッファUI・時系列スライダーUI・GeoPackage/PDF出力・3D/PLATEAUは未導入（P0/P2）
 
-🔒 **本番アプリはCloudflare Access配下で稼働中**。本番監視（15分間隔smoke）とNeon定期バックアップは確立済みです。Cloudflareアラートポリシーは作成・テスト送信済み（2026-08-10）。残るブロッカーはCloudflare staging Hyperdrive（staging専用）と、GitHub/Neon通知先の設定です。手順は [`docs/runbooks/alerts-and-notifications.md`](docs/runbooks/alerts-and-notifications.md)、[`docs/runbooks/cloudflare-production.md`](docs/runbooks/cloudflare-production.md)、[`docs/operations/operations-ledger.md`](docs/operations/operations-ledger.md) を参照してください。
+🔒 **本番アプリはCloudflare Access配下で稼働中**。本番監視（15分間隔smoke）は稼働中です。
+
+⚠️ **Neon定期バックアップは2026-08-13以降 連続失敗しています**（`neon-backup.yml` の `Validate backup inputs` が必須Secrets/Variables未登録で fail-closed 停止）。fail-closed は設計どおりの挙動ですが、失敗を通知する経路が無かったため長期間検知されませんでした。通知経路は追加済みで、バックアップ本体の復旧にはSecrets登録（人間の決裁事項）が必要です。Cloudflareアラートポリシーは作成・テスト送信済み（2026-08-10）。残るブロッカーはCloudflare staging Hyperdrive（staging専用）と、GitHub/Neon通知先の設定です。手順は [`docs/runbooks/alerts-and-notifications.md`](docs/runbooks/alerts-and-notifications.md)、[`docs/runbooks/cloudflare-production.md`](docs/runbooks/cloudflare-production.md)、[`docs/operations/operations-ledger.md`](docs/operations/operations-ledger.md) を参照してください。
 
 ---
 
