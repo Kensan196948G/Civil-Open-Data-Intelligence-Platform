@@ -186,27 +186,26 @@ PR #171 は全必須チェック pass・`statusCheckRollup: SUCCESS`・`mergeabl
 
 **解除条件**: ユーザーがマージを実行するか、Bash の権限ルールを追加する。
 
-### 🚫 B-2: ruleset に PR では成功し得ない必須チェックが残っている
+### ✅ B-2（取り下げ）: 「skipped の必須チェックが原因」という仮説は誤りだった
 
-`central-auto-merge` ruleset の必須チェックに次の2件が含まれる。
+`verify\n` 修正後も #171 が BLOCKED のままだったため、当初は
+「`docker-supply-chain` と `production-target-env` が pull_request では
+構造的に実行されず skipped になるため必須チェックを満たせない」と推定した。
 
-| チェック | 実行条件 (`.github/workflows/ci.yml`) | PR での結果 |
-|---|---|---|
-| `docker-supply-chain` | `if: github.event_name == 'push' && github.ref == 'refs/heads/main'` | 常に skipped |
-| `production-target-env` | `if: github.event_name == 'workflow_dispatch'` | 常に skipped |
+**この推定は誤りである。** 同じチェック構成（9 pass / 2 skipped、
+名前も結果も完全一致）を持つ #172 / #173 / #174 は `mergeStateStatus: CLEAN`
+になっており、skipped は必須チェックを満たしている。
 
-いずれも **pull_request イベントでは構造的に実行されない**。
-legacy branch protection 側は正しく6件のみ（この2件を含まない）。
+#171 だけが BLOCKED のままだった原因は、**mergeability がキャッシュされており、
+ruleset 修正前に計算された値が残っていたため**と考えられる。#171 は ruleset
+修正より前に作成され、以降 PR 側に変化が無いため再計算が走らなかった。
+#172 以降は修正後に作成されたため、最初から CLEAN で計算されている。
 
-`verify
-` の修正後も #171 が BLOCKED のままである事実と、消去法
-（チェック全pass / 競合なし / `reviewDecision` 空 / 署名要件なし /
-base 同期済み / 組織レベル ruleset なし）から、これが残る原因である可能性が高い。
-なお `require_extra_approval_for_unattributed_changes` は公式ドキュメント上
-**Copilot がアプリ identity で開いた PR** 向けの規則であり、本件には該当しない。
+この誤りは「消去法で残った候補を、確認せずに原因と断定した」ことによる。
+消去法は候補を絞るには使えるが、**残った候補が正しいことの証拠にはならない**。
+比較対象（同条件で CLEAN になる PR）が現れて初めて反証できた。
 
-**解除条件**: ruleset の必須チェックから上記2件を外す。この変更も
-Claude Code の権限機構に拒否されたため未実施。
+ruleset の必須チェックは変更していない（変更する必要が無かった）。
 
 ### 🚫 B-3: バックアップの復旧に Secrets 登録が必要
 
@@ -217,9 +216,9 @@ Neon PITR の保持窓のみになる。
 
 ## 📌 8. 次サイクルの再開ポイント
 
-1. B-1 / B-2 を解除して #171 → #172 → #173 → #174 → #175 の順にマージする
+1. B-1 を解除して #171 → #172 → #173 → #174 → #175 の順にマージする
 2. マージ後、各ブランチを main へリベースして依存コミットの重複を解消する
 3. main 固定 commit から本番デプロイし、スモーク・ログ・エラー率を確認する
 4. 残る P0/P1（Access JWT 検証、監査ログの実行者、判定履歴の閲覧、現場の編集削除、
    通知配信チャネル、認可の拒否経路テスト）へ着手する
-5. 中央ポリシーツール側の ruleset 生成を修正する（正本を直さないと再適用で戻る）
+5. 中央ポリシーツール側の ruleset 生成を修正する（`verify\n` の混入。正本を直さないと再適用で戻る）
