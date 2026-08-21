@@ -4,13 +4,18 @@ import { requireAdminRequest } from "@/lib/admin-auth";
 import { auditLogCreateData } from "@/lib/audit";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 import { requestId } from "@/lib/v1-response";
+import { intParam } from "@/lib/query-params";
 
 const TABS = new Set(["terrain", "section", "confirm", "output"]);
 
 export async function GET(request: NextRequest) {
   const rate = checkRateLimit("api:v1:terrain:runs", clientIdentifier(request), 120, 60_000);
   if (!rate.allowed) return rateLimitResponse(rate);
-  const limit = Math.min(Math.max(Number(request.nextUrl.searchParams.get("limit") ?? 50), 1), 200);
+  // クランプは NaN を素通しするため検証にならない (take: NaN が Prisma へ到達する)。
+  const limit = intParam(request.nextUrl.searchParams, "limit", 50, 1, 200);
+  if (limit === null) {
+    return NextResponse.json({ error: { code: "invalid_query", message: "limit は 1〜200 の整数で指定してください" } }, { status: 400 });
+  }
   const runs = await prisma.terrainAnalysisRun.findMany({
     orderBy: { createdAt: "desc" },
     take: limit,
