@@ -4,23 +4,10 @@ import { checkRateLimit, clientIdentifier } from "@/lib/rate-limit";
 import { findStandardFeaturesForLayer } from "@/lib/standard-records";
 import { decisionNotSupportedWarning, qualityStatus, requestId, toIso, v1RateLimitResponse } from "@/lib/v1-response";
 import { sanitizeUrl } from "@/lib/url-safety";
+import { cursorParam, intParam } from "@/lib/query-params";
 
 type Params = { params: Promise<{ id: string }> };
 const GEOSPATIAL_FORMATS = ["GeoJSON", "Shapefile", "CityGML", "PNG"];
-
-function intParam(sp: URLSearchParams, name: string, fallback: number, min: number, max: number) {
-  const raw = sp.get(name);
-  if (!raw) return fallback;
-  const value = Number(raw);
-  return Number.isInteger(value) && value >= min && value <= max ? value : null;
-}
-
-function cursorParam(sp: URLSearchParams) {
-  const raw = sp.get("cursor");
-  if (!raw) return 0;
-  const value = Number(raw);
-  return Number.isInteger(value) && value >= 0 && value <= 100_000 ? value : null;
-}
 
 function parseBbox(value: string | null): { ok: true; value?: [number, number, number, number] } | { ok: false } {
   if (!value) return { ok: true };
