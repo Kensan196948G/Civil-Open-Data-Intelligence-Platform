@@ -64,6 +64,32 @@ describe("bufferM の上限", () => {
   });
 });
 
+describe("circle の中心座標の範囲検査", () => {
+  it("緯度・経度の範囲外を拒否する（ST_MakePoint へ渡さない）", async () => {
+    for (const c of [
+      { lat: 91, lng: 139.7 },
+      { lat: -91, lng: 139.7 },
+      { lat: 35.6, lng: 181 },
+      { lat: 35.6, lng: -181 },
+    ]) {
+      const res = await post({ mode: "circle", center: c, radiusM: 1000 });
+      expect(res.status, JSON.stringify(c)).toBe(400);
+    }
+    expect(findStandardRecordsForGeometry).not.toHaveBeenCalled();
+  });
+
+  it("境界値は有効として通す", async () => {
+    for (const c of [
+      { lat: 90, lng: 180 },
+      { lat: -90, lng: -180 },
+      { lat: 0, lng: 0 },
+    ]) {
+      const res = await post({ mode: "circle", center: c, radiusM: 1000 });
+      expect(res.status, JSON.stringify(c)).toBe(200);
+    }
+  });
+});
+
 describe("bbox の範囲検査", () => {
   it("地理座標として成立しない包絡矩形を拒否する", async () => {
     const res = await post({ mode: "bbox", bbox: [-1e9, -1e9, 1e9, 1e9] });
