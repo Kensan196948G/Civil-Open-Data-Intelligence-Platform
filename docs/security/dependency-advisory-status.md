@@ -74,7 +74,7 @@ allowlist が使えない以上、修正はバージョンを上げる以外に�
 
 `npm ci` 後のクリーンな依存グラフで、override が意図どおり効いていることを確認した。
 
-```
+```console
 $ npm ls --omit=dev nanoid --all
 civil-open-data-intelligence-platform@0.1.0
 └─┬ next@15.5.23

@@ -68,13 +68,24 @@ service token は Secrets にあり、値をターミナルへ展開しない。
 
 ```bash
 # GitHub Actions 側で実行する（ローカルに token を降ろさない）
-gh workflow run production-smoke.yml
-sleep 5
+# ⚠️ このワークフローは15分毎の scheduled run も走る。さらに他の当番が
+#    同時に dispatch している可能性もある。--limit 1 では取り違える。
+#    dispatch **前**の最新 dispatch run を控え、それより新しいものを自分の run とする。
+BEFORE=$(gh run list --workflow=production-smoke.yml --event=workflow_dispatch \
+  --limit 1 --json databaseId -q '.[0].databaseId // 0')
 
-# ⚠️ このワークフローは15分毎の scheduled run も走る。--limit 1 だけでは
-#    別の scheduled run を掴む。--event=workflow_dispatch で自分の run に固定する。
-RUN_ID=$(gh run list --workflow=production-smoke.yml \
-  --event=workflow_dispatch --limit 1 --json databaseId -q '.[0].databaseId')
+gh workflow run production-smoke.yml
+
+RUN_ID=""
+for _ in $(seq 1 30); do
+  sleep 4
+  CANDIDATE=$(gh run list --workflow=production-smoke.yml --event=workflow_dispatch \
+    --limit 1 --json databaseId -q '.[0].databaseId // 0')
+  if [ "$CANDIDATE" != "$BEFORE" ] && [ "$CANDIDATE" != "0" ]; then RUN_ID="$CANDIDATE"; break; fi
+done
+# 空の RUN_ID で先へ進まない（gh run watch "" は別 run を掴みうる）
+[ -n "$RUN_ID" ] || { echo "dispatch した run を特定できなかった。手動で確認すること" >&2; exit 1; }
+
 echo "watching run: $RUN_ID"
 gh run watch "$RUN_ID" --exit-status
 ```
@@ -147,17 +158,20 @@ DB の復旧（Neon PITR restore）は**上書きであり取り消しが困難*
 
 ### 3.7 検証
 
-```bash
-# 本番の復旧確認は §3.2 と同じ「認証つき probe を dispatch して、その run の成否を見る」
-gh workflow run production-smoke.yml
-sleep 5
-RUN_ID=$(gh run list --workflow=production-smoke.yml \
-  --event=workflow_dispatch --limit 1 --json databaseId -q '.[0].databaseId')
-gh run watch "$RUN_ID" --exit-status
+本番の復旧確認は §3.2 と同じ手順（**dispatch した run を特定して、その成否を見る**）を使う。
+§3.2 のブロックをそのまま再実行すること。
 
-# 以降の scheduled run が継続して成功していることも確認する
-gh run list --workflow=production-smoke.yml --limit 5
+そのうえで、以降の **scheduled** run が継続して成功していることを別に確認する。
+
+```bash
+# 復旧後に自動で回る scheduled run だけを見る（dispatch した自分の run と混ぜない）
+gh run list --workflow=production-smoke.yml --event=schedule --limit 5 \
+  --json databaseId,createdAt,status,conclusion \
+  -q '.[] | "\(.createdAt) \(.status) \(.conclusion) #\(.databaseId)"'
 ```
+
+`status=completed` かつ `conclusion=success` が続いていることを確認する。
+`status` が `in_progress` のものは判定に含めない。
 
 `/api/ready=200`（Access 経由）、主要画面 / API、管理系の negative ケース、
 直近 smoke の継続成功を確認する。
@@ -219,14 +233,22 @@ curl -sS -w '\nHTTP %{http_code}\n' https://codip-mvp.mirai-dx-platform.com/api/
 
 ## 8. RPO / RTO
 
-| 指標 | 目標 | 根拠 | 実測 |
+| 指標 | 目標 | 根拠 | 実測（**操作単体**。適用範囲に注意） |
 | --- | --- | --- | --- |
-| RPO（許容データ損失） | 24時間 | 日次 pg_dump（`neon-backup.yml`） | 未実測 |
-| RPO（PITR 利用時） | Neon の保持窓に依存 | `create-neon-backup-evidence.js` が実測して記録 | 実行時に取得 |
-| RTO（コードのみの復旧） | 30分 | `wrangler rollback` + smoke 再実行 | 未実測 |
-| RTO（DB を含む復旧） | 4時間 | PITR restore + 検証 + human 承認 | 未実測 |
+| RPO（許容データ損失） | 24時間 | 日次 pg_dump（`neon-backup.yml`） | ⚠️ 未実測。かつ **2026-08-13 以降 backup が失敗中**のため現状は達成していない |
+| RPO（PITR 利用時） | Neon の保持窓に依存 | `create-neon-backup-evidence.js` が実測して記録 | 実行時に取得（直近実測 `history_retention_seconds=86400`） |
+| RTO（コードのみ） | 30分 | `wrangler rollback` + smoke 再実行 | ✅ **4秒**（2026-08-10 ドリル。`--env production` で d1528b5d へ切戻し）＋ smoke。復旧デプロイは **25秒** |
+| RTO（DB を含む） | 4時間 | PITR restore + 検証 + human 承認 | ✅ **約14分**（2026-08-12 PITR ドリル。branch 作成〜検証〜後片付けまで）。別途 2026-08-10 に PITR→初回クエリ **3.1秒** |
 
-⚠️ **実測列が「未実測」である項目は、訓練で測るまで達成を主張しない。**
-`docs/runbooks/restore-drill-record.md` に訓練の記録を残し、実測値が取れた時点で
-本表を更新する。pg_dump からの `pg_restore` 型の訓練は**まだ一度も実施していない**ため、
-暗号化 dump の復号可否とパスフレーズの有効性は未検証である。
+> ⚠️ **実測列は「復旧操作そのもの」の所要時間であり、インシデント全体の RTO ではない。**
+> 検知・切り分け・判断・human 承認の時間を含まない。目標値（30分 / 4時間）は
+> インシデント全体を想定しているため、実測値が目標を大きく下回っていても
+> 「目標達成」を意味しない。エンドツーエンドの実測はまだ無い。
+>
+> 実測の出典は `docs/operations/operations-ledger.md` §5 の実行記録、および
+> `docs/runbooks/restore-drill-record.md`。
+
+⚠️ **pg_dump からの `pg_restore` 型の訓練は一度も実施していない。**
+上記の DB 復旧実測はすべて **Neon PITR** 経由であり、
+暗号化 dump の復号可否とパスフレーズの有効性は**未検証**である。
+バックアップが失効した場合に頼る経路が、検証されていないことを意味する。
