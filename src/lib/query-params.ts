@@ -25,12 +25,39 @@ export function intParam(
   return Number.isInteger(value) && value >= min && value <= max ? value : null;
 }
 
-/** 日時パラメータ。未指定なら fallback、パースできなければ null。 */
+/**
+ * 日時パラメータ。未指定なら fallback、解釈できなければ null。
+ *
+ * `new Date(raw)` の成否だけでは足りない。`2026-02-30` や非うるう年の
+ * `2026-02-29` は **例外にも Invalid Date にもならず、翌月へ正規化される**
+ * （実測: `2026-02-30` → `2026-03-02`）。そのまま Prisma の期間条件へ渡すと、
+ * 利用者が指定したつもりのない期間を無言で検索する。
+ * 日付部分が正規化で動いていないことを確認してから返す。
+ */
 export function dateParam(sp: URLSearchParams, name: string, fallback: Date): Date | null {
   const raw = sp.get(name);
   if (raw === null || raw === "") return fallback;
   const value = new Date(raw);
-  return Number.isNaN(value.getTime()) ? null : value;
+  if (Number.isNaN(value.getTime())) return null;
+
+  // ISO 8601 形式で暦日が明示されている場合のみ、正規化の有無を検算できる。
+  // それ以外の形式 (RFC 2822 など) は Date のパースに委ねる。
+  const isoDate = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+  if (isoDate) {
+    const [, year, month, day] = isoDate;
+    const normalized =
+      value.getUTCFullYear() === Number(year) &&
+      value.getUTCMonth() + 1 === Number(month) &&
+      value.getUTCDate() === Number(day);
+    // ローカルタイムゾーン指定 (末尾に Z / +hh:mm が無い) の場合は UTC 日付が
+    // ずれるため、ローカル日付でも一致を許す。
+    const localMatch =
+      value.getFullYear() === Number(year) &&
+      value.getMonth() + 1 === Number(month) &&
+      value.getDate() === Number(day);
+    if (!normalized && !localMatch) return null;
+  }
+  return value;
 }
 
 /** 非負の cursor（オフセット）。上限は深い OFFSET による全表走査を避けるため。 */
