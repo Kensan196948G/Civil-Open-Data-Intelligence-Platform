@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   ACCESS_USER_EMAIL_HEADER,
   PROXY_SECRET_HEADER,
+  STRIPPED_REQUEST_HEADERS,
   buildInjectedHeaders,
   proxyAuthInjectionEnabled,
 } from "../../src/lib/proxy-auth-inject";
@@ -33,15 +34,56 @@ describe("proxy-auth-inject", () => {
     expect(buildInjectedHeaders(ENABLED_ENV, withoutUser)).toBeNull();
   });
 
-  test("既存の proxy secret は上書きしない (fail-safe)", () => {
+  // 以前は「既存の proxy secret があれば null を返す」実装で、これを fail-safe と
+  // 称していた。実際には外部が用意したヘッダーをそのままオリジンへ到達させる
+  // 素通し経路であり、シークレットが漏れた場合に Access を迂回できた。
+  // 正しい境界処理は「まず除去し、その後で必要なら注入する」。
+  test("外部から届いた proxy secret は素通しせず、正規の値で上書きする", () => {
     const headers = new Headers({
       [ACCESS_USER_EMAIL_HEADER]: "kensan1969@gmail.com",
-      [PROXY_SECRET_HEADER]: "existing-secret",
+      [PROXY_SECRET_HEADER]: "attacker-supplied-value",
     });
-    expect(buildInjectedHeaders(ENABLED_ENV, headers)).toBeNull();
+    const result = buildInjectedHeaders(ENABLED_ENV, headers);
+    expect(result).not.toBeNull();
+    expect(result?.get(PROXY_SECRET_HEADER)).toBe(ENABLED_ENV.CODIP_TRUST_PROXY_SECRET);
   });
 
-  test("設定無効時は何も注入しない", () => {
+  test("Access識別ヘッダーが無ければ、届いた proxy secret を除去して注入もしない", () => {
+    const headers = new Headers({ [PROXY_SECRET_HEADER]: "attacker-supplied-value" });
+    const result = buildInjectedHeaders(ENABLED_ENV, headers);
+    expect(result).not.toBeNull();
+    expect(result?.has(PROXY_SECRET_HEADER)).toBe(false);
+  });
+
+  test("注入が無効な設定でも、届いた内部ヘッダーは除去する", () => {
+    const headers = new Headers({
+      [ACCESS_USER_EMAIL_HEADER]: "kensan1969@gmail.com",
+      [PROXY_SECRET_HEADER]: "attacker-supplied-value",
+      "x-codip-user": "admin@example.com",
+    });
+    const result = buildInjectedHeaders({}, headers);
+    expect(result).not.toBeNull();
+    expect(result?.has(PROXY_SECRET_HEADER)).toBe(false);
+    expect(result?.has("x-codip-user")).toBe(false);
+    // 素性の確かな Access 識別ヘッダーは残す
+    expect(result?.get(ACCESS_USER_EMAIL_HEADER)).toBe("kensan1969@gmail.com");
+  });
+
+  test("caller が付けた x-codip-user はオリジンへ渡さない", () => {
+    const headers = new Headers({
+      [ACCESS_USER_EMAIL_HEADER]: "viewer@example.com",
+      "x-codip-user": "admin@example.com",
+    });
+    const result = buildInjectedHeaders(ENABLED_ENV, headers);
+    expect(result?.has("x-codip-user")).toBe(false);
+    expect(result?.get(ACCESS_USER_EMAIL_HEADER)).toBe("viewer@example.com");
+  });
+
+  test("除去対象ヘッダーの一覧が縮んでいないこと", () => {
+    expect([...STRIPPED_REQUEST_HEADERS]).toEqual([PROXY_SECRET_HEADER, "x-codip-user"]);
+  });
+
+  test("設定無効かつ除去対象が無ければ書き換えない", () => {
     const headers = new Headers({ [ACCESS_USER_EMAIL_HEADER]: "kensan1969@gmail.com" });
     expect(buildInjectedHeaders({}, headers)).toBeNull();
   });
