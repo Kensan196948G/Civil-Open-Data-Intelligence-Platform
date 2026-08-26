@@ -123,34 +123,52 @@ describe("request helpers", () => {
     expect(normalizeEmail(" User@Example.COM ")).toBe("user@example.com");
   });
 
-  it("reads the injected user header with fallback only when the proxy identity is trusted", () => {
+  it("reads the Access identity header only when the proxy identity is trusted", () => {
     vi.stubEnv("CODIP_TRUST_PROXY_AUTH", "true");
     vi.stubEnv("CODIP_TRUST_PROXY_SECRET", "unit-test-proxy-secret-1234567890");
 
     const req = new NextRequest("http://localhost/api/v1/sites", {
       headers: {
-        "x-codip-user": "Field@Example.com",
-        "x-codip-proxy-secret": "unit-test-proxy-secret-1234567890",
-      },
-    });
-    expect(userEmailFromRequest(req)).toBe("field@example.com");
-
-    const fallback = new NextRequest("http://localhost/api/v1/sites", {
-      headers: {
         "cf-access-authenticated-user-email": "Back@Example.com",
         "x-codip-proxy-secret": "unit-test-proxy-secret-1234567890",
       },
     });
-    expect(userEmailFromRequest(fallback)).toBe("back@example.com");
+    expect(userEmailFromRequest(req)).toBe("back@example.com");
 
     const none = new NextRequest("http://localhost/api/v1/sites");
     expect(userEmailFromRequest(none)).toBeNull();
 
-    // 偽装ヘッダーだけでは信頼しない（proxy secret不一致）
+    // 識別ヘッダーだけでは信頼しない（proxy secret不一致）
     const spoofed = new NextRequest("http://localhost/api/v1/sites", {
-      headers: { "x-codip-user": "engineer@example.com" },
+      headers: { "cf-access-authenticated-user-email": "engineer@example.com" },
     });
     expect(userEmailFromRequest(spoofed)).toBeNull();
+    vi.unstubAllEnvs();
+  });
+
+  // 回帰テスト: x-codip-user は送信者が自由に設定できるため、主体として採用しない。
+  // 採用していた頃は、Access を通過した任意の利用者が管理者を名乗れた。
+  it("never derives the identity from the caller-supplied x-codip-user header", () => {
+    vi.stubEnv("CODIP_TRUST_PROXY_AUTH", "true");
+    vi.stubEnv("CODIP_TRUST_PROXY_SECRET", "unit-test-proxy-secret-1234567890");
+
+    const spoofOnly = new NextRequest("http://localhost/api/v1/sites", {
+      headers: {
+        "x-codip-user": "admin@example.com",
+        "x-codip-proxy-secret": "unit-test-proxy-secret-1234567890",
+      },
+    });
+    expect(userEmailFromRequest(spoofOnly)).toBeNull();
+
+    // Access が本人を認証していても、x-codip-user で別人を名乗ることはできない
+    const overrideAttempt = new NextRequest("http://localhost/api/v1/sites", {
+      headers: {
+        "cf-access-authenticated-user-email": "viewer@example.com",
+        "x-codip-user": "admin@example.com",
+        "x-codip-proxy-secret": "unit-test-proxy-secret-1234567890",
+      },
+    });
+    expect(userEmailFromRequest(overrideAttempt)).toBe("viewer@example.com");
     vi.unstubAllEnvs();
   });
 });
@@ -174,7 +192,7 @@ describe("requireRole / requireRoleOrAdmin", () => {
     vi.stubEnv("CODIP_TRUST_PROXY_SECRET", "unit-test-proxy-secret-1234567890");
     const req = new NextRequest("http://localhost/api/v1/sites", {
       headers: {
-        "x-codip-user": "viewer@example.com",
+        "cf-access-authenticated-user-email": "viewer@example.com",
         "x-codip-proxy-secret": "unit-test-proxy-secret-1234567890",
       },
     });
@@ -190,7 +208,7 @@ describe("requireRole / requireRoleOrAdmin", () => {
     vi.stubEnv("CODIP_TRUST_PROXY_SECRET", "unit-test-proxy-secret-1234567890");
     const req = new NextRequest("http://localhost/api/v1/sites", {
       headers: {
-        "x-codip-user": "engineer@example.com",
+        "cf-access-authenticated-user-email": "engineer@example.com",
         "x-codip-proxy-secret": "unit-test-proxy-secret-1234567890",
       },
     });
@@ -203,10 +221,63 @@ describe("requireRole / requireRoleOrAdmin", () => {
     vi.stubEnv("CODIP_TRUST_PROXY_AUTH", "true");
     vi.stubEnv("CODIP_TRUST_PROXY_SECRET", "unit-test-proxy-secret-1234567890");
     const req = new NextRequest("http://localhost/api/v1/sites", {
-      headers: { "x-codip-user": "engineer@example.com" },
+      headers: { "cf-access-authenticated-user-email": "engineer@example.com" },
     });
     const response = await requireRole(req, ["engineer"], async () => "engineer");
     expect(response?.status).toBe(401);
+    vi.unstubAllEnvs();
+  });
+
+  // proxy 認証は Cloudflare Access の Cookie に依存するため、クロスサイトの
+  // フォーム送信でも識別ヘッダー付きのリクエストがオリジンへ届く。
+  // requireAdminRequest() と同じ同一Origin検証をロール単独経路にも課す。
+  it("rejects a cross-origin unsafe request even when the role is allowed", async () => {
+    vi.stubEnv("CODIP_TRUST_PROXY_AUTH", "true");
+    vi.stubEnv("CODIP_TRUST_PROXY_SECRET", "unit-test-proxy-secret-1234567890");
+    const req = new NextRequest("http://localhost/api/v1/sites", {
+      method: "POST",
+      headers: {
+        "cf-access-authenticated-user-email": "engineer@example.com",
+        "x-codip-proxy-secret": "unit-test-proxy-secret-1234567890",
+        origin: "https://evil.example.com",
+      },
+    });
+    const response = await requireRole(req, ["engineer"], async () => "engineer");
+    expect(response?.status).toBe(403);
+    const body = await response?.json();
+    expect(body.error.code).toBe("csrf_check_failed");
+    vi.unstubAllEnvs();
+  });
+
+  it("allows a same-origin unsafe request for an allowed role", async () => {
+    vi.stubEnv("CODIP_TRUST_PROXY_AUTH", "true");
+    vi.stubEnv("CODIP_TRUST_PROXY_SECRET", "unit-test-proxy-secret-1234567890");
+    const req = new NextRequest("http://localhost/api/v1/sites", {
+      method: "POST",
+      headers: {
+        "cf-access-authenticated-user-email": "engineer@example.com",
+        "x-codip-proxy-secret": "unit-test-proxy-secret-1234567890",
+        origin: "http://localhost",
+      },
+    });
+    const response = await requireRole(req, ["engineer"], async () => "engineer");
+    expect(response).toBeNull();
+    vi.unstubAllEnvs();
+  });
+
+  // 安全メソッドは同一Origin検証の対象外（閲覧が壊れないことの確認）
+  it("does not apply the origin check to safe methods", async () => {
+    vi.stubEnv("CODIP_TRUST_PROXY_AUTH", "true");
+    vi.stubEnv("CODIP_TRUST_PROXY_SECRET", "unit-test-proxy-secret-1234567890");
+    const req = new NextRequest("http://localhost/api/v1/sites", {
+      headers: {
+        "cf-access-authenticated-user-email": "engineer@example.com",
+        "x-codip-proxy-secret": "unit-test-proxy-secret-1234567890",
+        origin: "https://evil.example.com",
+      },
+    });
+    const response = await requireRole(req, ["engineer"], async () => "engineer");
+    expect(response).toBeNull();
     vi.unstubAllEnvs();
   });
 
@@ -231,7 +302,7 @@ describe("requireRole / requireRoleOrAdmin", () => {
     const { requireRoleOrAdmin: guard } = await import("../../src/lib/rbac");
     const req = new NextRequest("http://localhost/api/v1/sites", {
       headers: {
-        "x-codip-user": "engineer@example.com",
+        "cf-access-authenticated-user-email": "engineer@example.com",
         "x-codip-proxy-secret": "unit-test-proxy-secret-1234567890",
       },
     });
@@ -240,7 +311,7 @@ describe("requireRole / requireRoleOrAdmin", () => {
 
     const deniedReq = new NextRequest("http://localhost/api/v1/sites", {
       headers: {
-        "x-codip-user": "viewer@example.com",
+        "cf-access-authenticated-user-email": "viewer@example.com",
         "x-codip-proxy-secret": "unit-test-proxy-secret-1234567890",
       },
     });
