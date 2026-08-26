@@ -149,7 +149,14 @@ const ALLOWLIST_REGIME_FULL = "full";
 // run が `"full"` と**宣言**したのは主張である。同じ文字列で出すと、ログを読む人は
 // この二つを区別できない。素の名前は強いほう (宣言) に割り当て、推定へ注記を付ける。
 const REGIME_LABEL_ASSUMED_FULL = `${ALLOWLIST_REGIME_FULL}(assumed)`;
-const KNOWN_DIFF_INFORMED_REGIMES = new Set(["diff-informed"]);
+const KNOWN_DIFF_INFORMED_REGIMES = new Set(["diff-informed", "diff-informed,overlay"]);
+// 実測: CodeQL は `pull_request` run で `incrementalMode = "diff-informed,overlay"` を
+// 報告する (2026-08-26時点。github/codeql-action を SHA 固定していても CodeQL bundle が
+// 新しくなると生成値が変わる)。これは diff-informed 系列の variant であり、差分の外に
+// ある finding を報告しない性質は素の "diff-informed" と同一のため、語彙へ加えて同じ
+// 緩和 (不足を落とさない) を与える。是正は語彙へ明示的に足すことで、緩和は**既知の
+// diff-informed であることの肯定形**のまま保つ (ゲートの設計原則を維持。語彙外の値に
+// 緩和を与えてはならず、将来 CodeQL が別の variant を出したらまた fail-closed で知らせる)。
 const REGIME_CLASS_FULL = "full";
 const REGIME_CLASS_DIFF_INFORMED = "diff-informed";
 const REGIME_CLASS_UNRECOGNISED = "unrecognised";
