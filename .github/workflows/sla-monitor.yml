@@ -17,6 +17,16 @@ jobs:
   sla:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # ダイジェストIssueの作成・更新とラベル作成に必要な最小権限。
+    # permissions を明示すると未列挙の権限は none になるため、
+    # 失敗通知が run 履歴を読めるよう actions:read も併せて宣言する。
+    # workflow レベルの permissions は job 側で上書きされるため、
+    # ここで宣言しないと issues:write が付与されず
+    # POST /repos/{owner}/{repo}/labels が 403 で失敗する。
+    permissions:
+      contents: read
+      actions: read
+      issues: write
     env:
       # 本番Neon（読み取りのみ）。値はActions Secretから供給されログへ出さない。
       DATABASE_URL: ${{ secrets.CODIP_INGESTION_DATABASE_URL }}
