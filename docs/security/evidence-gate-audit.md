@@ -61,6 +61,8 @@ Issue #127 でこの構造は撤去した。既定値を削除し、`--restore-d
 
 ### 2.1 `.github/workflows/neon-backup.yml` — Neon backup 鮮度ゲート族
 
+> 🔁 **2026-08-30 更新**: `neon-backup.yml` はローカルsystemdタイマー（`codip-backup.timer` → `scripts/local-cron/run-backup.sh`）への移行に伴い**削除された**。本節のゲート行は削除前の監査記録として残す。現行のバックアップはローカル `pg_dump`（custom形式・GPG AES256・14日保持）で、証跡ゲートの機械検査はGitHub Actions上では走らない（運用監査は operations-ledger / runbook が担う）。
+
 ⚠️ 本節のファイルは QA 調査時点で **T-B4 で backend が是正実装中**だった。QA は read-only で参照し、その後 backend が Issue #126 / #127 の是正を実装したうえで本節を更新した（行番号は是正後のもの）。
 
 | # | ゲート名（検査項目） | 供給元（ファイル:行） | 分類 | 偽陰性シナリオ | 是正案 |

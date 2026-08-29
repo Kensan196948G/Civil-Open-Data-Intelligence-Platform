@@ -74,7 +74,7 @@
 
 ## 3. 証跡ゲートへの反映
 
-台帳へ追記したら、次のどちらかで `neon-backup.yml` へ結果を渡す。**どちらも未設定ならジョブは `Validate backup inputs` で失敗する**（意図した挙動）。
+台帳へ追記したら、復旧訓練の結果を運用台帳（`docs/operations/operations-ledger.md`）と日次確認へ反映する。旧GitHub Actions証跡ゲート（`neon-backup.yml` の `Validate backup inputs`）は2026-08-30にローカルsystemdタイマー移行で廃止された。ローカル移行後は `~/backups/codip/backup.log` の成功確認と、復元訓練の結果を本台帳へ記録する。
 
 | 経路 | 設定先 | 用途 |
 | --- | --- | --- |

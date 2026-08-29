@@ -106,13 +106,13 @@ CODIP_ADMIN_TOKEN="$CODIP_ADMIN_TOKEN" npm run release:smoke -- --base-url http:
 | 接続方式 | Cloudflare Workersの場合はHyperdrive等の接続プールを検討 |
 | 秘密情報 | `DATABASE_URL` はGitHub Secretsまたはデプロイ環境変数で管理 |
 
-## 4.1 Neon pg_dumpバックアップ証跡
+## 4.1 ローカルPostgreSQLバックアップ証跡
 
-本番NeonはPITRだけに依存しない。定期ジョブは `.github/workflows/neon-backup.yml` で `pg_dump` をSecret管理されたGitHub Actions上で実行し、接続文字列をログへ出さずに暗号化artifactへ保存する。リポジトリ側の検証コマンドはDBへ接続せず、ジョブが生成した非Secret証跡だけを検査する。
+本番DBはローカルPostgreSQLへ移行済み（2026-08-30）。定期バックアップはローカルsystemdタイマー `codip-backup.timer`（日次03:17 JST）が `scripts/local-cron/run-backup.sh` を実行し、`pg_dump`（custom形式）をGPG AES256で暗号化して `~/backups/codip/` へ14日保持する。スクリプトは本番DB接続文字列とpassphraseを含むためリポジトリ非公開（`.gitignore` で除外）。旧GitHub Actions経路（`.github/workflows/neon-backup.yml`）はローカル移行のため削除された。
 
-### 4.1.1 GitHub Actions定期pg_dump
+### 4.1.1 旧GitHub Actions定期pg_dump（2026-08-30廃止・記録）
 
-`.github/workflows/neon-backup.yml` は毎日03:17 JSTに実行され、次を行う。
+`.github/workflows/neon-backup.yml` は毎日03:17 JSTに実行され、次を行っていた（Neon時代の記録）。
 
 | 項目 | 内容 |
 | --- | --- |

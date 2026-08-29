@@ -55,7 +55,7 @@ DATABASE_URL=<本番Pg> npm run ops:sla-monitor -- --strict
 ## 5. 追加（2026-08-12 実装済み）
 
 - **ウォッチリストAPI** `/api/v1/watchlist`（engineer以上・個人単位）と
-  日次ダイジェスト（`sla-monitor.yml` が `data-watch-digest` Issue を自動更新）
-- **SLA日次監視** `sla-monitor.yml`（21:05 JST・strict失敗で赤・artifact保存）
+  日次ダイジェスト（旧 `sla-monitor.yml` が `data-watch-digest` Issue を自動更新。2026-08-30にローカル移行で廃止）
+- **SLA日次監視** 旧 `sla-monitor.yml`（21:05 JST・strict失敗で赤・artifact保存。2026-08-30にローカル移行で廃止）
 - **本番負荷シナリオ** `scripts/load/k6-production-scenario.js`（承認後に段階実行）
 - 河川水位XML・水文水質CSVは構造的エンドポイント確認後に追加（現時点はHTMLのみ確認）

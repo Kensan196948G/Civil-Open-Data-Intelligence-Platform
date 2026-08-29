@@ -54,9 +54,9 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 | 項目 | 値 |
 | --- | --- |
 | Neon PITR | 24時間（`history_retention_seconds=86400`。2026-08-11 実測。現行Launchプランでは0〜7日で可変であり、24時間は下限固定ではない。詳細と引き上げ判断材料は `docs/runbooks/monitoring.md` §1.2.1） |
-| 定期pg_dump | 毎日 03:17 JST（`.github/workflows/neon-backup.yml`） |
-| 暗号化 | GPG AES256（`CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE`） |
-| 保持 | 暗号化dump 14日 / 証跡JSON 30日 |
+| 定期pg_dump | 毎日 03:17 JST（ローカルsystemdタイマー `codip-backup.timer` → `scripts/local-cron/run-backup.sh`） |
+| 暗号化 | GPG AES256（ローカルpassphrase `~/.config/codip/backup-passphrase.txt`） |
+| 保持 | 暗号化dump 14日 |
 | RPO（目標） | 24時間以内（PITR + 日次dump） |
 | RTO（目標） | Worker切戻し 60分以内 / DB復元 4時間以内（要実測） |
 | 復元試験 | restore drill 2026-08-04（branch `restore-drill-20260804`、`br-wild-shape-aff21r0u`）実施済み |
@@ -68,7 +68,7 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 | 項目 | 実行方法 | 判定基準 | 担当 | 証跡 | 次回予定 |
 | --- | --- | --- | --- | --- | --- |
 | production smoke | GitHub Actions（15分毎自動） | `/api/health` 200・`/api/ready` 200 | 自動 | Actions run / artifact | 自動 |
-| バックアップ成功 | `neon-backup.yml`（03:17 JST） | workflow success・証跡JSON鮮度OK | 自動 | Actions run / artifact | 自動 |
+| バックアップ成功 | ローカル `codip-backup.timer`（03:17 JST） | dump.gpg生成・暗号化成功（`~/backups/codip/backup.log`） | 自動 | ローカルログ / 日次確認 | 自動 |
 | Workers error / ログ | Workers Logs / Traces | error 0 or 既知 | CTO代行 | `CODIP_CLOUDFLARE_LOGS_EVIDENCE` | 毎日 09:00 JST |
 
 ### 3.2 週次

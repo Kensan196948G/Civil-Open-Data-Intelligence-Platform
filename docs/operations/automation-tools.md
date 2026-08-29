@@ -64,8 +64,8 @@ curl -X POST https://<host>/api/v1/watchlist \
   -d '{"targetType":"dataSource","targetId":"<dataSourceId>"}'
 ```
 
-日次ダイジェストは `.github/workflows/sla-monitor.yml`（21:05 JST）が生成し、
-`data-watch-digest` Issue を自動更新する。手動確認:
+日次ダイジェストは旧 `.github/workflows/sla-monitor.yml`（21:05 JST）が生成し、
+`data-watch-digest` Issue を自動更新していた（2026-08-30にローカル移行で廃止）。手動確認:
 
 ```bash
 DATABASE_URL=postgres://... npm run ops:notification-check

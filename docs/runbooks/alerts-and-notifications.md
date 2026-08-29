@@ -10,9 +10,9 @@ CODIPの障害検知（Production Smoke 15分毎・Neonバックアップ日次�
 
 | 監視対象 | 頻度 | 検知 | 通知 |
 | --- | --- | --- | --- |
-| 本番health/ready | 15分 | ✅ Production Smoke（`post-release-status --strict-production`） | 🟡 GitHub既定通知のみ（専用Webhook未設定） |
-| Neonバックアップ | 日次 03:17 JST | ✅ `neon-backup.yml` | 🟡 GitHub既定通知のみ |
-| データ収集 | 10/30分 | ✅ `data-ingestion.yml` / `data-ingestion-weather.yml` | 🟡 GitHub既定通知のみ |
+| 本番health/ready | 15分 | ✅ Production Smoke（`post-release-status --strict-production`）+ ローカル `codip-healthcheck.timer`（`/api/ready`） | 🟡 GitHub既定通知のみ（専用Webhook未設定） |
+| DBバックアップ | 日次 03:17 JST | ✅ ローカル `codip-backup.timer`（`scripts/local-cron/run-backup.sh`） | 🟡 ローカルログのみ（`~/backups/codip/backup.log`） |
+| データ収集 | 10/30分 | ✅ ローカル `codip-weather.timer` / `codip-ingestion.timer` | 🟡 ローカルログのみ |
 | CI/ビルド | PR/merge毎 | ✅ `ci.yml` | 🟡 GitHub既定通知のみ |
 | Workersエラー | 日次確認 | ✅ Workers Logs/Traces（手動） | ✅ Cloudflare policy `CODIP Worker Error Alert`（2026-08-10作成・テスト送信済み） |
 | Neon容量・接続 | 月次確認 | ❌ 手動予定 | ❌ 未設定 |
@@ -51,9 +51,9 @@ flowchart LR
    - メール: IT/DX部門共有メールボックス（例: `it-dx@mirai-const.co.jp`）
    - チャット: Microsoft Teams チャネルWebhook（Microsoft 365環境に整合）
 2. GitHub Repository Settings → Notifications で失敗通知のメール設定を確認
-3. 各ワークフロー（`production-smoke.yml` / `neon-backup.yml` / `data-ingestion.yml` / `data-ingestion-weather.yml` / `ci.yml`）の失敗時に通知するジョブを追加
-   - メール: `actions/github-script` で Issue 起票＋`@dependabot` 等ではなく、運用台帳のエスカレーション先へ
-   - Teams: `dcr-jrndm/workflow-teams-notify` 等のSHA固定Action（レビュー後に採用）またはWebhook呼び出し
+3. 各ワークフロー（`production-smoke.yml` / `ci.yml`）とローカルsystemdタイマー（`codip-ingestion.timer` / `codip-weather.timer` / `codip-backup.timer`）の失敗時に通知する仕組みを追加
+   - GitHub Actions側: メール・Teams Webhook（SHA固定Action）
+   - ローカル側: ログ監視（`~/backups/codip/backup.log`、`~/logs/codip-ingestion/`）から失敗を検知する監視の追加
 4. **通知テスト**: `production-smoke.yml` を `workflow_dispatch` で `run_notification_test=true` にして実行する。本番probeは通常どおり実行され、通知stepだけがテスト専用incident Issue（`[TEST]` 接頭辞・`production-smoke-test` label）を起票する。本番を故意に落とす必要はない。起票後、受信確認してテストIssueをクローズする（`notification-test-record.md` §3）
 
 ### 3.2 Cloudflare Alert Policies

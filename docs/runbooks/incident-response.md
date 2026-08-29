@@ -15,8 +15,8 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 | 経路 | 周期 | 通知の実体 | 到達範囲 |
 | --- | --- | --- | --- |
 | `production-smoke.yml` | 15分 | **incident Issue を自動起票**（連続2回以上で P1 へ昇格） | `odip` のみ |
-| `neon-backup.yml` | 日次 | **失敗時に `backup-incident` Issue を自動起票**（連続失敗数を run 履歴から算出） | — |
-| `sla-monitor.yml` | 日次 | `data-watch-digest` Issue を作成・更新 | データ鮮度 |
+| ローカル `codip-backup.timer` | 日次 | 失敗はローカルログ（`~/backups/codip/backup.log`）へ記録。旧 `neon-backup.yml` の `backup-incident` Issue 自動起票は2026-08-30にローカル移行で廃止 | — |
+| ローカル `codip-healthcheck.timer` | 5分 | `/api/ready` 非200で `codip-webui.service` を再起動 | ローカル |
 | Workers Logs / Traces、Neon Console | 随時 | 手動確認 | 全 env |
 | 利用者からの報告 | — | — | 全 env |
 
@@ -220,7 +220,7 @@ curl -sS -w '\nHTTP %{http_code}\n' https://codip-mvp.mirai-dx-platform.com/api/
 | データ鮮度（10min） | 同上 | **≤ 1時間** | 同 `:21` | 同上 |
 | データ鮮度（hourly） | 同上 | **≤ 4時間** | 同 `:22` | 同上 |
 | データ鮮度（daily） | 同上 | **≤ 30時間** | 同 `:23` | 同上 |
-| バックアップ鮮度 | `check-neon-backup-evidence.js` | 24時間以内の成功 | `neon-backup.yml` | `backup-incident` Issue 自動起票 |
+| バックアップ鮮度 | ローカル `codip-backup.timer` の日次成功（`~/backups/codip/backup.log`） | 24時間以内の成功 | ローカルログ | 日次確認（旧 `neon-backup.yml` の自動起票はローカル移行で廃止） |
 
 ### 未定義（意図的に空欄のまま残す）
 
@@ -236,7 +236,7 @@ curl -sS -w '\nHTTP %{http_code}\n' https://codip-mvp.mirai-dx-platform.com/api/
 
 | 指標 | 目標 | 根拠 | 実測（**操作単体**。適用範囲に注意） |
 | --- | --- | --- | --- |
-| RPO（許容データ損失） | 24時間 | 日次 pg_dump（`neon-backup.yml`） | ⚠️ 未実測。かつ **2026-08-13 以降 backup が失敗中**のため現状は達成していない |
+| RPO（許容データ損失） | 24時間 | 日次 pg_dump（ローカル `codip-backup.timer`） | ⚠️ 実測は2026-08-30のローカル移行後に再計測が必要（移行前のNeon経路では未達成が継続していた） |
 | RPO（PITR 利用時） | Neon の保持窓に依存 | `create-neon-backup-evidence.js` が実測して記録 | 実行時に取得（直近実測 `history_retention_seconds=86400`） |
 | RTO（コードのみ） | 30分 | `wrangler rollback` + smoke 再実行 | ✅ **4秒**（2026-08-10 ドリル。`--env production` で d1528b5d へ切戻し）＋ smoke。復旧デプロイは **25秒** |
 | RTO（DB を含む） | 4時間 | PITR restore + 検証 + human 承認 | ✅ **約14分**（2026-08-12 PITR ドリル。branch 作成〜検証〜後片付けまで）。別途 2026-08-10 に PITR→初回クエリ **3.1秒** |
