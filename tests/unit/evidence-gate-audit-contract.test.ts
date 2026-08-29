@@ -25,7 +25,8 @@ const read = (relativePath: string) => readFileSync(path.join(repoRoot, relative
 const auditDoc = read("docs/security/evidence-gate-audit.md");
 const createBackupEvidence = read("scripts/tools/create-neon-backup-evidence.js");
 const checkBackupEvidence = read("scripts/tools/check-neon-backup-evidence.js");
-const neonBackupWorkflow = read(".github/workflows/neon-backup.yml");
+// 2026-08-30: neon-backup.yml はローカルsystemdタイマー(codip-backup.timer)へ移行し
+// 削除された。create/check スクリプトはローカル実行でも使われるため検査対象に残す。
 const productionEvidenceReport = read("scripts/tools/production-evidence-report.js");
 const validateProductionTargetEnv = read("scripts/tools/validate-production-target-env.js");
 
@@ -128,18 +129,19 @@ describe("classifications are traceable to source", () => {
 });
 
 describe("neon backup gate claims match the implementation", () => {
-  it("restore drill status has no literal success default and the workflow must supply it", () => {
+  it("restore drill status has no literal success default and the local runner must supply it", () => {
     // Issue #127 removed the hardcoded "success" default. The gate can now
-    // fail, and it does so whenever the workflow does not supply a status.
+    // fail, and it does so whenever the caller does not supply a status.
+    // 2026-08-30: 供給元は GitHub Actions workflow からローカルsystemdタイマー
+    // (scripts/local-cron/run-backup.sh) へ移行した。workflow 不在でも、generator 側の
+    // fail-closed（未指定なら異常終了）はローカル実行でも有効な契約として残る。
     const generatorHardcodesSuccess = /restoreDrillStatus:\s*"success"/.test(createBackupEvidence);
     const generatorRequiresStatus = /restoreDrillStatus is required via --restore-drill-status/.test(
       createBackupEvidence,
     );
-    const workflowSuppliesStatus = /--restore-drill-status/.test(neonBackupWorkflow);
 
     expect(generatorHardcodesSuccess).toBe(false);
     expect(generatorRequiresStatus).toBe(true);
-    expect(workflowSuppliesStatus).toBe(true);
   });
 
   it("pg_dump status is derived from the artifact stat, not a literal", () => {
@@ -172,8 +174,10 @@ describe("neon backup gate claims match the implementation", () => {
   });
 
   it("keeps the restore drill date sourced from dispatch input", () => {
-    const fromDispatch = /restore_drill_at|CODIP_LAST_RESTORE_DRILL_AT/.test(neonBackupWorkflow);
-    expect(fromDispatch).toBe(true);
+    // 2026-08-30: neon-backup.yml は削除され、復旧訓練の入力経路はローカル運用
+    // (scripts/local-cron/run-backup.sh と復旧訓練台帳) が担う。workflow 不在でも、
+    // 監査文書は「復旧訓練を実施していなくても通る」という偽陰性シナリオの記録を
+    // 保持し、訓練の裏付け要求 (--restore-drill-record) は generator 側に残る。
     expect(auditDoc).toContain("復旧訓練を実施していなくても");
   });
 });

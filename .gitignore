@@ -65,3 +65,6 @@ _worktrees/
 
 # Codex/agent runtime state (internal only, never commit)
 .omo/
+
+# ローカル運用スクリプト（本番DB接続文字列を含むためリポジトリ非公開）
+scripts/local-cron/

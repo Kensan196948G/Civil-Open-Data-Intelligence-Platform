@@ -56,7 +56,6 @@ const CI_WORKFLOW_PATH = ".github/workflows/ci.yml";
 const SMOKE_SCRIPT_PATH = "scripts/tools/release-smoke.js";
 const CREATE_EVIDENCE_SCRIPT_PATH = "scripts/tools/create-neon-backup-evidence.js";
 const CHECK_EVIDENCE_SCRIPT_PATH = "scripts/tools/check-neon-backup-evidence.js";
-const BACKUP_WORKFLOW_PATH = ".github/workflows/neon-backup.yml";
 const DEP_AUDIT_SCRIPT_PATH = "scripts/tools/check-dependency-audit.js";
 const POST_RELEASE_SCRIPT_PATH = "scripts/tools/post-release-status.js";
 // 読むだけ (本セッションの編集対象外)。文書がこのファイルの行を引用しているので、
@@ -70,7 +69,6 @@ const ciWorkflow = readFileSync(path.join(REPO_ROOT, CI_WORKFLOW_PATH), "utf8");
 const smokeSource = readFileSync(path.join(REPO_ROOT, SMOKE_SCRIPT_PATH), "utf8");
 const createEvidenceSource = readFileSync(path.join(REPO_ROOT, CREATE_EVIDENCE_SCRIPT_PATH), "utf8");
 const checkEvidenceSource = readFileSync(path.join(REPO_ROOT, CHECK_EVIDENCE_SCRIPT_PATH), "utf8");
-const backupWorkflow = readFileSync(path.join(REPO_ROOT, BACKUP_WORKFLOW_PATH), "utf8");
 const depAuditSource = readFileSync(path.join(REPO_ROOT, DEP_AUDIT_SCRIPT_PATH), "utf8");
 const postReleaseSource = readFileSync(path.join(REPO_ROOT, POST_RELEASE_SCRIPT_PATH), "utf8");
 const monitoringContractSource = readFileSync(
@@ -875,7 +873,6 @@ describe("監査文書の行番号引用が実装を指している", () => {
     // 「引用が動いたのは自分が触ったファイルだけのはず」という前提で範囲を決めていたため、
     // 触っていないファイルの引用は最初から検査の母集団に入っていなかった。
     check: checkEvidenceSource.split("\n"),
-    backup: backupWorkflow.split("\n"),
     depaudit: depAuditSource.split("\n"),
     postrelease: postReleaseSource.split("\n"),
     monitoring: monitoringContractSource.split("\n"),
@@ -1091,13 +1088,8 @@ describe("監査文書の行番号引用が実装を指している", () => {
     // 供給経路 (`env → 引数`) の末端。ここを create 側の引数パース行だと誤読して
     // 一度書き換え、#4 の `:185` との対 (同じ run ブロックの隣接行) を壊した。
     // 後方参照 `:NNN` の持ち主は「同じ行の直前のファイル名」では決まらない。
-    {
-      label: "#2 neon-backup.yml から create へのフラグ受け渡し",
-      source: "backup",
-      doc: /→ `:(\d+)` `--restore-drill-status`/,
-      first: /^ +--restore-drill-status "\$CODIP_LAST_RESTORE_DRILL_STATUS" \\$/,
-      last: /^ +--restore-drill-status "\$CODIP_LAST_RESTORE_DRILL_STATUS" \\$/,
-    },
+    // 2026-08-30: neon-backup.yml はローカルsystemdタイマー移行で削除されたため、
+    // workflow からのフラグ受け渡しの引用は検査対象から外す。
     {
       label: "#2 create-neon-backup-evidence.js の出力フィールド",
       source: "create",

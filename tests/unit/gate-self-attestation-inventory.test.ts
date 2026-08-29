@@ -435,9 +435,9 @@ const SCRIPT_GATES: readonly GateEntry[] = [
     issue: "open",
     why: "restoreDrillStatus が \"success\" かどうかを文字列比較するだけで (235-237 行)、その値に出所の裏づけが無い。#126/#127 の是正は 7f72626 (PR #137) で main へ着地し、PITR 保持期間は measured のみ受理へ、pgDumpStatus は lastPgDumpStatusSource が artifact-stat: で始まることの検査へ変わった (245-247 行)。しかし restoreDrillStatus には対になる Source が create 側でも書かれず (create-neon-backup-evidence.js 294 行は pgDump のみ)、check 側でも検査されない。等級1 の根拠はこの一点へ絞られる",
     signals: { substringDominant: false, probesExternal: false, probesFs: false },
-    runsOn: "scheduled",
+    runsOn: "unwired",
     notRunMeans:
-      "neon-backup.yml の定期実行でしか走らない。PR では一度も評価されないため、証跡の受理条件を緩める変更を入れても、次の定期実行まで検知されない",
+      "2026-08-30 に neon-backup.yml がローカルsystemdタイマー移行で削除され、どの GitHub Actions workflow からも呼ばれない。ローカル実行(scripts/local-cron/run-backup.sh)では証跡生成を経由しないため、本スクリプトの退行は人が手動実行したときしか現れない",
     defect: {
       pattern: /restoreDrillStatus is success/,
       means: "自己申告値との文字列比較が合否そのものになっている",
@@ -523,9 +523,9 @@ const SCRIPT_GATES: readonly GateEntry[] = [
     issue: "fixed",
     why: "7f72626 (PR #137, backend e199e64 由来。#126/#127) が main へ着地し、合格側の既定値が撤去された。restoreDrillStatus は未指定なら throw し (278 行)、pgDumpStatus も --pg-dump-file が無ければ throw する (267 行)。\"success\" が入るのは artifact-stat で実測できた場合だけで、既定値による検査経路の閉塞は現物から消えている",
     signals: { substringDominant: false, probesExternal: false, probesFs: true },
-    runsOn: "scheduled",
+    runsOn: "unwired",
     notRunMeans:
-      "neon-backup.yml の定期実行でしか走らない。PR では評価されないため、既定値の撤去が本当に効いているかは次の定期実行まで確認できない",
+      "2026-08-30 に neon-backup.yml がローカルsystemdタイマー移行で削除され、どの GitHub Actions workflow からも呼ばれない。ローカル実行(scripts/local-cron/run-backup.sh)は pg_dump+GPG を直接行い本スクリプトを経由しないため、既定値の撤去が効いているかは人が手動実行したときしか確認できない",
     fixEvidence: {
       pattern: /there is no default outcome/,
       means: "既定値の不在が throw のメッセージとして現物に在る。既定値を戻せばこの文言も消える",
@@ -787,36 +787,6 @@ const WORKFLOWS: readonly WorkflowEntry[] = [
     remediatedBy: "7f72626",
   },
   {
-    file: ".github/workflows/data-ingestion.yml",
-    grade: "枠外",
-    issue: "none",
-    why: "枠外。データ取込のバッチであり証跡を受理・棄却するゲートを含まない (isGate === false)。SHA ピン検査の対象外である点は check-github-actions-contract.js 側の問題として扱う",
-    isGate: false,
-    runsOn: "scheduled",
-    notRunMeans:
-      "定期実行と workflow_dispatch でのみ動く。ゲートではないため未検査になる証跡は無いが、取込の失敗自体は定期実行が回るまで現れない",
-  },
-  {
-    file: ".github/workflows/data-ingestion-weather.yml",
-    grade: "枠外",
-    issue: "none",
-    why: "枠外。気象データ取込のバッチであり証跡を受理・棄却するゲートを含まない (isGate === false)。SHA ピン検査の対象外である点は data-ingestion.yml と同じ扱い",
-    isGate: false,
-    runsOn: "scheduled",
-    notRunMeans:
-      "定期実行と workflow_dispatch でのみ動く。ゲートではないため未検査になる証跡は無いが、取込の失敗自体は定期実行が回るまで現れない",
-  },
-  {
-    file: ".github/workflows/neon-backup.yml",
-    grade: 0,
-    issue: "none",
-    why: "continue-on-error を 1 つも持たず、証跡生成の直後に check-neon-backup-evidence.js を実行して失敗すればジョブが落ちる。workflow としての結線は健全で、証跡の質の問題は生成側スクリプト (等級2) と検査側スクリプト (等級1) に帰属させる",
-    isGate: true,
-    runsOn: "scheduled",
-    notRunMeans:
-      "定期実行と workflow_dispatch でのみ動く。バックアップ証跡の生成も検査も PR では一度も走らないため、両スクリプトの退行は次の定期実行まで検知されない",
-  },
-  {
     file: ".github/workflows/production-smoke.yml",
     grade: 0,
     issue: "none",
@@ -825,16 +795,6 @@ const WORKFLOWS: readonly WorkflowEntry[] = [
     runsOn: "scheduled",
     notRunMeans:
       "定期実行と workflow_dispatch でのみ動く。本番監視は PR では走らないため、この workflow 自身の結線が壊れても次の定期実行まで気付けない",
-  },
-  {
-    file: ".github/workflows/sla-monitor.yml",
-    grade: "枠外",
-    issue: "none",
-    why: "枠外。SLA 鮮度監視とウォッチリスト通知ダイジェストの発行を行う運用バッチであり、証跡を受理・棄却するマージゲートを含まない (isGate === false)。continue-on-error は SLA/通知の結果を digest Issue と artifact に残すためのもので、結果によるジョブの成否は作らない",
-    isGate: false,
-    runsOn: "scheduled",
-    notRunMeans:
-      "定期実行と workflow_dispatch でのみ動く。SLA 違反と通知ダイジェストは次の定期実行まで現れない",
   },
   {
     file: ".github/workflows/load-test.yml",
