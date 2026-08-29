@@ -18,6 +18,9 @@
 //                    Access header injection is configured, rotate both sides
 //                    together.
 //   --skip-deploy    run checks + DNS/secrets only, skip `cf:deploy:production`.
+//   --allow-dirty-deploy  skip the working-tree / origin-main provenance checks.
+//                    Use only for a deliberate out-of-band deploy; the override is logged.
+//   --skip-ci-check  skip the CI-green gate for the deploy commit. Same caveat.
 //   --wrangler-direct  run the same release gates individually, then deploy with
 //                    `wrangler deploy --env production` instead of the OpenNext
 //                    wrapper. Needed on hosts where workerd cannot start
@@ -51,6 +54,11 @@ const BASE_URL = `https://${PRODUCTION_HOST}`;
 const withSecrets = process.argv.includes("--with-secrets");
 const skipDeploy = process.argv.includes("--skip-deploy");
 const wranglerDirect = process.argv.includes("--wrangler-direct");
+// この2つは呼び出し時に読む。モジュール読込時に固定すると、上書き経路を
+// 実行させて確かめるテストが書けない（フラグを立てても既に評価済みになる）。
+// 本番の挙動は同じ（スクリプトは1回しか走らない）。
+const allowDirtyDeploy = () => process.argv.includes("--allow-dirty-deploy");
+const skipCiCheck = () => process.argv.includes("--skip-ci-check");
 
 /**
  * Any string map, not specifically `process.env`.
@@ -248,7 +256,159 @@ async function ensureDnsRecord(token) {
 // that only exercises resolveEvidenceEnv() proves the function is fail-closed
 // while saying nothing about whether main() still calls it: replacing the line
 // below with `const evidenceEnv = {}` left the whole suite green (T-B12).
+/** 素性検証で外部 CLI を叩くときの上限。ネットワーク停止で deploy が無限待機しないため。 */
+const PROBE_TIMEOUT_MS = 60_000;
+
+/**
+ * 素性検証用の外部コマンド実行。**タイムアウトは fail-closed** にする。
+ *
+ * `git fetch` / `git ls-remote` / `gh api` はいずれもネットワークを触る。
+ * 時間制限なしで spawnSync すると、上流が無応答のとき deploy が黙って止まり続ける。
+ * 「応答が無い」は「検証に通った」ではないので、必ず例外にする。
+ */
+function runProbe(command, args) {
+  const r = spawnSync(command, args, {
+    encoding: "utf8",
+    timeout: PROBE_TIMEOUT_MS,
+    killSignal: "SIGKILL",
+  });
+  if (r.error) {
+    const code = r.error.code === "ETIMEDOUT" ? `timed out after ${PROBE_TIMEOUT_MS}ms` : r.error.code;
+    throw new Error(`${command} ${args.join(" ")} failed: ${code}`);
+  }
+  // timeout で kill された場合 status は null になる。0 以外と同様に失敗として扱う。
+  if (r.status !== 0) {
+    const why = r.status === null ? `killed by ${r.signal ?? "signal"}` : `exit=${r.status}`;
+    throw new Error(`${command} ${args.join(" ")} failed (${why}): ${(r.stderr || "").trim()}`);
+  }
+  return r;
+}
+
+/**
+ * デプロイ対象 commit の素性を検証する。
+ *
+ * これが無いと、このスクリプトは**ローカル作業ツリーの内容をそのまま本番へ出す**。
+ * 未コミット・未 push・未マージ・CI 未通過のコードが本番へ到達しうる状態であり、
+ * 「main の確定 commit と検証済み commit の一致を確認し、その固定 commit から
+ * デプロイする」という運用条件を機械的に担保できていなかった。
+ *
+ * 検証するのは次の4点。いずれも fail-closed。
+ *   1. 作業ツリーがクリーン（未コミット変更が無い）
+ *   2. HEAD が origin/main と一致（マージ済みの確定 commit である）
+ *   3. HEAD がリモートに存在する（push 済みで、あとから追跡できる）
+ *   4. その commit の CI が success（検証済みである）
+ *
+ * `--allow-dirty-deploy` で 1〜3 を、`--skip-ci-check` で 4 を明示的に外せる。
+ * 外した事実は必ず標準出力へ残す（黙って緩めない）。
+ */
+function verifyCommitProvenance() {
+  step("verify deploy commit provenance (git + CI)");
+
+  // raw=true は porcelain 用。全体を trim すると1行目の先頭スペース
+  // （`git status --porcelain` の XY フィールド）が消え、パスの先頭を削ってしまう。
+  const git = (args, { raw = false } = {}) => {
+    const r = runProbe("git", args);
+    const out = r.stdout || "";
+    return raw ? out.replace(/\n$/, "") : out.trim();
+  };
+
+  const head = git(["rev-parse", "HEAD"]);
+
+  if (allowDirtyDeploy()) {
+    console.warn(
+      `[deploy-production] ⚠️ --allow-dirty-deploy: skipping working-tree / origin-main checks (HEAD=${head})`,
+    );
+  } else {
+    const dirty = git(["status", "--porcelain"], { raw: true });
+    if (dirty) {
+      // porcelain v1 は「XY<space>path」。X/Y は staged/unstaged の状態で、
+      // 片方が空白のこともある。固定長 slice はパスの先頭を削るため使わない。
+      const files = dirty
+        .split("\n")
+        .map((line) => line.replace(/^.{2} /, ""))
+        .join(", ");
+      throw new Error(
+        `working tree is not clean; refusing to deploy uncommitted state. Files: ${files}. ` +
+          "Commit or stash first, or pass --allow-dirty-deploy to override.",
+      );
+    }
+
+    git(["fetch", "origin", "main", "--quiet"]);
+    const originMain = git(["rev-parse", "origin/main"]);
+    if (head !== originMain) {
+      throw new Error(
+        `HEAD (${head}) does not match origin/main (${originMain}); refusing to deploy an unmerged commit. ` +
+          "Merge first, or pass --allow-dirty-deploy to override.",
+      );
+    }
+
+    // push 済みであることの確認。origin/main と一致していれば満たされるが、
+    // ローカル ref が古い可能性を排除するためリモートへ直接問い合わせる。
+    const remoteMain = git(["ls-remote", "origin", "refs/heads/main"]).split(/\s+/)[0];
+    if (remoteMain !== head) {
+      throw new Error(
+        `remote main (${remoteMain}) does not match HEAD (${head}); local origin/main ref is stale. ` +
+          "Run `git fetch origin main` and re-check.",
+      );
+    }
+  }
+
+  if (skipCiCheck()) {
+    console.warn("[deploy-production] ⚠️ --skip-ci-check: deploying without confirming CI success");
+    return head;
+  }
+
+  // CI 結果は GitHub を単一の真実として引く。gh が無い / 認証されていない場合は
+  // 「確認できなかった」であって「成功した」ではないため、停止する。
+  // --paginate + per_page=100 で全ページを見る。既定の30件だけを見ると、
+  // 2ページ目以降の failure を取りこぼして「CI 失敗 commit をデプロイ」できてしまう。
+  let gh;
+  try {
+    gh = runProbe("gh", [
+      "api",
+      "--paginate",
+      `repos/{owner}/{repo}/commits/${head}/check-runs?per_page=100`,
+      "--jq",
+      '.check_runs[] | "\(.name)=\(.conclusion)"',
+    ]);
+  } catch (error) {
+    throw new Error(
+      `could not read CI results for ${head} via gh (${error.message}). ` +
+        "Fix gh auth, or pass --skip-ci-check to deploy without this gate.",
+    );
+  }
+  const runs = (gh.stdout || "").trim().split("\n").filter(Boolean);
+  if (runs.length === 0) {
+    throw new Error(`no CI check-runs found for ${head}; refusing to deploy an unverified commit.`);
+  }
+  // skipped は GitHub の必須チェックでも成功として扱われるため、ここでも許容する。
+  const bad = runs.filter((line) => {
+    const conclusion = line.split("=").pop();
+    return conclusion !== "success" && conclusion !== "skipped" && conclusion !== "neutral";
+  });
+  if (bad.length > 0) {
+    throw new Error(`CI is not green for ${head}: ${bad.join(", ")}`);
+  }
+  console.log(`[deploy-production] commit ${head} verified: clean tree, == origin/main, ${runs.length} CI checks green`);
+  return head;
+}
+
 export async function main() {
+  // --skip-deploy は DNS 変更・migration・seed・deploy・secrets のいずれにも
+  // 到達せず return する読取り専用の preflight である（下の skipDeploy 分岐が
+  // ensureDnsRecord() より前にある）。何もデプロイしないので素性ゲートは課さない。
+  // ここで止めると、接続先・権限・migration 状態を事前に確かめる手段が失われる。
+  // 証跡ゲート（resolveEvidenceEnv）が --skip-deploy を免除しているのと同じ理由。
+  // 既存の skipDeploy はモジュール読込時に固定される。ゲートの免除判定は
+  // 呼び出し時に読み直す（既存定数の評価タイミングは変えない。他の分岐が依存しているため）。
+  const readOnlyPreflight = skipDeploy || process.argv.includes("--skip-deploy");
+  if (!readOnlyPreflight) {
+    const deployCommit = verifyCommitProvenance();
+    console.log(`[deploy-production] deploying fixed commit ${deployCommit}`);
+  } else {
+    console.log("[deploy-production] --skip-deploy: read-only preflight (provenance gate not applied)");
+  }
+
   const neonKey = requiredEnv("NEON_API_KEY");
   const cfToken = requiredEnv("CLOUDFLARE_API_TOKEN");
   requiredEnv("CLOUDFLARE_ACCOUNT_ID");

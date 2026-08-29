@@ -214,7 +214,26 @@ describe("証跡ゲートの deploy 経路への結線 (T-B12)", () => {
     fetchMock = vi.fn(() => Promise.reject(new Error("remote call must not be reached")));
     vi.stubGlobal("fetch", fetchMock);
     spawnSyncMock.mockReset();
+    // main() の先頭には commit 素性ゲート (git + gh) が入っている。
+    // 本ファイルが測るのは**その次に来る証跡ゲート**なので、素性ゲートは
+    // 「通る」側へ寄せて素通りさせる。ここを緩めても、証跡ゲートが
+    // prisma/wrangler より前にあることの検証は変わらない。
+    spawnSyncMock.mockImplementation((command: string, args: string[]) => {
+      if (command === "git") {
+        const sub = args[0];
+        if (sub === "rev-parse") return { status: 0, stdout: `${"c".repeat(40)}\n`, stderr: "" };
+        if (sub === "status") return { status: 0, stdout: "", stderr: "" };
+        if (sub === "fetch") return { status: 0, stdout: "", stderr: "" };
+        if (sub === "ls-remote") return { status: 0, stdout: `${"c".repeat(40)}\trefs/heads/main\n`, stderr: "" };
+      }
+      if (command === "gh") return { status: 0, stdout: "verify=success\n", stderr: "" };
+      // git / gh 以外が起きたら、証跡ゲートより先に後段が動いている。
+      return { status: 0, stdout: "", stderr: "" };
+    });
   });
+
+  /** 素性ゲートが使う子プロセス。証跡ゲートの順序検証では対象外にする。 */
+  const isProvenanceProbe = (call: unknown[]) => call[0] === "git" || call[0] === "gh";
 
   afterEach(() => {
     for (const [key, value] of Object.entries(saved)) {
@@ -230,6 +249,11 @@ describe("証跡ゲートの deploy 経路への結線 (T-B12)", () => {
     const { spawnSync } = await import("node:child_process");
     expect(spawnSync).toBe(spawnSyncMock);
     expect(globalThis.fetch).toBe(fetchMock);
+    // 素性ゲートの素通し実装が実際に効いていること。ここが壊れると
+    // 下 2 件は「証跡ゲートで止まった」ではなく「素性ゲートで止まった」を
+    // 見ていることになる。
+    expect(isProvenanceProbe(["git", ["rev-parse", "HEAD"]])).toBe(true);
+    expect(isProvenanceProbe(["npx", ["prisma"]])).toBe(false);
   });
 
   it("証跡変数が無ければ main() は停止する", async () => {
@@ -242,9 +266,10 @@ describe("証跡ゲートの deploy 経路への結線 (T-B12)", () => {
       fetchMock,
       "Neon/Cloudflare API を呼んでからゲートが動いている (順序が逆転した)",
     ).not.toHaveBeenCalled();
+    const nonProvenance = spawnSyncMock.mock.calls.filter((call) => !isProvenanceProbe(call));
     expect(
-      spawnSyncMock,
+      nonProvenance,
       "prisma/wrangler を起動してからゲートが動いている (順序が逆転した)",
-    ).not.toHaveBeenCalled();
+    ).toEqual([]);
   });
 });
