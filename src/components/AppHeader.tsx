@@ -13,6 +13,15 @@ const VIEW_META: { prefix: string; exact?: boolean; title: string; sub: string }
   { prefix: "/audit", title: "🔍 監査ログ", sub: "操作・イベントの証跡とエクスポート" },
   { prefix: "/tags", title: "🏷️ タグ管理", sub: "データソースの分類タグを管理" },
   { prefix: "/settings", title: "⚙️ 設定", sub: "接続確認の動作設定とセキュリティ制約" },
+  // AppSidebar が持つルートは必ずここにも入れる。metaFor() は該当が無いと
+  // VIEW_META[0]（ダッシュボード）へ落ちるため、抜けると別画面のタイトルが出る。
+  // 対応は tests/unit/app-header-routes.test.ts が強制する。
+  { prefix: "/terrain", title: "⛰️ 地形分析", sub: "標高・傾斜・縦断からの現場条件評価" },
+  { prefix: "/weather", title: "🌦️ 気象・海象", sub: "観測値・予報と閾値による作業条件の確認" },
+  { prefix: "/sites", title: "🚧 現場管理", sub: "現場マスタと観測地点の対応づけ" },
+  { prefix: "/decisions", title: "🧭 施工可否判定", sub: "閾値と観測値にもとづく判断と根拠の記録" },
+  { prefix: "/reports", title: "📊 レポート", sub: "期間・現場を指定した集計と出力" },
+  { prefix: "/watchlist", title: "🔔 ウォッチリスト", sub: "現場・データソースの変化を追跡" },
 ];
 
 function metaFor(pathname: string) {
