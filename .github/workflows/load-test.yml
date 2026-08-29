@@ -67,7 +67,7 @@ jobs:
 
       - name: Start node preview
         run: |
-          npm run start:checked -- --hostname 127.0.0.1 --port 3110 > /tmp/codip-preview.log 2>&1 &
+          npm run start:checked -- --hostname 0.0.0.0 --port 3110 > /tmp/codip-preview.log 2>&1 &
           timeout 60 bash -c 'until curl -sf http://127.0.0.1:3110/api/ready >/dev/null 2>&1; do sleep 2; done'
           curl -sf http://127.0.0.1:3110/api/ready >/dev/null
 
