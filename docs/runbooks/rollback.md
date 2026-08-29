@@ -10,7 +10,7 @@
 
 | 区分 | 内容 |
 | --- | --- |
-| 対象 | 共有プレビュー / staging / production |
+| 対象 | 共有プレビュー / staging / **codip-mvp（公開レビュー環境）** / production |
 | 実行者 | **人間**。ロールバックは本番状態を変更するため、AI エージェントは判断材料の提示までとし実行しない |
 | 事前確認 | 本書の各手順は「影響」「不可逆性」を明記している。実行前に必ず読むこと |
 | 記録 | 実行後は §7 の記録欄と該当 Issue に、実行者・時刻・対象・結果を残す |
@@ -69,6 +69,26 @@ npx wrangler rollback <VERSION_ID> --name codip --env production --message "inci
 
 `--message` を指定すると対話確認プロンプトが省略される。無人実行以外では省略して確認画面を読むこと。
 
+### 2.2.1 codip-mvp（公開レビュー環境）を戻す
+
+`codip-mvp` は 2026-08-13 から公開しており、`odip`（本番）とは target が完全に分離している。
+同じ機構（`wrangler rollback`）で戻せるが、**`--env` が異なる**。
+
+```bash
+npx wrangler deployments list --name codip --env mvp
+npx wrangler rollback --name codip --env mvp --message "incident: <Issue番号> による切り戻し"
+```
+
+検証は Access を通らないため直接叩ける。
+
+```bash
+curl -sS -w '\nHTTP %{http_code}\n' https://codip-mvp.mirai-dx-platform.com/api/ready
+```
+
+> ⚠️ `codip-mvp` は `production-smoke.yml` の probe 対象に**含まれていない**。
+> 戻したあとの継続確認は手動で行うこと。DB・公開停止の手順は
+> [cloudflare-mvp.md](cloudflare-mvp.md) §4 を参照する。
+
 ### 2.3 制約 (Cloudflare 公式仕様)
 
 | 制約 | 内容 |
@@ -94,6 +114,12 @@ npx wrangler deploy --env production   # ⚠️ 人間承認必須
 ## 🐳 3. Docker / GHCR イメージのロールバック
 
 > 適用: コンテナ実行環境 (共有プレビュー等) の切り戻し。
+>
+> 🚫 **本番（`odip`）と公開MVP（`codip-mvp`）の復旧経路ではない。** どちらも
+> Cloudflare Workers であり、Docker イメージはデプロイに使用していない。
+> 障害時に GHCR digest を差し戻しても、これらの環境は変わらない。
+> 本節はコンテナで動かしている共有プレビューに限って有効である。
+> Docker 依存そのものの撤去は Issue #35 で追跡している。
 
 ### 3.1 戻せるイメージを特定する
 
@@ -251,8 +277,19 @@ docker compose -f docker-compose.preview.yml up -d
 
 切り戻し後は必ず read-only スモークで復旧を確認する。**書き込みを伴う検証は本番で実行しない。**
 
+**本番（`odip`）の合否はローカル smoke で判定しない。**
+Access service token を持たないローカル実行は Access 境界しか見ておらず、
+「302 が返る」以上のことは分からない。判定は GitHub Actions 側の認証つき probe で行う
+（手順は [`incident-response.md`](incident-response.md) §3.2。dispatch した run を
+特定して `gh run watch --exit-status` で成否を取る）。
+
 ```bash
-npm run release:smoke -- --read-only --base-url "https://<対象URL>"
+# 公開MVP（Access 無し。ローカルから直接叩けるので、これは本当に検証になる）
+npm run release:smoke -- --read-only --base-url "https://codip-mvp.mirai-dx-platform.com"
+
+# 本番へローカルから叩く場合は「Access 境界が生きていること」の確認に限定される
+curl -sS -o /dev/null -w 'HTTP %{http_code}\n' https://odip.mirai-dx-platform.com/api/health
+# → 302 は Access 境界が機能している証拠にすぎず、アプリの復旧確認ではない
 ```
 
 | 確認項目 | 期待 |
@@ -275,6 +312,11 @@ npm run release:smoke -- --read-only --base-url "https://<対象URL>"
 ---
 
 ## 🔗 関連文書
+
+- [段階的本番デプロイ計画（2026-08 サイクル）](staged-production-deploy-2026-08.md)
+  — 未デプロイ 28 commits + 本サイクル 12 PR を段階的に出す手順と、各段の判定・停止条件。
+  **本デプロイは migration を伴わない**（本番 DB は既に目標 schema）ため、
+  rollback はコードのみで完結する。
 
 | 文書 | 役割 |
 | --- | --- |
