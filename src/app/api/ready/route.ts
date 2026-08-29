@@ -18,7 +18,11 @@ export async function GET() {
       responseTimeMs: Math.round(performance.now() - startedAt),
       checkedAt: new Date().toISOString(),
     });
-  } catch {
+  } catch (error) {
+    // 監視(production-smoke)は応答本文しか観測できないため、失敗の実体
+    // (接続先・認証・タイムアウト等) はここでログへ落として初めて
+    // Cloudflare Workers Logs / wrangler tail で確認できる。
+    console.error("[ready] database readiness check failed", error);
     return NextResponse.json(
       {
         status: "not_ready",
