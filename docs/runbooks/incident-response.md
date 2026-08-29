@@ -107,8 +107,9 @@ npx wrangler tail --env production --status error --format pretty
 ```
 
 🚫 **本番 DB の状態を `codip-mvp` で代用してはならない。**
-`codip-mvp` は Neon branch `mvp-20260813` を使う独立環境であり
-（`scripts/deploy/deploy-mvp.mjs:5,39`。production の `main` branch には触れない）、
+`codip-mvp.mirai-dx-platform.com` は **Cloudflare Tunnel 経由でローカルの next start
+（SQLite `dev.db`）を公開した独立レビュー環境**であり（`docs/runbooks/cloudflare-mvp.md` §0.1。
+旧構成では Neon branch `mvp-20260813` を使用）、
 その `/api/ready` が `ok` でも**本番 DB については何も言っていない**。
 障害中にこれを見ると「DB は正常」という誤った切り分けになる。
 

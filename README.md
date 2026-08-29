@@ -10,7 +10,7 @@
 
 **CODIP** は、国土交通省、国土地理院、気象庁、自治体、道路、河川、防災、都市計画、インフラ、環境などに分散している公開データを、土木建設業務で再利用しやすい形に整理するための共通データ基盤です。
 
-現行MVPは **データソース台帳、取得確認、取得ログ、地図プレビュー、品質状態、後続API、PostgreSQL/PostGIS標準レコード読取経路** を中心に実装しています。共有preview `http://192.168.0.185:3100/` は稼働中です。本番Cloudflare Workers + Hyperdrive + Neonも配備済みで、**本番 `https://odip.mirai-dx-platform.com` は2026-08-05以降 Access 保護下で継続稼働中**（15分毎のstrict read-only smoke成功、日次暗号化バックアップ・復元ドリル実施済み）。公開レビュー用MVPは **`https://codip-mvp.mirai-dx-platform.com`** で稼働中です（架空ダミーデータ99件・管理トークンでセッション開始・Workers Custom Domains。詳細は [docs/runbooks/cloudflare-mvp.md](docs/runbooks/cloudflare-mvp.md)）。本番稼働状況は [docs/16-release-readiness-checklist.md](docs/16-release-readiness-checklist.md) を参照してください。
+現行MVPは **データソース台帳、取得確認、取得ログ、地図プレビュー、品質状態、後続API、PostgreSQL/PostGIS標準レコード読取経路** を中心に実装しています。共有preview `http://192.168.0.185:3100/` は稼働中です。本番Cloudflare Workers + Hyperdrive + Neonも配備済みで、**本番 `https://odip.mirai-dx-platform.com` は2026-08-05以降 Access 保護下で継続稼働中**（15分毎のstrict read-only smoke、日次暗号化バックアップ・復元ドリル実施済み。2026-08-29時点では本番DB認証失効により `/api/ready` のみ失敗継続中・復旧手順は Issue #190）。公開レビュー用MVPは **`https://codip-mvp.mirai-dx-platform.com`** で稼働中です（Cloudflare Tunnel 経由でローカル preview を公開・SQLite デモデータ・管理トークンでセッション開始。経路の実体と更新手順は [docs/runbooks/cloudflare-mvp.md](docs/runbooks/cloudflare-mvp.md)）。本番稼働状況は [docs/16-release-readiness-checklist.md](docs/16-release-readiness-checklist.md) を参照してください。
 
 > 公開データを探すだけのサイトではなく、土木建設システムが公開データを安全に再利用するための共通データハブです。
 
@@ -116,7 +116,7 @@ flowchart TD
 | 認証 | 管理トークン / HttpOnly Cookie | Cloudflare Access + proxy secret |
 | CI | GitHub Actions | SHA固定Actions、CodeQL、Trivy、SBOM/provenance |
 | 本番URL | 共有preview `http://192.168.0.185:3100/` | `https://odip.mirai-dx-platform.com` |
-| MVPレビューURL | - | `https://codip-mvp.mirai-dx-platform.com`（Neon `mvp-20260813`、架空ダミーデータ） |
+| MVPレビューURL | - | `https://codip-mvp.mirai-dx-platform.com`（Cloudflare Tunnel → ローカル preview・SQLite デモデータ） |
 
 ---
 
