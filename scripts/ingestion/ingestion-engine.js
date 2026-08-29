@@ -473,15 +473,36 @@ function candidateFromFeature(feature, source, index) {
   };
 }
 
+// HTML を CSV と誤判定させないための番人。
+//
+// 提供元が WAF のブロックページやメンテナンス告知を「HTTP 200 + text/html」で
+// 返すことがある。従来の CSV スニファは先頭文字クラス [^"{[\s] が `<` を
+// 除外していなかったため、1行目にカンマを含むミニファイ HTML が CSV として
+// 通っていた。その場合は全行の title が空になり、upsert が全件 skipped、
+// 例外は出ないので run は status:"success" / inserted:0 で完走する。
+// retryCount は 0 に戻り lastStatus は success なのでアラートも上がらない。
+// つまり取得が止まっているのに、監視・品質スコア・SLA のすべてが正常を報告する。
+function looksLikeHtml(ct, trimmed) {
+  if (ct.includes("html")) return true;
+  return /^<(?:!doctype\s|html[\s>]|\?xml-stylesheet)/i.test(trimmed);
+}
+
 function parsePayload(bodyText, contentType, source) {
   const ct = (contentType ?? "").toLowerCase();
   const trimmed = bodyText.trimStart();
   let kind = "rows";
   let rows = [];
   const isXml = ct.includes("xml") || String(source?.dataFormat ?? "").toUpperCase() === "XML";
+  // HTML は「取得できたが中身が想定外」であって、成功として記録してはならない。
+  // XML 判定より後に置くと Atom feed を巻き込むため、XML でない場合にだけ見る。
+  if (!isXml && looksLikeHtml(ct, trimmed)) {
+    throw new Error(
+      "HTML が返されました（ブロックページ・メンテナンス告知・ログイン画面の可能性）。データ形式が一致しません",
+    );
+  }
   if (isXml) {
     rows = parseJmaAtomFeed(bodyText);
-  } else if (ct.includes("csv") || /^[^"{[\s][^\n]*,[^\n]*/.test(trimmed)) {
+  } else if (ct.includes("csv") || /^[^"{[<\s][^\n]*,[^\n]*/.test(trimmed)) {
     rows = parseCsv(bodyText);
   } else if (ct.includes("json") || trimmed.startsWith("{") || trimmed.startsWith("[")) {
     const parsed = parseJsonPayload(bodyText);
@@ -710,6 +731,48 @@ async function runIngestionJob(prisma, options = {}) {
     candidates,
     maxRecords: job.maxRecords || DEFAULT_MAX_RECORDS,
   });
+
+  // 「取得できたのに1件も使えなかった」は成功ではない。
+  //
+  // 構造としてはパースできても、想定していた列が存在しなければ候補は
+  // title も座標も持たず、upsert が全件 skipped になる。例外は出ないため、
+  // これを success として記録すると inserted:0 のまま無言でデータが凍結し、
+  // retryCount は 0 に戻り lastStatus も success になるので監視も鮮度スコアも
+  // 正常を報告し続ける。提供元の列名変更を検知できない最大の穴だった。
+  const evaluated = Math.min(candidates.length, job.maxRecords || DEFAULT_MAX_RECORDS);
+  if (evaluated > 0 && counts.inserted === 0 && counts.updated === 0 && counts.skipped === evaluated) {
+    const reason =
+      `${evaluated}件を取得したが、title・座標・住所・ジオメトリのいずれも取り出せず全件スキップした` +
+      "（提供元の列名変更・想定外の形式の可能性）";
+    await prisma.ingestionRun.update({
+      where: { id: run.id },
+      data: {
+        ...baseRunUpdate,
+        status: "dead_letter",
+        errorType: "parse_error",
+        errorMessage: reason,
+        deadLetterReason: reason,
+        recordsInserted: 0,
+        recordsUpdated: 0,
+        recordsSkipped: counts.skipped,
+        schemaFingerprint,
+        schemaChanged,
+        note: "デッドレターキューへ送信（全件スキップ＝実質的な形式不一致）",
+        finishedAt: now,
+      },
+    });
+    await prisma.ingestionJob.update({
+      where: { id: jobId },
+      data: {
+        lastRunAt: now,
+        nextRunAt: new Date(now.getTime() + 24 * 60 * 60_000),
+        lastStatus: "dead_letter",
+        retryCount: job.maxRetries,
+      },
+    });
+    return { status: "dead_letter", inserted: 0, updated: 0, skipped: counts.skipped, reason };
+  }
+
   await prisma.ingestionRun.update({
     where: { id: run.id },
     data: {

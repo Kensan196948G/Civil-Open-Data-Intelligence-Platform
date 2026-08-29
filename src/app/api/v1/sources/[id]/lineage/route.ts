@@ -18,7 +18,9 @@ export async function GET(request: NextRequest, { params }: Params) {
     where: { id },
     include: {
       ingestionJob: true,
-      standardRecords: { select: { id: true, ingestionRunId: true, updatedAt: true } },
+      // 件数しか使わないので行を取り出さない。標準レコードは1ソースあたり
+      // 数十万行に達しうるため、行を全件ロードすると Workers の 128MB 制限に触れる。
+      _count: { select: { standardRecords: true } },
       provider: { select: { id: true, name: true } },
     },
   });
@@ -41,7 +43,7 @@ export async function GET(request: NextRequest, { params }: Params) {
         provider: source.provider,
         officialUrl: sanitizeUrl(source.officialUrl),
         endpointUrl: source.endpointUrl ? sanitizeUrl(source.endpointUrl) : null,
-        standardRecordCount: source.standardRecords.length,
+        standardRecordCount: source._count.standardRecords,
       },
       ingestionJob: source.ingestionJob
         ? {
