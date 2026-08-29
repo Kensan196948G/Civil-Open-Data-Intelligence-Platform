@@ -631,7 +631,37 @@ const openApiDocument = {
       get: {
         tags: ["downstream"],
         summary: "50年確率波推算 (Gumbel/Weibull)",
-        responses: { "200": { description: "再現期間ごとの波高" }, "400": v1ErrorResponse, "422": v1ErrorResponse, "429": v1ErrorResponse },
+        parameters: [
+          { name: "siteId", in: "query", required: true, schema: { type: "string" }, description: "対象現場ID" },
+          {
+            name: "method",
+            in: "query",
+            required: false,
+            schema: { type: "string", enum: ["gumbel", "weibull"], default: "gumbel" },
+          },
+          {
+            name: "from",
+            in: "query",
+            required: false,
+            schema: { type: "string", format: "date-time" },
+            description: "対象期間の開始。未指定なら全履歴",
+          },
+          {
+            name: "to",
+            in: "query",
+            required: false,
+            schema: { type: "string", format: "date-time" },
+            description: "対象期間の終了。未指定なら全履歴",
+          },
+        ],
+        responses: {
+          "200": { description: "再現期間ごとの波高" },
+          "400": v1ErrorResponse,
+          // insufficient_data (年最大が2年分未満) と range_too_large
+          // (対象観測が上限超過。from / to で絞る) の両方がここに入る
+          "422": v1ErrorResponse,
+          "429": v1ErrorResponse,
+        },
       },
     },
     "/api/v1/etl/status": {
