@@ -7,6 +7,27 @@ import { isPostgreSqlRuntime } from "@/lib/database-url";
 import { sanitizeUrl } from "@/lib/url-safety";
 import { toIso } from "@/lib/v1-response";
 
+/**
+ * ILIKE の検索語をリテラルとして扱うためのエスケープ。
+ *
+ * 値はパラメータ化されているので SQL インジェクションは成立しないが、
+ * `%` と `_` は **パターンのメタ文字として解釈される**。エスケープしないと
+ * 検索語 `%%` が「全行に一致するパターン」になり、`q` の下限2文字という
+ * ガードを自明に回避できる。とくに `properties::text ILIKE` は索引が無く
+ * 全行スキャンになるため、これは可用性の問題になる。
+ *
+ * PostgreSQL の LIKE / ILIKE は既定のエスケープ文字がバックスラッシュなので、
+ * `\` `%` `_` を退避すればリテラル一致になる。
+ */
+export function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
+/** ILIKE 用の部分一致パターン（前後 `%`）。検索語はリテラルとして扱う。 */
+function likeContains(value: string): string {
+  return `%${escapeLikePattern(value)}%`;
+}
+
 const SECRET_PROPERTY_KEY =
   /(api[-_]?key|apikey|app[_-]?id|authorization|bearer|client[-_]?secret|credential|internal|note|password|secret|token)/i;
 
@@ -316,7 +337,7 @@ export async function findStandardRecordsForSearch(input: {
   const PostgreSQLPrisma = getPostgreSQLPrismaHelpers();
   const where: PostgreSQLPrismaTypes.Sql[] = [];
   if (input.q) {
-    const q = `%${input.q}%`;
+    const q = likeContains(input.q);
     where.push(
       PostgreSQLPrisma.sql`(sr.title ILIKE ${q} OR sr.description ILIKE ${q} OR sr.address ILIKE ${q} OR sr."sourceRecordId" ILIKE ${q})`,
     );
@@ -447,9 +468,9 @@ export async function findStandardRecordsForGeometry(input: {
 
   const qSql =
     input.q && input.q.trim().length >= 2
-      ? PostgreSQLPrisma.sql`AND (sr.title ILIKE ${`%${input.q.trim()}%`}
-          OR sr.address ILIKE ${`%${input.q.trim()}%`}
-          OR sr."properties"::text ILIKE ${`%${input.q.trim()}%`})`
+      ? PostgreSQLPrisma.sql`AND (sr.title ILIKE ${likeContains(input.q.trim())}
+          OR sr.address ILIKE ${likeContains(input.q.trim())}
+          OR sr."properties"::text ILIKE ${likeContains(input.q.trim())})`
       : PostgreSQLPrisma.empty;
 
   const countRows = await prisma.$queryRaw<{ count: number | bigint }[]>`
@@ -496,7 +517,7 @@ export async function findStandardLayers(input: {
   const PostgreSQLPrisma = getPostgreSQLPrismaHelpers();
   const where: PostgreSQLPrismaTypes.Sql[] = [];
   if (input.q) {
-    const q = `%${input.q}%`;
+    const q = likeContains(input.q);
     where.push(PostgreSQLPrisma.sql`(ds.name ILIKE ${q} OR ds."nameEn" ILIKE ${q} OR ds.description ILIKE ${q})`);
   }
   if (input.category) where.push(PostgreSQLPrisma.sql`ds.category = ${input.category}`);
@@ -588,9 +609,9 @@ export async function findStandardFeaturesForLayer(input: {
     : PostgreSQLPrisma.empty;
   const qSql =
     input.q && input.q.trim().length >= 2
-      ? PostgreSQLPrisma.sql`AND (sr.title ILIKE ${`%${input.q.trim()}%`}
-          OR sr.address ILIKE ${`%${input.q.trim()}%`}
-          OR sr."properties"::text ILIKE ${`%${input.q.trim()}%`})`
+      ? PostgreSQLPrisma.sql`AND (sr.title ILIKE ${likeContains(input.q.trim())}
+          OR sr.address ILIKE ${likeContains(input.q.trim())}
+          OR sr."properties"::text ILIKE ${likeContains(input.q.trim())})`
       : PostgreSQLPrisma.empty;
 
   const rows = await prisma.$queryRaw<RawStandardRecord[]>`
