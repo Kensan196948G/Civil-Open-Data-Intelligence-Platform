@@ -44,6 +44,15 @@ jobs:
   pg-dump:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # 失敗をIssueとして可視化するための最小権限。
+    # permissions を明示すると未列挙の権限は none になるため、
+    # 連続失敗の判定に使う run 履歴読み取り (actions:read) も併せて宣言する。
+    # 外部通知先やそのSecretは追加しない
+    # (通知先の追加・変更は人間承認事項 / CLAUDE.md §17 Approval PR 対象)。
+    permissions:
+      contents: read
+      actions: read
+      issues: write
     env:
       # Dedicated read-only or least-privilege dump URL. Never echo this value.
       NEON_DATABASE_URL: ${{ secrets.CODIP_NEON_PGDUMP_DATABASE_URL }}
@@ -205,3 +214,103 @@ jobs:
           path: ${{ steps.evidence.outputs.evidence_path }}
           if-no-files-found: error
           retention-days: 30
+
+      # バックアップは「失敗しても誰にも届かない」状態が最も危険である。
+      # 2026-08-13〜08-20 の9日間、必須入力の欠落で毎日 fail-closed していたが、
+      # 通知経路が無かったため誰も気づかなかった。fail-closed 自体は設計どおりの
+      # 正しい挙動であり、欠けていたのは通知だけだった。
+      - name: Report backup failure as an incident issue
+        if: failure()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: |
+            const WORKFLOW_FILE = "neon-backup.yml";
+            const DEDUPE_LABEL = "backup-incident";
+            const HISTORY_DEPTH = 10;
+            const { owner, repo } = context.repo;
+
+            // 連続失敗は GitHub の run 履歴を単一の真実として数える。
+            // workflow 側に状態を持たせると、run がキャンセル/タイムアウトした際に
+            // 書き込まれないまま次の run が読むため、状態が静かに腐敗する。
+            // この履歴参照は補助情報にすぎず、取得できなくても起票は必ず行う (fail-open)。
+            let consecutiveFailures = 1;
+            let streakKnown = false;
+            try {
+              const { data: history } = await github.rest.actions.listWorkflowRuns({
+                owner,
+                repo,
+                workflow_id: WORKFLOW_FILE,
+                status: "completed",
+                per_page: HISTORY_DEPTH,
+              });
+              for (const run of history.workflow_runs.filter((r) => r.id !== context.runId)) {
+                if (run.conclusion !== "failure") break;
+                consecutiveFailures += 1;
+              }
+              streakKnown = true;
+            } catch (error) {
+              core.warning(`Could not read run history; reporting without a streak count: ${error.message}`);
+            }
+
+            // 回数不明時は P1 へ倒さない (誤った P1 は当番の信頼を損なう)。
+            const severity = streakKnown && consecutiveFailures >= 2 ? "P1" : "P2";
+
+            try {
+              await github.rest.issues.createLabel({
+                owner,
+                repo,
+                name: DEDUPE_LABEL,
+                color: "b60205",
+                description: "バックアップ失敗の自動起票（重複防止ラベル）",
+              });
+            } catch (error) {
+              if (error.status !== 422) throw error;
+            }
+
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const body = [
+              "# バックアップ失敗（自動起票）",
+              "",
+              `- 重大度: **${severity}**`,
+              `- 連続失敗: ${streakKnown ? `${consecutiveFailures} 回` : "不明（run履歴を取得できず）"}`,
+              `- 検知日時 (UTC): ${new Date().toISOString()}`,
+              `- 失敗した run: ${runUrl}`,
+              "",
+              "## 最初に確認すること",
+              "",
+              "1. 失敗 step が `Validate backup inputs` の場合、必須の Secrets / Variables が未登録である",
+              "   （fail-closed は設計どおりの挙動。値の登録は人間の決裁事項）",
+              "2. `docs/runbooks/database-deployment.md` のバックアップ節",
+              "3. 直近で成功した run の artifact 保持期限（既定 14 日）。",
+              "   **失効すると pg_dump による復旧手段が失われ、Neon PITR の保持窓のみになる**",
+              "",
+              "> このIssueは連続失敗のあいだ本文を更新する。復旧したら手動でクローズすること。",
+            ].join("\n");
+            const title = `[${severity}] Neon バックアップ失敗（連続 ${streakKnown ? consecutiveFailures : "?"} 回）`;
+
+            const { data: openIssues } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: "open",
+              labels: DEDUPE_LABEL,
+              per_page: 1,
+            });
+            if (openIssues.length > 0) {
+              await github.rest.issues.update({
+                owner,
+                repo,
+                issue_number: openIssues[0].number,
+                title,
+                body,
+              });
+              core.notice(`Updated backup incident #${openIssues[0].number}`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner,
+                repo,
+                title,
+                labels: [DEDUPE_LABEL],
+                body,
+              });
+              core.notice(`Opened backup incident #${created.data.number}`);
+            }
