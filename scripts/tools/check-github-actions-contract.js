@@ -49,7 +49,10 @@ function workflowSource(relativePath) {
 
 const ci = workflowSource(".github/workflows/ci.yml");
 const codeql = workflowSource(".github/workflows/codeql.yml");
-const neonBackup = workflowSource(".github/workflows/neon-backup.yml");
+// 2026-08-30: neon-backup.yml はローカルsystemdタイマー(codip-backup.timer,
+// scripts/local-cron/run-backup.sh のローカル実行)へ置き換えられ削除された。
+// 本契約はGitHub Actionsワークフローの契約であり、ローカル実行の監査対象ではないため、
+// 検査対象から外す。ローカル側の運用監査は operations-ledger / runbook が担う。
 const productionSmoke = workflowSource(".github/workflows/production-smoke.yml");
 const packageJson = readNormalized("package.json");
 
@@ -214,26 +217,12 @@ requireText("CI workflow", ci, "fetch-depth: 0");
 requireText("CI workflow", ci, "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020");
 requireText("CI workflow", ci, "gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7");
 requireText("CI workflow", ci, "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
-requireText("Neon backup workflow", neonBackup, "name: Neon Backup");
-requireText("Neon backup workflow", neonBackup, "schedule:");
-requireText("Neon backup workflow", neonBackup, "workflow_dispatch:");
-requireText("Neon backup workflow", neonBackup, "permissions:\n  contents: read");
-requireText("Neon backup workflow", neonBackup, "persist-credentials: false");
-requireText("Neon backup workflow", neonBackup, "secrets.CODIP_NEON_PGDUMP_DATABASE_URL");
-requireText("Neon backup workflow", neonBackup, "secrets.CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE");
-requireText("Neon backup workflow", neonBackup, "::add-mask::$NEON_DATABASE_URL");
-requireText("Neon backup workflow", neonBackup, "::add-mask::$CODIP_BACKUP_ENCRYPTION_PASSPHRASE");
-requireText("Neon backup workflow", neonBackup, "pg_dump --format=custom --no-owner --no-privileges --file");
-requireText("Neon backup workflow", neonBackup, "gpg --batch --yes --pinentry-mode loopback");
-requireText("Neon backup workflow", neonBackup, "shred -u \"$dump_path\" || rm -f \"$dump_path\"");
-requireText("Neon backup workflow", neonBackup, "release:create-neon-backup-evidence");
-requireText("Neon backup workflow", neonBackup, "release:check-neon-backup-evidence");
-requireText("Neon backup workflow", neonBackup, "github-actions-artifact://");
-requireText("Neon backup workflow", neonBackup, "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
-requireText("Neon backup workflow", neonBackup, "retention-days: 14");
-if (neonBackup.includes("pull_request:")) {
-  errors.push("Neon backup workflow must not run on pull_request");
-}
+// 2026-08-30: Neon backup はローカルsystemdタイマー(codip-backup.timer → ローカル
+// pg_dump + GPG)へ移行した。GitHub Actions上の neon-backup.yml は削除済みのため、
+// その内容契約(Neon Secret・pg_dump・暗号化artifact・証跡JSON)は検査対象から外す。
+// ローカル実行スクリプト(scripts/local-cron/run-backup.sh)は本番DB接続文字列を
+// 直接保持するためリポジトリへコミットせず、ホスト上のローカル管理とし、
+// 運用監査は operations-ledger / runbook が担う。
 requireText("Production smoke workflow", productionSmoke, "name: Production Smoke");
 requireText("Production smoke workflow", productionSmoke, "schedule:");
 requireText("Production smoke workflow", productionSmoke, "workflow_dispatch:");
@@ -266,9 +255,6 @@ requireStepText(
   "name: Enforce production readiness",
   "if: steps.production-status.outcome == 'failure'",
 );
-requireText("Neon backup workflow", neonBackup, "CODIP_NEON_BRANCH: main");
-requireText("Neon backup workflow", neonBackup, "vars.CODIP_NEON_PGDUMP_HOST");
-requireText("Neon backup workflow", neonBackup, "--endpoint-host");
 if (productionSmoke.includes("pull_request:")) {
   errors.push("Production smoke workflow must not run on pull_request");
 }
