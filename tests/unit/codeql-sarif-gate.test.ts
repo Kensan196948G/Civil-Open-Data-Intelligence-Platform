@@ -74,6 +74,8 @@ type AllowlistEntry = {
 
 /** 実測どおり `diff-informed`。定数側は "full" しか持たないため、こちらは実測値を書く。 */
 const DIFF_INFORMED = "diff-informed";
+/** 実測 (2026-08-26): CodeQL bundle 更新後、`pull_request` run は `diff-informed,overlay` を報告する。 */
+const DIFF_INFORMED_OVERLAY = "diff-informed,overlay";
 
 const JS_QUERIES = "codeql/javascript-queries";
 
@@ -1048,6 +1050,26 @@ describe("CodeQL SARIF acceptance record", () => {
       // 探査ケースが語彙の成長で黙って縮まないようにする。3 本のうち 1 本でも語彙へ
       // 入ったなら、それは意図的な緩和であり、ここで気づく必要がある。
       expect(OUTSIDE_VOCABULARY).toHaveLength(3);
+    });
+
+    it("recognises the CodeQL diff-informed,overlay variant as diff-informed (not structural)", () => {
+      // 実測 (2026-08-26): CodeQL bundle 更新後、`pull_request` run は `incrementalMode` が
+      // "diff-informed,overlay" になる。これを語彙外として落とすと、diff-informed の PR 全 run が
+      // 陳腐化 (stale) の偽陽性で赤になり、あらゆる PR のマージを止める (実測で #173〜#180 が
+      // codeql-findings で fail した)。これはゲートの意図しないブロッカーであり、是正は語彙へ
+      // 足すこと (check-codeql-sarif.js の設計コメントに明記)。
+      // "diff-informed,overlay" は diff-informed 系列の variant で、差分外の finding を報告しない
+      // 性質は素の "diff-informed" と同一のため、同じ緩和を与えてよい。
+      const { label, regimeClass } = classifyRegime(DIFF_INFORMED_OVERLAY);
+      expect(regimeClass).toBe("diff-informed");
+      expect(label).toBe(DIFF_INFORMED_OVERLAY);
+      // 差分外の finding が報告されない場合も、陳腐化 (stale) として落とさない。
+      const outcome = runGate(
+        withSarif(findingsSarif([{ path: HTML, ruleId: RULE, found: 0 }], DIFF_INFORMED_OVERLAY)),
+        record([{ path: HTML, ruleId: RULE, count: 2, justification: WHY }]),
+      );
+      expect(outcome.status).toBe(0);
+      expect(outcome.stdout).toContain(`analysis regime: ${DIFF_INFORMED_OVERLAY}`);
     });
 
     it.each(OUTSIDE_VOCABULARY)(
