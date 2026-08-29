@@ -1,7 +1,14 @@
 # Cloudflare MVP Review Environment Runbook
 
-`codip-mvp.mirai-dx-platform.com` を **MVP公開・関係者レビュー用** のCloudflare Workers + Neon環境として有効化する手順である。
+`codip-mvp.mirai-dx-platform.com` を **MVP公開・関係者レビュー用** の環境として有効化する手順である。
 本番（`odip.mirai-dx-platform.com`）と同じ Cloudflare 基盤だが、**本番 Worker / route / secret / Hyperdrive / Neon production branch には一切触れない**。
+
+> ⚠️ **実態との整合（2026-08-29 実測・Deep Debug Round 2/4）**
+> 本ドキュメントの旧記述は「Workers Custom Domains + Neon mvp branch」方式だったが、
+> **現行の公開経路は Cloudflare Tunnel + ローカル next start（SQLite）** である。
+> 詳細は §0.1 を参照。Worker `codip-mvp` はデプロイされているが公開 target は無い
+> （`wrangler deploy --env mvp` は "No targets deployed" と報告し、カスタムドメイン
+> は account の Custom Domains 一覧に存在しない。Round 2 実測）。
 
 ## 0. MVP target
 
@@ -10,12 +17,30 @@
 | Zone | `mirai-dx-platform.com` |
 | FQDN | `codip-mvp.mirai-dx-platform.com` |
 | URL | `https://codip-mvp.mirai-dx-platform.com` |
-| Worker | `codip-mvp`（`wrangler.jsonc` の `env.mvp`） |
-| Routing | Workers Custom Domains + proxied AAAA `100::`、`workers_dev=false`。zone route は現行 token に Workers Routes:Edit スコープが無いため不採用（2026-08-13 実測 code 10000）。カスタムドメイン登録は `deploy-mvp.mjs` が API で冪等実行 |
-| DB | Neon branch `mvp-20260813`（project `falling-dawn-93620497` の main から copy-on-write。**production main は不変**） |
-| 接続方式 | Hyperdrive 不使用。Worker secret `DATABASE_URL`（Neon pooled URI）を Prisma の `@prisma/adapter-pg`（pg ドライバ）で Worker から直接 TCP 接続（`nodejs_compat` + Prisma >= 6.15） |
+| **現行公開経路** | **Cloudflare Tunnel（`codip-mvp-cloudflared.service`, tunnel `0b3721de-…`）→ `http://localhost:18801`（`codip-mvp.service` = `next start -p 18801`、SQLite `file:./dev.db`）** |
+| Worker | `codip-mvp`（`wrangler.jsonc` の `env.mvp`）— デプロイ済みだが公開 target なし |
+| DB | **ローカル SQLite `dev.db`**（旧方式の Neon branch `mvp-20260813` は現在未使用） |
 | 認証 | `CODIP_ENV_MODE=preview` / `CODIP_TRUST_PROXY_AUTH=false` / 管理トークン（`CODIP_ADMIN_TOKEN`）でセッション開始。ウォッチリストはデモ識別子 `demo.engineer@example.com`（seed 済み RBAC + ウォッチリスト） |
-| データ | `prisma migrate reset --force`（mvp branch のみ）後に `db:pg:seed` を投入した架空ダミーデータ。本番データをコピーしたまま公開しない |
+| データ | `prisma/seed.ts`（SQLite）のデモデータ |
+
+### 0.1 現行公開経路の実体（2026-08-29 実測）
+
+```text
+codip-mvp.mirai-dx-platform.com
+  └─ DNS: CNAME → 0b3721de-…cfargotunnel.com（proxied）
+       └─ Cloudflare Tunnel（systemd: codip-mvp-cloudflared.service）
+            └─ ingress: http://localhost:18801
+                 └─ systemd: codip-mvp.service（next start -p 18801、SQLite dev.db）
+```
+
+- トンネル設定: `~/.cloudflared/codip-mvp-config.yml`（hostname → localhost:18801）
+- アプリの更新手順:
+  1. `git pull` で main を更新
+  2. `npm run build`（**cf:build 実行後は .next/BUILD_ID が消えるため必ず再実行する**。
+     cf:build → next start は "Could not find a production build" で起動失敗する。Round 4 実測）
+  3. `sudo systemctl restart codip-mvp.service`（要 root）
+- 参考: production smoke の `--preview-url http://192.168.0.185:3100` はこの LAN 上の
+  preview を指す（GitHub ランナーからは到達不能のため `--allow-preview-down` で許容）。
 
 ## 1. Stop conditions
 
