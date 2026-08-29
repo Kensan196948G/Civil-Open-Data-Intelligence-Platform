@@ -356,11 +356,6 @@ jobs:
       - name: Apply PostgreSQL/PostGIS migrations
         run: npx prisma migrate deploy --schema prisma/postgresql/schema.prisma
 
-      # Issue #140: 監査トランザクションの commit/rollback を実DBで実測する。
-      # 通常の vitest（verify）では RUN_DB_INTEGRATION 未設定のため skip される。
-      - name: Audit transaction rollback integration test (Issue #140)
-        run: RUN_DB_INTEGRATION=1 npx vitest run tests/integration/audit-transaction.integration.test.ts
-
       - name: Seed PostgreSQL twice (idempotency)
         run: |
           npm run db:pg:seed
@@ -385,6 +380,11 @@ jobs:
             }
           })().finally(async () => prisma.$disconnect());
           NODE
+
+      # Issue #140: 監査トランザクションの commit/rollback を実DBで実測する。
+      # 通常の vitest（verify）では RUN_DB_INTEGRATION 未設定のため skip される。
+      - name: Audit transaction rollback integration test (Issue #140)
+        run: RUN_DB_INTEGRATION=1 npx vitest run tests/integration/audit-transaction.integration.test.ts
 
       - name: Verify standard record release policy
         run: npm run db:check-standard-record-policy
