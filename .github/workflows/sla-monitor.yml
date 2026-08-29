@@ -43,6 +43,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # sla-monitor.js は PostgreSQL 用に生成された Prisma クライアント
+      # (node_modules/.prisma/client-postgresql) を require する。npm ci は既定
+      # (SQLite) クライアントしか生成しないため、データ収集ジョブと同様に
+      # 明示生成する（data-ingestion.yml と同じ構成、Issue #103 参照）。
+      - name: Generate PostgreSQL Prisma Client
+        run: npm run db:pg:generate
+
       - name: Run SLA freshness monitor (strict)
         id: sla
         continue-on-error: true
