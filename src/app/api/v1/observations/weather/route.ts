@@ -4,6 +4,7 @@ import { requireAdminRequest } from "@/lib/admin-auth";
 import { auditLogCreateData } from "@/lib/audit";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 import { requestId } from "@/lib/v1-response";
+import { dateParam, intParam } from "@/lib/query-params";
 
 const RATE_LIMIT = 120;
 const RATE_WINDOW_MS = 60_000;
@@ -16,9 +17,23 @@ export async function GET(request: NextRequest) {
   if (!siteId) {
     return NextResponse.json({ error: { code: "invalid_query", message: "siteId を指定してください" } }, { status: 400 });
   }
-  const t1 = sp.get("t1") ? new Date(sp.get("t1")!) : new Date();
-  const t0 = sp.get("t0") ? new Date(sp.get("t0")!) : new Date(t1.getTime() - 24 * 3600 * 1000);
-  const limit = Math.min(Math.max(Number(sp.get("limit") ?? 200), 1), 2000);
+  // クランプは NaN を素通しするため検証にならない。不正値は 400 で弾き、
+  // take: NaN / lte: Invalid Date が Prisma へ到達しないようにする。
+  const t1 = dateParam(sp, "t1", new Date());
+  if (!t1) {
+    return NextResponse.json({ error: { code: "invalid_query", message: "t1 は解釈可能な日時で指定してください" } }, { status: 400 });
+  }
+  const t0 = dateParam(sp, "t0", new Date(t1.getTime() - 24 * 3600 * 1000));
+  if (!t0) {
+    return NextResponse.json({ error: { code: "invalid_query", message: "t0 は解釈可能な日時で指定してください" } }, { status: 400 });
+  }
+  if (t0.getTime() > t1.getTime()) {
+    return NextResponse.json({ error: { code: "invalid_query", message: "t0 は t1 以前を指定してください" } }, { status: 400 });
+  }
+  const limit = intParam(sp, "limit", 200, 1, 2000);
+  if (limit === null) {
+    return NextResponse.json({ error: { code: "invalid_query", message: "limit は 1〜2000 の整数で指定してください" } }, { status: 400 });
+  }
   const rows = await prisma.weatherObservation.findMany({
     where: { siteId, observedAt: { gte: t0, lte: t1 } },
     orderBy: { observedAt: "desc" },
