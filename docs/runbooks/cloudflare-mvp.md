@@ -72,7 +72,15 @@ npm run release:smoke -- --read-only --base-url https://codip-mvp.mirai-dx-platf
 
 ## 4. Rollback
 
-- Worker: `npx wrangler rollback codip-mvp --env mvp`（直前 version へ）
+- Worker: 直前 version へ戻す。**worker 名は `--name` で渡す**
+  （`wrangler rollback` の位置引数は version-id であり、worker 名を置くと
+  「その ID の version が無い」で失敗する）
+
+  ```bash
+  npx wrangler deployments list --name codip --env mvp     # 戻し先の version-id を確認
+  npx wrangler rollback --name codip --env mvp             # 最新の1つ前へ
+  npx wrangler rollback <VERSION_ID> --name codip --env mvp
+  ```
 - DB: Neon Console で `mvp-20260813` を削除し再作成（`scripts/deploy/deploy-mvp.mjs` を再実行）
 - 公開停止: Cloudflare で `codip-mvp` の route / DNS record を削除
 - 本番への影響なし（target が完全に分離）
