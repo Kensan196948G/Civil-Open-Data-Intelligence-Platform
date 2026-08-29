@@ -1,6 +1,6 @@
 # 依存advisory対応状況
 
-最終更新: 2026-08-22 (JST) / 2026-08-21T16:12Z (UTC)
+最終更新: **2026-08-21T16:12Z (UTC)** = 2026-08-22 01:12 JST（本文の日付は JST 表記。CI ログは UTC のため1日ずれて見える）
 
 `npm audit` が検出する advisory の対応状況と、allowlist に残す判断の根拠を記録する。
 CI ゲートの実体は次の2段構成であり、本ドキュメントはその判断材料を提供する。
@@ -13,7 +13,7 @@ CI ゲートの実体は次の2段構成であり、本ドキュメントはそ�
 allowlist は `scripts/tools/check-dependency-audit.js` の `ALLOWLIST` が唯一の正本である。
 期限切れエントリは、対象 advisory が検出されていなくてもゲートを FAIL させる（受容が無期限に生き延びないため）。
 
-## 現況サマリ (2026-08-22 JST / 2026-08-21T16:12Z UTC 時点)
+## 現況サマリ (2026-08-21T16:12Z UTC = 2026-08-22 01:12 JST 時点)
 
 | 項目 | 結果 |
 | --- | --- |
@@ -74,7 +74,7 @@ allowlist が使えない以上、修正はバージョンを上げる以外に�
 
 `npm ci` 後のクリーンな依存グラフで、override が意図どおり効いていることを確認した。
 
-```
+```console
 $ npm ls --omit=dev nanoid --all
 civil-open-data-intelligence-platform@0.1.0
 └─┬ next@15.5.23
