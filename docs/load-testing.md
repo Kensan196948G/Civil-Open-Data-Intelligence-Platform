@@ -40,6 +40,12 @@ previewは `CODIP_TRUST_PROXY_HEADERS=true` で起動し、k6はVUごとに
   書込+管理API混在（20VU読込+5VU書込）P95 103.3ms・エラー0%。5秒SLOは100VUでも充足。
   本番（Cloudflare + Hyperdrive + Neon）ではネットワーク・DB負荷が加わるため、
   デプロイ後の本番スモーク（`release:post-release-status`）と併せて継続監視する。
+- **2026-08-29（CI dispatch 初回完全成功, run 33250938031）**: 読込20VU+書込5VU・**総リクエスト 9,966**。
+  - `http_req_failed` **0.00%** / `check_failure_rate` **0.00%**（全11チェック ✓）
+  - `http_req_duration` **p(95)=21.7ms**（max 125.8ms）— 5秒SLOを大幅に充足
+  - 管理系（`POST /api/v1/sites` 201/409・`GET /api/admin/roles` 200）も成功
+  - ※ CI workflow 修正（#197 バインド0.0.0.0 / #198 ADMIN_TOKEN 受け渡し）により
+    CI での再現が可能になった。実測は preview（SQLite）のみで本番には実行しない。
 - 単一IPで20 VUのburstを行うと429が大量発生するのは**レート制限の正常動作**であり、
   障害ではない（初回測定で確認）。
 - 100VU相当の測定は **PostgreSQL/PostGIS preview** で実施済み（P95 981.6ms・SLO内）。
