@@ -182,7 +182,7 @@ flowchart LR
 | 🧭 施工判定 | `/decisions`: コンクリート打設・クレーン・海上揚重・潜水・海上輸送の go/caution/stop 判定 (欠測はfail-closed、監査スナップショット保存) |
 | 🚧 現場管理 | `/sites`: 現場一覧・登録 (陸上/海上/両方、AMeDAS局番) |
 | 📊 レポート | `/reports`: 日次/週次/月次/判定履歴/海象/年次 (CSV/Markdown) |
-| 📡 定期収集 | `.github/workflows/data-ingestion-weather.yml` (10分毎) + `scripts/ingestion/run-weather-jobs.js` |
+| 📡 定期収集 | ローカルsystemdタイマー: `codip-weather.timer`（10分毎・`run-weather-jobs.js`）+ `codip-ingestion.timer`（30分毎・`run-due-jobs.js`） |
 
 ---
 
@@ -392,7 +392,7 @@ cmd /c "pushd \\192.168.0.185\kensan\Projects\Mirai-DX-Project\Civil-Open-Data-I
 | `npm run release:production-evidence -- --strict` | 実Cloudflare/Neon target、Wrangler本番構成、監視・アラート、バックアップ・リストアの証跡MarkdownをSecret値なしで出力し、未充足Evidenceを検知 |
 | `npm run release:create-neon-backup-evidence` | `pg_dump` artifactのファイルmetadataまたはartifact IDから、Secretを含まないNeon backup証跡JSONを生成 |
 | `npm run release:check-neon-backup-evidence` | `CODIP_NEON_BACKUP_EVIDENCE_JSON` からPITR window、pg_dump 24h鮮度、restore drill 30日鮮度を非Secretで検査 |
-| `.github/workflows/neon-backup.yml` | 毎日03:17 JSTにNeon `pg_dump` を暗号化artifact化し、非Secret証跡JSONを生成。Secret未設定・restore drill未記録ならfail-closed |
+| ローカル日次バックアップ | systemdタイマー `codip-backup.timer`（日次03:17 JST）→ `scripts/local-cron/run-backup.sh` がローカルPostgreSQLへ `pg_dump`（custom形式・暗号化GPG AES256・14日保持）。スクリプトは本番DB接続文字列を含むためリポジトリ非公開（`.gitignore` で除外） |
 | `npm run release:post-release-status -- --strict-production --max-response-ms 5000` | 本番DNS/health/DB ready/応答時間が未達なら失敗させる本番化後の監視ゲート |
 | `npm run release:check-production-placeholders -- --env production` | 実デプロイ前にproduction Hyperdrive ID等の未解決placeholderを拒否 |
 | `npm run release:check-cloudflare-build-artifact` | `npm run cf:build` 後に `.open-next/worker.js` と `.open-next/assets` が揃っていることを確認 |

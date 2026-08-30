@@ -175,7 +175,7 @@ Cloudflare Workers本番では、データソース接続確認・サンプル�
 
 ### 2.6 定期収集パイプライン
 
-`.github/workflows/data-ingestion.yml` が30分毎（:03/:33 UTC）に `scripts/ingestion/run-due-jobs.js` を実行する。接続先は `CODIP_INGESTION_DATABASE_URL`（write権限のあるNeon URL）。ジョブは `ingestion_jobs` テーブルで管理し、`enabled=true` かつ `nextRunAt` が到来したものから最大3件（`CODIP_INGESTION_MAX_JOBS_PER_TICK` で変更可）を実行する。
+ローカルsystemdタイマー `codip-ingestion.timer`（30分毎）が `scripts/ingestion/run-due-jobs.js` を、`codip-weather.timer`（10分毎）が `scripts/ingestion/run-weather-jobs.js` を実行する（ユーザー空間systemd、`~/.config/systemd/user/`）。接続先はローカルPostgreSQL（`DATABASE_URL=postgresql://codip_app@localhost:5432/codip`）。ジョブは `ingestion_jobs` テーブルで管理し、`enabled=true` かつ `nextRunAt` が到来したものから最大3件（`CODIP_INGESTION_MAX_JOBS_PER_TICK` で変更可）を実行する。
 
 収集エンジン（`scripts/ingestion/ingestion-engine.js`）は次を実施する。
 
@@ -190,9 +190,9 @@ Cloudflare Workers本番では、データソース接続確認・サンプル�
 - スキーマドリフト: 取得データの列フィンガープリントを比較し、前回成功と異なる場合は `ingestion_runs.schemaChanged=true` と note へ記録
 - デッドレターキュー: リトライ上限到達・parse失敗は `status=dead_letter` と `deadLetterReason` を保存し、`/api/admin/ingestion/runs?status=dead_letter` で確認できる
 
-各実行後、`data-ingestion.yml` は `scripts/ingestion/quality-monitor.cjs` で品質監視サマリー（デッドレター・スキーマ変化・停滞ジョブ・件数急減/急増）を出力する。`--strict` を指定すると異常検出時に失敗させられる（既定はレポートのみ）。
+各実行後、`codip-ingestion.service` は `scripts/ingestion/quality-monitor.cjs` で品質監視サマリー（デッドレター・スキーマ変化・停滞ジョブ・件数急減/急増）を出力する。`--strict` を指定すると異常検出時に失敗させられる（既定はレポートのみ）。
 
-Workersランタイムは外部URL取得が `unsupported_runtime` のため、定期実行はGitHub Actions（Nodeホスト）で行う。管理APIの手動実行はNode/preview環境向け。
+Workersランタイムは外部URL取得が `unsupported_runtime` のため、定期実行はローカルNodeホスト（systemdタイマー）で行う。管理APIの手動実行はNode/preview環境向け。
 
 ## 3. 運用監視
 
@@ -282,10 +282,13 @@ Workersランタイムは外部URL取得が `unsupported_runtime` のため、�
 > - `pg_dump` バックアップ証跡: 実行日時・対象 branch・成否を本チェックリスト
 >   (`docs/16-release-readiness-checklist.md`) または `state.json` の検証記録に残す
 >
-> 整備済み: `.github/workflows/neon-backup.yml` で、GitHub Actions上の定期
-> `pg_dump` artifactとSecretを含まない証跡JSONを生成する。`npm run
-> release:check-neon-backup-evidence` は `CODIP_NEON_BACKUP_EVIDENCE_JSON`
-> またはworkflow生成JSONからPITR window、`pg_dump` 鮮度、restore drill鮮度を検査する
+> 整備済み: ローカルsystemdタイマー `codip-backup.timer`（日次03:17 JST）が
+> `scripts/local-cron/run-backup.sh` を実行し、ローカルPostgreSQLへ `pg_dump`
+> （custom形式・GPG AES256暗号化・14日保持）を行う。スクリプトは本番DB接続文字列を
+> 含むためリポジトリ非公開（`.gitignore` で除外）。旧GitHub Actions経路
+> （`.github/workflows/neon-backup.yml`）は2026-08-30にローカル移行のため削除済み。
+> `npm run release:check-neon-backup-evidence` は `CODIP_NEON_BACKUP_EVIDENCE_JSON`
+> または生成JSONからPITR window、`pg_dump` 鮮度、restore drill鮮度を検査する
 > 完了証跡 (2026-08-04): Secrets/Variables登録、restore drill `restore-drill-20260804`、
 > workflow_dispatch初回成功 run 30950851419（2026-08-04T21:05Z、artifact `codip-neon-pgdump-20260804T210642Z.dump.gpg`、証跡JSON `neon-backup-evidence`）
 > 保持期間: 暗号化dump 14日・証跡JSON 30日。PITR window 24h（変更は運用台帳で週次確認）

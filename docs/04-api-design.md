@@ -327,7 +327,7 @@ PostGIS `standard_records` が存在する環境では、指定地点の半径�
 | `/api/admin/ingestion/runs` | GET | 実行履歴一覧（status/limitで絞込） |
 | `/api/admin/ingestion/quality-summary` | GET | 品質監視サマリー（デッドレター・スキーマ変化・停滞ジョブ・件数異常） |
 
-定期実行はGitHub Actions `data-ingestion.yml` が30分毎に `scripts/ingestion/run-due-jobs.js` を実行する。ジョブはETag/Last-Modifiedによる差分判定、上限サイズ/レコード数、リトライ（指数バックオフ）、SSRFガード（静的検証＋接続時DNSピン留め）、CSV/GeoJSON/JSON解析、標準レコードupsert、リネージュ記録に対応する。**提供元別レート制限**（`providers.ingestionRateLimitMinutes`）、**スキーマドリフト検出**（取得列のフィンガープリント比較）、**デッドレターキュー**（リトライ上限到達・parse失敗を `dead_letter` として保存）にも対応する。Workersランタイムでは外部URL取得が `unsupported_runtime` のため、本番の定期実行はGitHub Actionsが担う。
+定期実行はローカルsystemdタイマー `codip-ingestion.timer`（30分毎）が `scripts/ingestion/run-due-jobs.js` を、`codip-weather.timer`（10分毎）が `scripts/ingestion/run-weather-jobs.js` を実行する。ジョブはETag/Last-Modifiedによる差分判定、上限サイズ/レコード数、リトライ（指数バックオフ）、SSRFガード（静的検証＋接続時DNSピン留め）、CSV/GeoJSON/JSON解析、標準レコードupsert、リネージュ記録に対応する。**提供元別レート制限**（`providers.ingestionRateLimitMinutes`）、**スキーマドリフト検出**（取得列のフィンガープリント比較）、**デッドレターキュー**（リトライ上限到達・parse失敗を `dead_letter` として保存）にも対応する。Workersランタイムでは外部URL取得が `unsupported_runtime` のため、本番の定期実行はローカルNodeホスト（systemdタイマー）が担う。
 
 ### 4.10 地形分析API (統合: Civil-Terrain-Slope-Risk-Viewer) 実装済み
 

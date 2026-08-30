@@ -46,7 +46,7 @@ Civil Open Data Intelligence Platform（CODIP）は、土木建設関連の公�
 | [runbooks/monitoring.md](runbooks/monitoring.md) | 監視・アラート・リリース後確認の初動手順 |
 | [runbooks/rollback.md](runbooks/rollback.md) | 障害時の切り戻し手順 (判断フロー、Workers、GHCR、Neon PITR、Prisma、SQLite、復旧後検証) |
 | [runbooks/incident-response.md](runbooks/incident-response.md) | インシデント対応・連絡・エスカレーション・メンテナンス・データ訂正 |
-| [runbooks/restore-drill-record.md](runbooks/restore-drill-record.md) | 復旧訓練の記録様式・実施手順・記録台帳、`neon-backup.yml` 証跡ゲートへの反映方法 |
+| [runbooks/restore-drill-record.md](runbooks/restore-drill-record.md) | 復旧訓練の記録様式・実施手順・記録台帳（旧 `neon-backup.yml` 証跡ゲートは2026-08-30にローカル移行で廃止） |
 | [load-testing.md](load-testing.md) | k6ロードテストのシナリオ・SLO・実測結果・再実行手順 |
 | [operations/automation-tools.md](operations/automation-tools.md) | CKANハーベスト・品質SLA監視・ロール棚卸しの運用ツール |
 | [runbooks/production-rollout-next10.md](runbooks/production-rollout-next10.md) | 次ステップ10項目の本番ロールアウト手順（人間承認事項） |

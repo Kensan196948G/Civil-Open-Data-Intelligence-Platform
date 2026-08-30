@@ -194,7 +194,7 @@ npm run release:production-evidence -- --strict
 
 `CODIP_BACKUP_RESTORE_EVIDENCE` は人間向けの証跡名だけを検査する。PITR window短縮や `pg_dump` 未実行を機械的に落とすため、production/stagingの定期バックアップジョブはSecretを含まないJSONを `CODIP_NEON_BACKUP_EVIDENCE_JSON` として渡し、次のゲートを実行する。
 
-本番向けの定期ジョブは `.github/workflows/neon-backup.yml` で管理する。`CODIP_NEON_PGDUMP_DATABASE_URL` / `CODIP_NEON_BACKUP_ENCRYPTION_PASSPHRASE` Secret、main endpoint hostnameを保持する `CODIP_NEON_PGDUMP_HOST` Variable、`CODIP_LAST_RESTORE_DRILL_AT` Variableまたはdispatch入力が未設定の場合、workflowはfail-closedで失敗する。証跡branchは`main`に固定し、Secret URLから抽出したhostnameが期待値と一致した場合だけdumpを開始する。
+本番向けの定期バックアップはローカルsystemdタイマー `codip-backup.timer`（日次03:17 JST）が管理し、`scripts/local-cron/run-backup.sh` がローカルPostgreSQLへ `pg_dump`（custom形式・GPG AES256暗号化・14日保持）を実行する。旧GitHub Actions経路（`.github/workflows/neon-backup.yml`）は2026-08-30にローカル移行のため削除された（Neon Secret / `CODIP_NEON_PGDUMP_HOST` Variable / dispatch入力は廃止）。
 
 ```bash
 npm run release:create-neon-backup-evidence -- \
