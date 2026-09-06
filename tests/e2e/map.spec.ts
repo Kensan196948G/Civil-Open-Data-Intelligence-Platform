@@ -63,4 +63,33 @@ test.describe("地図表示", () => {
       timeout: 10_000,
     });
   });
+
+  test("円+バッファ検索: 中心点をクリックして検索を実行できる", async ({ page }) => {
+    await page.goto("/map");
+    const map = page.locator(".leaflet-container");
+    await expect(map).toBeVisible({ timeout: 20_000 });
+
+    await page.getByRole("button", { name: /円\+バッファ検索/ }).click();
+    await expect(page.getByText(/地図上をクリックして中心点を指定してください/)).toBeVisible();
+
+    await map.click({ position: { x: 300, y: 200 } });
+    await expect(page.getByText(/中心点: -?\d+\.\d+, -?\d+\.\d+/)).toBeVisible();
+
+    await page.getByRole("button", { name: /検索実行/ }).click();
+    await expect(page.getByText(/件の地物が見つかりました|候補レイヤーのみ確認できます/)).toBeVisible({
+      timeout: 10_000,
+    });
+  });
+
+  test("ポリゴン検索: 3点未満ではエラー表示される", async ({ page }) => {
+    await page.goto("/map");
+    const map = page.locator(".leaflet-container");
+    await expect(map).toBeVisible({ timeout: 20_000 });
+
+    await page.getByRole("button", { name: /ポリゴン検索/ }).click();
+    await map.click({ position: { x: 250, y: 150 } });
+    await map.click({ position: { x: 350, y: 150 } });
+    await page.getByRole("button", { name: /検索実行/ }).click();
+    await expect(page.getByText(/ポリゴンは3点以上指定してください/)).toBeVisible();
+  });
 });
