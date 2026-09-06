@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { GeoJSON, MapContainer, Marker, Polyline, Polygon, TileLayer, useMapEvents } from "react-leaflet";
+import { Circle, GeoJSON, MapContainer, Marker, Polyline, Polygon, TileLayer, useMapEvents } from "react-leaflet";
 import type { Map as LeafletMap } from "leaflet";
 import { icon as leafletIcon } from "leaflet";
 import type { Feature, FeatureCollection, GeoJsonObject } from "geojson";
@@ -132,6 +132,15 @@ export default function MapView() {
   const [searchMessage, setSearchMessage] = useState("");
   const [timeFrom, setTimeFrom] = useState("");
   const [timeTo, setTimeTo] = useState("");
+  const [geometrySearchMode, setGeometrySearchMode] = useState<"off" | "polygon" | "circle">("off");
+  const [geometrySearchPoints, setGeometrySearchPoints] = useState<[number, number][]>([]);
+  const [geometryCircleCenter, setGeometryCircleCenter] = useState<[number, number] | null>(null);
+  const [geometryRadiusM, setGeometryRadiusM] = useState(1000);
+  const [geometryBufferM, setGeometryBufferM] = useState(0);
+  const [geometryResult, setGeometryResult] = useState<FeatureCollection | null>(null);
+  const [geometrySummary, setGeometrySummary] = useState<Array<{ category: string; recordCount: number }>>([]);
+  const [geometryMessage, setGeometryMessage] = useState("");
+  const [geometryLoading, setGeometryLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -175,6 +184,14 @@ export default function MapView() {
   );
 
   function handleMapClick(latNum: number, lngNum: number) {
+    if (geometrySearchMode === "polygon") {
+      setGeometrySearchPoints((current) => [...current, [latNum, lngNum] as [number, number]]);
+      return;
+    }
+    if (geometrySearchMode === "circle") {
+      setGeometryCircleCenter([latNum, lngNum]);
+      return;
+    }
     if (bboxMode) {
       setBboxPoints((current) => {
         const next = [...current, [latNum, lngNum] as [number, number]];
@@ -375,6 +392,86 @@ export default function MapView() {
     setLayerMessage(`🔲 矩形検索を適用: ${bbox.join(", ")}`);
   }
 
+  function toGeometryResultFeatureCollection(
+    records: Array<{ geometry: unknown; properties?: unknown; category?: string }>,
+  ): FeatureCollection {
+    return {
+      type: "FeatureCollection",
+      features: records
+        .filter((record) => record.geometry)
+        .map((record) => ({
+          type: "Feature",
+          geometry: record.geometry as Feature["geometry"],
+          properties: { ...((record.properties as Record<string, unknown>) ?? {}), category: record.category },
+        })),
+    };
+  }
+
+  function clearGeometrySearch() {
+    setGeometrySearchMode("off");
+    setGeometrySearchPoints([]);
+    setGeometryCircleCenter(null);
+    setGeometryResult(null);
+    setGeometrySummary([]);
+    setGeometryMessage("");
+  }
+
+  async function runGeometrySearch() {
+    let body: Record<string, unknown>;
+    if (geometrySearchMode === "polygon") {
+      if (geometrySearchPoints.length < 3) {
+        setGeometryMessage("⚠️ ポリゴンは3点以上指定してください");
+        return;
+      }
+      const ring = geometrySearchPoints.map(([lat, lng]) => [lng, lat]);
+      ring.push(ring[0]);
+      body = { mode: "polygon", polygon: { type: "Polygon", coordinates: [ring] }, bufferM: geometryBufferM, limit: 500 };
+    } else if (geometrySearchMode === "circle") {
+      if (!geometryCircleCenter) {
+        setGeometryMessage("⚠️ 地図上をクリックして中心点を指定してください");
+        return;
+      }
+      body = {
+        mode: "circle",
+        center: { lat: geometryCircleCenter[0], lng: geometryCircleCenter[1] },
+        radiusM: geometryRadiusM,
+        bufferM: geometryBufferM,
+        limit: 500,
+      };
+    } else {
+      return;
+    }
+    setGeometryMessage("");
+    setGeometryLoading(true);
+    try {
+      const response = await fetch("/api/v1/assessments/geometry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error?.message ?? "検索に失敗しました");
+      }
+      const records = (payload?.data?.records ?? []) as Array<{
+        geometry: unknown;
+        properties?: unknown;
+        category?: string;
+      }>;
+      setGeometryResult(toGeometryResultFeatureCollection(records));
+      setGeometrySummary(payload?.data?.summary ?? []);
+      setGeometryMessage(
+        payload?.data?.dataAvailability === "catalog_only"
+          ? "ℹ️ 標準化済み地物が未投入のため候補レイヤーのみ確認できます（地物は0件）"
+          : `✅ ${records.length}件の地物が見つかりました`,
+      );
+    } catch (error) {
+      setGeometryMessage(`⚠️ ${error instanceof Error ? error.message : "検索に失敗しました"}`);
+    } finally {
+      setGeometryLoading(false);
+    }
+  }
+
   async function runAttributeSearch() {
     const q = attributeQuery.trim();
     if (q.length < 2) {
@@ -444,6 +541,26 @@ export default function MapView() {
           )}
           {measurePoints.length >= 3 && measureShape === "polygon" && (
             <Polygon positions={measurePoints} pathOptions={{ color: "#f59e0b", weight: 3, fillOpacity: 0.15 }} />
+          )}
+          {geometrySearchMode === "polygon" && geometrySearchPoints.length >= 3 && (
+            <Polygon
+              positions={geometrySearchPoints}
+              pathOptions={{ color: "#0891b2", weight: 2, fillOpacity: 0.1, dashArray: "4" }}
+            />
+          )}
+          {geometrySearchMode === "circle" && geometryCircleCenter && (
+            <Circle
+              center={geometryCircleCenter}
+              radius={geometryRadiusM + geometryBufferM}
+              pathOptions={{ color: "#0891b2", weight: 2, fillOpacity: 0.1, dashArray: "4" }}
+            />
+          )}
+          {geometryResult && (
+            <GeoJSON
+              key={`geometry-result-${geometryResult.features.length}`}
+              data={geometryResult}
+              style={{ color: "#be185d", weight: 2, fillOpacity: 0.3 }}
+            />
           )}
           {filteredLayers.map((layer) => (
             <GeoJSON
@@ -551,6 +668,30 @@ export default function MapView() {
           >
             {bboxMode ? "🛑 矩形検索を終了" : "🔲 矩形検索"}
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              setGeometrySearchMode((current) => (current === "polygon" ? "off" : "polygon"));
+              setGeometrySearchPoints([]);
+              setGeometryCircleCenter(null);
+              setGeometryMessage("");
+            }}
+            className="dc-btn-ghost"
+          >
+            {geometrySearchMode === "polygon" ? "🛑 ポリゴン検索を終了" : "⬠ ポリゴン検索"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setGeometrySearchMode((current) => (current === "circle" ? "off" : "circle"));
+              setGeometrySearchPoints([]);
+              setGeometryCircleCenter(null);
+              setGeometryMessage("");
+            }}
+            className="dc-btn-ghost"
+          >
+            {geometrySearchMode === "circle" ? "🛑 円+バッファ検索を終了" : "⭕ 円+バッファ検索"}
+          </button>
           <button type="button" onClick={exportGeoJson} className="dc-btn-ghost" disabled={visibleGeoJsonLayers.length === 0}>
             ⬇️ GeoJSON出力
           </button>
@@ -562,6 +703,61 @@ export default function MapView() {
           <p className="mb-2 mt-0 text-[11.5px] text-[var(--amber)]" role="status">
             🔲 地図上で2点をクリックして矩形範囲を指定してください（現在 {bboxPoints.length} 点）
           </p>
+        )}
+        {(geometrySearchMode === "polygon" || geometrySearchMode === "circle") && (
+          <div className="mb-3 rounded-lg border border-[var(--line)] p-3">
+            <p className="mb-2 mt-0 text-[11.5px] text-[var(--amber)]" role="status">
+              {geometrySearchMode === "polygon"
+                ? `⬠ 地図上をクリックして頂点を追加してください（現在 ${geometrySearchPoints.length} 点、3点以上必要）`
+                : geometryCircleCenter
+                  ? `⭕ 中心点: ${geometryCircleCenter[0].toFixed(5)}, ${geometryCircleCenter[1].toFixed(5)}`
+                  : "⭕ 地図上をクリックして中心点を指定してください"}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              {geometrySearchMode === "circle" && (
+                <label className="flex items-center gap-1 text-[11.5px] text-[var(--muted)]">
+                  半径(m)
+                  <input
+                    type="number"
+                    min={1}
+                    max={100_000}
+                    value={geometryRadiusM}
+                    onChange={(event) => setGeometryRadiusM(Number(event.target.value))}
+                    className="dc-input w-24 text-xs"
+                    aria-label="円検索の半径(メートル)"
+                  />
+                </label>
+              )}
+              <label className="flex items-center gap-1 text-[11.5px] text-[var(--muted)]">
+                バッファ(m)
+                <input
+                  type="number"
+                  min={0}
+                  max={10_000}
+                  value={geometryBufferM}
+                  onChange={(event) => setGeometryBufferM(Number(event.target.value))}
+                  className="dc-input w-24 text-xs"
+                  aria-label="バッファ距離(メートル)"
+                />
+              </label>
+              <button type="button" onClick={() => void runGeometrySearch()} className="dc-btn-ghost" disabled={geometryLoading}>
+                {geometryLoading ? "⏳ 検索中..." : "📐 検索実行"}
+              </button>
+              <button type="button" onClick={clearGeometrySearch} className="dc-btn-ghost">
+                クリア
+              </button>
+            </div>
+            {geometryMessage && <p className="mb-0 mt-1 text-[11.5px] text-[var(--muted)]">{geometryMessage}</p>}
+            {geometrySummary.length > 0 && (
+              <ul className="m-0 mt-1 list-none text-[11.5px] text-[var(--muted)]">
+                {geometrySummary.map((item) => (
+                  <li key={item.category}>
+                    {item.category}: {item.recordCount}件
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
 
         <h2 className="mb-2 mt-0 text-sm font-semibold text-[var(--ink)]">🗂️ データレイヤー</h2>
