@@ -10,7 +10,7 @@
 
 **CODIP** は、国土交通省、国土地理院、気象庁、自治体、道路、河川、防災、都市計画、インフラ、環境などに分散している公開データを、土木建設業務で再利用しやすい形に整理するための共通データ基盤です。
 
-現行MVPは **データソース台帳、取得確認、取得ログ、地図プレビュー、品質状態、後続API、PostgreSQL/PostGIS標準レコード読取経路** を中心に実装しています。共有preview `http://192.168.0.185:3100/` は稼働中です。本番Cloudflare Workers + Hyperdrive + Neonも配備済みで、**本番 `https://odip.mirai-dx-platform.com` は2026-08-05以降 Access 保護下で継続稼働中**（15分毎のstrict read-only smoke、日次暗号化バックアップ・復元ドリル実施済み。2026-08-29時点では本番DB認証失効により `/api/ready` のみ失敗継続中・復旧手順は Issue #190）。公開レビュー用MVPは **`https://codip-mvp.mirai-dx-platform.com`** で稼働中です（Cloudflare Tunnel 経由でローカル preview を公開・SQLite デモデータ・管理トークンでセッション開始。経路の実体と更新手順は [docs/runbooks/cloudflare-mvp.md](docs/runbooks/cloudflare-mvp.md)）。本番稼働状況は [docs/16-release-readiness-checklist.md](docs/16-release-readiness-checklist.md) を参照してください。
+現行MVPは **データソース台帳、取得確認、取得ログ、地図プレビュー、品質状態、後続API、PostgreSQL/PostGIS標準レコード読取経路** を中心に実装しています。共有preview `http://192.168.0.185:3100/` は稼働中です。**本番 `https://odip.mirai-dx-platform.com` は2026-08-30以降、Cloudflare Workers + Hyperdrive + Neon構成からローカルPostgreSQL + Cloudflare Tunnel構成へ移行し継続稼働中**です（Neon本番DBのパスワードローテーションに起因する認証失効[Issue #190](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/190)を受け、Cloudflare Workers/Hyperdrive経由の配信を廃止し、この開発機で常駐する Next.js + ローカルPostgreSQL を Cloudflare Tunnel で公開する構成に一本化。15分毎のstrict read-only smoke、日次ローカルpg_dump暗号化バックアップ運用中。Cloudflare Access保護は移行時に設定漏れが生じていたが2026-09-06に再設定済み）。詳細は [docs/runbooks/cloudflare-production.md](docs/runbooks/cloudflare-production.md) と [docs/runbooks/database-deployment.md](docs/runbooks/database-deployment.md) を参照してください。公開レビュー用MVPは **`https://codip-mvp.mirai-dx-platform.com`** で稼働中です（Cloudflare Tunnel 経由でローカル preview を公開・SQLite デモデータ・管理トークンでセッション開始。経路の実体と更新手順は [docs/runbooks/cloudflare-mvp.md](docs/runbooks/cloudflare-mvp.md)）。本番稼働状況は [docs/16-release-readiness-checklist.md](docs/16-release-readiness-checklist.md) を参照してください。
 
 > 公開データを探すだけのサイトではなく、土木建設システムが公開データを安全に再利用するための共通データハブです。
 
@@ -88,7 +88,7 @@ flowchart LR
 
 ### 6. 🧑‍💻 社内IT部門スタッフ向け
 
-管理API、取得ログ、品質再計算、後続API、Docker preview、PostgreSQL/PostGIS移行、Cloudflare/Neon staging runbookを整備しています。
+管理API、取得ログ、品質再計算、後続API、Docker preview、PostgreSQL/PostGIS移行、Cloudflare Tunnel + ローカルPostgreSQL本番runbookを整備しています。
 
 ---
 
@@ -110,45 +110,43 @@ flowchart TD
 
 | 領域 | 現在 | 本番目標 |
 | --- | --- | --- |
-| UI | Next.js | Cloudflare Workers目標 (`@opennextjs/cloudflare`) |
-| API | Next.js Route Handlers | Cloudflare Workers分離候補 |
-| DB | SQLite preview / PostgreSQL schema | Neon PostgreSQL + PostGIS |
+| UI | Next.js | Next.js（`next start`、systemd常駐） |
+| API | Next.js Route Handlers | Next.js Route Handlers（同一プロセス） |
+| DB | SQLite preview / PostgreSQL schema | ローカルPostgreSQL + PostGIS（開発機常駐、Neonからは撤退済み） |
 | 認証 | 管理トークン / HttpOnly Cookie | Cloudflare Access + proxy secret |
 | CI | GitHub Actions | SHA固定Actions、CodeQL、Trivy、SBOM/provenance |
-| 本番URL | 共有preview `http://192.168.0.185:3100/` | `https://odip.mirai-dx-platform.com` |
+| 本番URL | 共有preview `http://192.168.0.185:3100/` | `https://odip.mirai-dx-platform.com`（Cloudflare Tunnel → `localhost:18810`） |
 | MVPレビューURL | - | `https://codip-mvp.mirai-dx-platform.com`（Cloudflare Tunnel → ローカル preview・SQLite デモデータ） |
+
+> Cloudflare Workers + Hyperdriveへの分離配信は2026-08-30に廃止し、本番はTunnel経由のローカル常駐プロセスへ一本化しました（`wrangler.jsonc` のWorker定義自体は将来の再検討用に残置していますが、現行トラフィックには使われていません）。詳細は [docs/runbooks/cloudflare-production.md](docs/runbooks/cloudflare-production.md) を参照してください。
 
 ---
 
-## 🚨 本番稼働状況 (2026-08-10)
+## 🚨 本番稼働状況 (2026-09-06)
+
+> ⚠️ **アーキテクチャ変更（2026-08-30）**: Neon本番DBのパスワードローテーションに起因する認証失効（[Issue #190](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/190)、[#187](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/187)、[#203](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/203)）を機に、Cloudflare Workers + Hyperdrive + Neon構成を廃止し、**この開発機のローカルPostgreSQL + Cloudflare Tunnel**構成へ移行しました。以降の本番はNeonに依存しません。
 
 ```mermaid
 flowchart LR
     U["利用者"] --> A1["Cloudflare Access (odip)"]
-    A1 --> CF["Cloudflare route / codip-production"]
-    CF --> A["Next.js API / UI"]
-    A --> P["Prisma WASM (PostgreSQL)"]
-    P --> HD["Hyperdrive"]
-    HD --> N["Neon PostgreSQL / PostGIS"]
+    A1 --> T["Cloudflare Tunnel"]
+    T --> S["systemd: codip-production.service<br>next start -p 18810"]
+    S --> PG["ローカル PostgreSQL / PostGIS<br>(codip_app@localhost:5432)"]
+    B["systemd timer: codip-backup<br>毎日03:17 JST"] --> PG
 ```
 
 | 確認項目 | 実測 | 判定 |
 | --- | --- | --- |
-| 正式URL | `https://odip.mirai-dx-platform.com` | ✅ DNS/TLS/route到達 |
-| MVPレビューURL | `https://codip-mvp.mirai-dx-platform.com` | ✅ 稼働中（smoke 73 checks OK、watchlist demo identity/PATCH 実測） |
-| Access | Cloudflare Access app `odip`（mirai-const.co.jp + kensan1969@gmail.com） | ✅ 未認証は302→login |
-| Health / Ready | Access service token付きprobeで200（2026-08-05T02:55Z run 30970704615）。未認証は302 | ✅ Worker/DB稼働 |
-| 稼働deployment | `codip-production`（Version `d1528b5d-b5e6-47e9-aa4b-1070868161f6`、main `3ec5e8f` 相当） | ✅ 統合機能・/reports修正・地形クラッシュ修正反映済 |
-| Neon | PostgreSQL 17.10 / PostGIS 3.5、migration 2/2、整合性異常0 | ✅ DB rollback不要 |
-| Backup | pg_dump初回成功（2026-08-04T21:05Z workflow_dispatch run 30950851419、AES256暗号化artifact `codip-neon-pgdump-20260804T210642Z.dump.gpg`、14日保持）。scheduled初回は2026-08-06 03:17 JSTに検証予定 | ✅（手動初回） |
-| 定期smoke | Access service token設定済み（2026-08-05）。15分間隔 strict read-only probe成功（初回 30969524446、scheduled 30972974222、P0デプロイ後 30976480258） | ✅ |
-| データ収集 | 本番62データソース・有効ジョブ18件（2026-08-10）。気象海象は現場6件＋観測収集稼働中、公式JSONコネクタ5種を追加 | ✅ |
-| アラート | Cloudflare `CODIP Worker Error Alert` 作成・テスト送信済み（2026-08-10）。GitHub/Neon通知は設定待ち | 🟡 |
-| PWA | manifest＋Service Worker実装済み（2026-08-10、PR #120）。オフライン戦略は設計書 `docs/design/pwa-mobile-design.md` | ✅ タスク1〜2 |
-| Access管理認証 | ミドルウェア注入でproxy認証を有効化（PR #120）。Access認証済みユーザーの管理操作が200応答 | ✅ |
-| Worker切戻し | 実測: rollback 4秒 / 復旧デプロイ 25秒（2026-08-10、両スモーク成功） | ✅ |
+| 正式URL | `https://odip.mirai-dx-platform.com` | ✅ DNS(CNAME→Tunnel)/TLS到達 |
+| 公開経路 | Cloudflare Tunnel（`codip-production-cloudflared.service`）→ `http://localhost:18810`（`codip-production.service`） | ✅ 稼働中（`ActiveEnterTimestamp` 2026-08-30、以降継続稼働） |
+| DB | ローカルPostgreSQL（`codip_app@localhost:5432/codip`）。Neonへの依存なし | ✅ `/api/ready` の `checks.database=ok` を実測 |
+| Access | Cloudflare Access app `odip`（mirai-const.co.jp + kensan1969@gmail.com） | ✅ 2026-09-06に再設定済み（移行時の設定漏れを検知・復旧。未認証は302→login） |
+| pg-odip（DB直結ルート） | Cloudflare Tunnel経由のTCPルート（`tcp://localhost:5432`）。開発者のリモートpsql接続用 | ✅ 2026-09-06にAccess Application追加、未認証302を確認 |
+| Backup | `codip-backup.timer`（毎日03:17 JST）が`pg_dump`+GPG暗号化を`~/backups/codip/`へ実行、14日保持 | ✅ ローカルcron相当。PITRなし（RPO≈24h、運用上の既知制約） |
+| 定期smoke | `.github/workflows/production-smoke.yml` が15分間隔でstrict read-only probe実行 | ✅（Access再設定後に監視用service tokenの疎通を再確認） |
+| データ収集 | `codip-ingestion.timer`（30分毎）、`codip-weather.timer`（10分毎）がローカルPostgreSQLへ直接投入 | ✅ |
 
-定期検知は `.github/workflows/production-smoke.yml` が15分ごとにstrict read-only probeを実行します。odipはCloudflare Access配下のため、監視用Access service token（`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`）をGitHub Actions Secretへ設定済みです。Cloudflare/Neonアラート通知先と初回通知テストは運用台帳（`docs/operations/operations-ledger.md`）の残課題です。
+定期検知は `.github/workflows/production-smoke.yml` が15分ごとにstrict read-only probeを実行します。odipはCloudflare Access配下のため、監視用Access service token（`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`）をGitHub Actions Secretへ設定済みです。過去のCloudflare Workers/Hyperdrive/Neon本番運用時の記録（2026-08-10時点）は [docs/release-notes.md](docs/release-notes.md) 等の履歴として残しています。
 
 ---
 
@@ -260,6 +258,8 @@ flowchart LR
 
 ### 🏗️ 本番インフラの状態
 
+> ⚠️ **このサブセクション（2026-07-20〜2026-08-10時点）は歴史的記録です。** Cloudflare Workers + Hyperdrive + Neon構成を前提とした記述が含まれますが、2026-08-30にローカルPostgreSQL + Cloudflare Tunnel構成へ移行済みです。最新状況は上記「[🚨 本番稼働状況 (2026-09-06)](#-本番稼働状況-2026-09-06)」を参照してください。
+
 2026-07-20 更新: Cloudflare本番サブドメインは `odip.mirai-dx-platform.com` で確定済みです。routingは zone route方式 (`routes[].pattern=<FQDN>/*` + `zone_name` + proxied AAAA `100::`) を採用し、決定記録は `docs/runbooks/cloudflare-production.md` §1.1 を正とします。
 
 | リソース | 状態 |
@@ -284,15 +284,15 @@ flowchart LR
 
 - **Cloudflare Workers ランタイム互換**: [Issue #18](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/18)。SSRF事前DNS検証は `dns.promises.resolve4` / `resolve6` へ変更済み。接続時DNSピン留めはNode.js/Undiciで継続し、Cloudflare Workersでは同等保証ができないため外部URL取得を `unsupported_runtime` で安全停止する。PostgreSQL Prisma Clientは `@prisma/adapter-pg` によりHyperdrive `connectionString` を消費できる構成へ変更済み。残りは実Cloudflare/Neon証跡
 - **main branch protection**: 現在は有効。required checksは `verify` / `e2e` / `postgresql-compat` / `docker-preview` / `docker-image-security` / `analyze`、strict=true、admin enforcement=true。今後はrequired review数やCode Ownersの要否を運用成熟度に合わせて判断する
-- **本番監視のAccess対応**: ✅ 解決済み（2026-08-05）。監視用service token `codip-production-smoke-20260805`、Service Auth policy `odip-service-auth`、Secrets登録、初回smoke成功まで完了。通知先・通知テストのみ未設定
-- **Cloudflare staging Hyperdrive**: 現行 `CLOUDFLARE_API_TOKEN` にHyperdrive作成権限がないため (code 10000)、Cloudflare stagingデプロイはブロック中。Neon staging branch `staging-20260804` は作成済み。権限追加またはDashboard操作が必要
-- **Neon pg_dump定期ジョブ**: ✅ 初回成功（2026-08-04T21:05Z workflow_dispatch run 30950851419、暗号化artifact・証跡JSON）。scheduledは2026-08-07/08/09に成功（2026-08-07の1回はGitHub runner未獲得による失敗→翌日復旧）。保持期間・復元手順は `docs/runbooks/database-deployment.md` §4.1、運用台帳を参照
+- **本番監視のAccess対応**: ✅ 2026-08-05に確立、2026-08-30のTunnel移行時に設定が引き継がれず一時的にAccess保護なしの状態が発生。2026-09-06に検知・再設定済み（`odip` / `pg-odip` 双方にAccess Application + Service Auth policyを再作成）。通知先・通知テストは未設定
+- **Cloudflare staging Hyperdrive**: 本番がNeon/Hyperdriveから撤退したため、この制約自体が非該当（historical）
+- **ローカルPostgreSQLバックアップ**: ✅ `codip-backup.timer`（毎日03:17 JST）が稼働中。Neon PITRのような継続的な復元点はなく、RPOは日次pg_dump相当（≈24h）。保持期間・復元手順は `docs/runbooks/database-deployment.md` §4.1を参照
 - **De-dockerization移行中**: [Issue #35](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/35)。Docker jobはbranch protection互換のため残し、先にDocker非依存の `node-preview` CIゲートを追加して差し替え先を育てる
 - **ETLの実データ展開**: 定期収集・クレンジング・リネージュ・提供元別レート制御・スキーマドリフト検出・デッドレターキューは実装済み。実データ50種類への展開と稼働チューニングは継続中（docs/14ロードマップ）
 - **AIの本格化**: ルールベース推薦（`/api/v1/recommendations`）は実装済み。LLM/RAG、AI品質監視、コネクタ自動生成、自然文検索は未導入（P1）
 - **GIS分析の深化**: レイヤー重ね合わせ・計測・出力・矩形検索・属性検索・時間フィルタは実装済み。ポリゴンUI・バッファUI・時系列スライダーUI・GeoPackage/PDF出力・3D/PLATEAUは未導入（P0/P2）
 
-🔒 **本番アプリはCloudflare Access配下で稼働中**。本番監視（15分間隔smoke）とNeon定期バックアップは確立済みです。Cloudflareアラートポリシーは作成・テスト送信済み（2026-08-10）。残るブロッカーはCloudflare staging Hyperdrive（staging専用）と、GitHub/Neon通知先の設定です。手順は [`docs/runbooks/alerts-and-notifications.md`](docs/runbooks/alerts-and-notifications.md)、[`docs/runbooks/cloudflare-production.md`](docs/runbooks/cloudflare-production.md)、[`docs/operations/operations-ledger.md`](docs/operations/operations-ledger.md) を参照してください。
+🔒 **本番アプリはCloudflare Access配下で稼働中**（2026-09-06にAccess Application再設定を確認）。本番監視（15分間隔smoke）とローカル日次バックアップは確立済みです。Cloudflareアラートポリシーは作成・テスト送信済み（2026-08-10）。残る課題は通知先の設定です。手順は [`docs/runbooks/alerts-and-notifications.md`](docs/runbooks/alerts-and-notifications.md)、[`docs/runbooks/cloudflare-production.md`](docs/runbooks/cloudflare-production.md)、[`docs/operations/operations-ledger.md`](docs/operations/operations-ledger.md) を参照してください。
 
 ---
 

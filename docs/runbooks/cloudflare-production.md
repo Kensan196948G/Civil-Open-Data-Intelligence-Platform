@@ -3,6 +3,29 @@
 `odip.mirai-dx-platform.com` をCloudflare Workers + Neon/PostGISの本番入口として有効化するための手順である。
 このRunbookは **DNS、Custom Domain、Access、Secrets、Hyperdrive、Neon本番接続を無断で変更しない** ことを前提に、承認済み作業者が本番化の証跡を揃えるための入口として使う。
 
+> ⚠️ **実態との整合（2026-08-30移行 / 2026-09-06 Access再設定）**
+> 本ドキュメント（§0〜§5）はCloudflare Workers + Hyperdrive + Neon構成での本番化手順の記録である。
+> Neon本番DBのパスワードローテーションに起因する認証失効（[Issue #190](https://github.com/Kensan196948G/Civil-Open-Data-Intelligence-Platform/issues/190)）を機に、
+> **2026-08-30以降の現行公開経路は Cloudflare Tunnel + ローカル `next start`（PostgreSQL、開発機常駐）** であり、
+> Worker `codip` のproduction envとHyperdrive binding（`1da7b81807374ec190addf146717d275`）は現行トラフィックには使われていない。
+>
+> ```text
+> odip.mirai-dx-platform.com
+>   └─ DNS: CNAME → 4f7b805d-302a-4548-8cf8-058533298944.cfargotunnel.com（proxied）
+>        └─ Cloudflare Tunnel（systemd: codip-production-cloudflared.service）
+>             └─ ingress: http://localhost:18810
+>                  └─ systemd: codip-production.service（next start -p 18810、DATABASE_URL=ローカルPostgreSQL）
+> pg-odip.mirai-dx-platform.com（開発者リモートpsql用の直結ルート、同一Tunnel）
+>   └─ ingress: tcp://localhost:5432
+> ```
+>
+> 2026-08-30の移行時、以前 `odip` に設定されていた Cloudflare Access Application（旧ID `9af09a69-6338-4e9b-ad31-8434aa0a3f1e`）が引き継がれておらず、
+> 一時的にAccess保護なしで一般公開される状態が発生していた（本番API/UIが未認証で200を返す状態を実測で検知）。
+> **2026-09-06に検知し、`odip`（app id `5281c2ba-e50f-477e-b277-e31cabaa617d`）と `pg-odip`（app id `92b121e2-7cc7-4c80-91eb-9b2d9c243e9e`）双方に
+> Access Application（allow policy: mirai-const.co.jp + kensan1969@gmail.com、Service Auth policyで監視用service tokenを許可）を再作成し復旧済み。**
+> 以下§0〜§5のHyperdrive/Neon固有の記述は、将来Workers配信へ戻す場合の参考として保持する。運用中の手順は
+> [docs/runbooks/database-deployment.md](database-deployment.md) §4.1 を正とする。
+
 ## 0. Production target
 
 | 項目 | 値 |
