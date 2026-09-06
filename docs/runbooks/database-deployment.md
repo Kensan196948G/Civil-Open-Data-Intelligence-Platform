@@ -1,6 +1,8 @@
 # データベースデプロイRunbook
 
-CODIPのMVPはSQLiteで開発しているが、本番スケール時はNeon PostgreSQL/PostGISへ移行する。SQLiteは共有プレビューの単一インスタンス検証に限定する。
+CODIPのMVPはSQLiteで開発しているが、本番スケール時はPostgreSQL/PostGISへ移行する。SQLiteは共有プレビューの単一インスタンス検証に限定する。
+
+> ⚠️ 本番は2026-08-30にNeon（クラウド管理PostgreSQL）からこの開発機のローカルPostgreSQLへ移行済み。以降「本番PostgreSQL」はローカルインスタンスを指す。詳細は §4.1、[docs/runbooks/cloudflare-production.md](cloudflare-production.md) を参照。
 
 ## 1. 現在のDB方針
 
