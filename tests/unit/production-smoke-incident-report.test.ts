@@ -179,6 +179,25 @@ describe("production smoke incident report / 連続失敗回数の飽和", () =>
     expect(result.createdIssue?.title).not.toContain("以上");
   });
 
+  it("履歴が空でも『直近100runが全て失敗』とは主張しない", async () => {
+    // 初回失敗では遡れる run が存在しない。非失敗runに当たらなかったことを
+    // そのまま飽和とみなすと、0件の観測から「全て失敗」を主張してしまう。
+    const result = await runIncidentScript({ previousRuns: [] });
+
+    expect(result.createdIssue?.title).toBe("[P2] production smoke failure (1 consecutive)");
+    expect(result.createdIssue?.body).toContain("1 (直近100run参照)");
+    expect(result.createdIssue?.body).not.toContain("全て失敗");
+  });
+
+  it("履歴が観測窓に満たないときは数えた値が実数であり飽和ではない", async () => {
+    // run 総数が窓より少ない場合、それ以上遡れる run は存在しないので下限ではない。
+    const result = await runIncidentScript({ previousRuns: failures(5) });
+
+    expect(result.createdIssue?.title).toContain("6 consecutive");
+    expect(result.createdIssue?.title).not.toContain("以上");
+    expect(result.createdIssue?.body).toContain("6 (直近100run参照)");
+  });
+
   it("観測窓の上限は listWorkflowRuns の per_page 上限 (100) を使う", async () => {
     const result = await runIncidentScript({ previousRuns: failures(100) });
     const historyCall = result.calls.find((call) => call.name === "actions.listWorkflowRuns");

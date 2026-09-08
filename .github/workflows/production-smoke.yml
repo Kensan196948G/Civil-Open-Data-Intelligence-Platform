@@ -136,8 +136,10 @@ jobs:
                   consecutiveFailures += 1;
                 }
                 // 非失敗runに当たらないまま窓を使い切った = 実際の連続失敗はこれ以上。
-                // 窓が空 (previousRuns.length === 0) の場合も遡れていないので飽和扱い。
-                streakSaturated = !sawNonFailure;
+                // 履歴が観測窓に満たない場合 (初回失敗・run総数が少ない) は、それ以上
+                // 遡れる run が存在しないので数えた値が実数であり、飽和ではない。
+                // ここを区別しないと「直近100runが全て失敗」を run 0件でも主張する。
+                streakSaturated = history.workflow_runs.length >= HISTORY_DEPTH && !sawNonFailure;
               } catch (error) {
                 core.warning(`Could not read run history; reporting without a streak count: ${error.message}`);
               }
