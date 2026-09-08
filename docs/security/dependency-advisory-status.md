@@ -19,7 +19,7 @@ allowlist は `scripts/tools/check-dependency-audit.js` の `ALLOWLIST` が唯�
 | --- | --- |
 | 本番グラフ (`--omit=dev`) | 脆弱性 0 件（`found 0 vulnerabilities`） |
 | 全グラフ (dev込み) | `[dependency-audit] OK` |
-| 有効な allowlist エントリ | 1件 (GHSA-mh99-v99m-4gvg) |
+| 有効な allowlist エントリ | 2件 (GHSA-mh99-v99m-4gvg / GHSA-82fw-gwwq-j7x9) |
 
 本監査 (2026-08-22 JST) の時点で advisory 2件が CI をブロックしていたため、いずれも **実アップグレードで解消**した。
 経緯は「2026-08-22 の再燃と新規検出」を参照。
@@ -148,7 +148,40 @@ prisma 側のアップグレードでは解消しない。`@prisma/config` は 6
   `postcss` を引くため、`npm audit --omit=dev` の対象に入る (2026-08-22 の再燃時に実測して判明)
 - 対応: 依存更新により advisory 自体が検出されなくなったため、allowlist エントリを削除 (2026-08-11)
 
+## 2026-09-09 (JST) の新規検出 — Deep Debug Round 3
+
+Deep Debug 中に本番グラフの `verify` ゲートが失敗し、**main を含むすべての PR がマージ不能**になっていることを検出した。原因は下記 4 件の新規 advisory。
+
+| GHSA | パッケージ | severity | スコープ | 対応 |
+| --- | --- | --- | --- | --- |
+| GHSA-jrc7-96c5-q579 | maplibre-gl | **critical** | 本番 dependencies (直接) | **実アップグレード** 5.24.0 → 6.8.0 |
+| GHSA-rgj7-g3m4-5g8c | sharp | high | 本番 (next の optional) | **override 修正** `^0.35.2` → `^0.35.4` |
+| GHSA-2883-xcg3-v3hh | js-yaml | high | dev (@eslint/eslintrc) | **override 追加** `^4.3.2` |
+| GHSA-82fw-gwwq-j7x9 | vitest / @vitest/mocker | moderate | dev | **期限付き allowlist** (Issue #222) |
+
+### GHSA-rgj7-g3m4-5g8c — sharp の override が脆弱版を指していた
+
+`overrides.sharp` は `"^0.35.2"` だったが、advisory の脆弱範囲は `<0.35.4` で、実インストールは **0.35.3**。
+つまり **override は存在したが、脆弱性対策という当初の意図をすでに満たしていなかった**。
+override の版指定は advisory 範囲に追随させないと、「対策済みに見えて対策されていない」状態が静かに続く。
+
+### GHSA-jrc7-96c5-q579 — maplibre-gl (critical / CI ブロッカー)
+
+本番 `dependencies` の直接依存。v6 は default export を廃止したため namespace import へ変更した。
+利用 API は `Map` / `NavigationControl` / `AttributionControl` と中核メソッドのみで、v6 でも維持されている。
+
 ## 有効な allowlist エントリ
+
+### GHSA-82fw-gwwq-j7x9 — vitest / @vitest/mocker (Issue #222)
+
+| 項目 | 内容 |
+| --- | --- |
+| severity | moderate |
+| スコープ | devDependencies (vitest / @vitest/mocker) |
+| 理由 | 修正は vitest 4.1.11+ / 5.0.0 だが、`overrides` の `$postcss` エイリアスと major 変更が競合して npm が依存を解決できない (`Unable to resolve reference $postcss` / `Cannot read properties of null (reading 'edgesOut')`)。解消には lockfile 全面再生成が必要で、1484 テストを持つテストフレームワークの major 移行として独立に扱う |
+| 本番影響 | なし。テスト実行時のみのツールで本番バンドルへは同梱されない |
+| tracking | Issue #222 |
+| expires | 2026-10-31T00:00:00Z |
 
 ### GHSA-mh99-v99m-4gvg — brace-expansion (Issue #82)
 
