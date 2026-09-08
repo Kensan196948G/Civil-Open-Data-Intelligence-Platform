@@ -459,6 +459,37 @@ describe("post-release-status", () => {
     expect(report.ready).toBe(false);
   });
 
+  it("identifies an Access challenge by strict hostname, not by substring", async () => {
+    const challenge = async (headers: Record<string, string>) => {
+      const result = await fetchWithTimeout("https://odip.example.com/api/health", {
+        fetcher: async () => new Response("", { status: 302, headers }),
+        timeoutMs: 1000,
+      });
+      return (result as { accessChallenge?: boolean }).accessChallenge;
+    };
+
+    // 正規のAccess login redirect
+    expect(
+      await challenge({ location: "https://team.cloudflareaccess.com/cdn-cgi/access/login/odip.example.com?kid=x" }),
+    ).toBe(true);
+    // WWW-Authenticate のscheme
+    expect(await challenge({ "www-authenticate": 'Cloudflare-Access resource_metadata="https://x/y"' })).toBe(true);
+
+    // substring判定なら通ってしまうなりすましホスト
+    expect(
+      await challenge({ location: "https://evil-cloudflareaccess.com.attacker.test/cdn-cgi/access/login/x" }),
+    ).toBe(false);
+    expect(
+      await challenge({ location: "https://attacker.test/cloudflareaccess.com/cdn-cgi/access/login/x" }),
+    ).toBe(false);
+    // 正規ホストでもlogin以外のpathはchallengeではない
+    expect(await challenge({ location: "https://team.cloudflareaccess.com/some/other/path" })).toBe(false);
+    // httpsでないredirect
+    expect(await challenge({ location: "http://team.cloudflareaccess.com/cdn-cgi/access/login/x" })).toBe(false);
+    // redirectなし
+    expect(await challenge({})).toBe(false);
+  });
+
   it("records /api/ready database health when the endpoint returns the standard payload", () => {
     const probe = inspectProbe(
       "/api/ready",

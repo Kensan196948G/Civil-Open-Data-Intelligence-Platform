@@ -122,6 +122,29 @@ async function resolveHost(hostname, resolver = dns) {
   return result;
 }
 
+// Accessのlogin redirectか否かを判定する。hostnameを厳密に比較すること。
+// substring判定 (`location.includes("cloudflareaccess.com")`) は
+// `https://evil-cloudflareaccess.com.attacker.test/` のようなホストも通すため使わない。
+function isAccessChallengeHeaders(locationHeader, wwwAuthenticateHeader) {
+  const scheme = String(wwwAuthenticateHeader ?? "")
+    .trim()
+    .toLowerCase();
+  if (scheme.startsWith("cloudflare-access")) return true;
+
+  const location = String(locationHeader ?? "").trim();
+  if (!location) return false;
+  let parsed;
+  try {
+    parsed = new URL(location);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "https:") return false;
+  const host = parsed.hostname.toLowerCase();
+  const isAccessHost = host === "cloudflareaccess.com" || host.endsWith(".cloudflareaccess.com");
+  return isAccessHost && parsed.pathname.startsWith("/cdn-cgi/access/login");
+}
+
 async function fetchWithTimeout(
   url,
   { fetcher = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS, headers: extraHeaders = {} } = {},
@@ -140,11 +163,10 @@ async function fetchWithTimeout(
     const body = await response.text().catch(() => "");
     // Accessのlogin URLにはJWT metaが載るため、Location / WWW-Authenticate は
     // 生値を保持せず、challengeか否かの判定結果だけを持ち回す。
-    const accessLocation = String(response.headers.get("location") ?? "").toLowerCase();
-    const accessAuthenticate = String(response.headers.get("www-authenticate") ?? "").toLowerCase();
-    const accessChallenge =
-      (accessLocation.includes("cloudflareaccess.com") && accessLocation.includes("/cdn-cgi/access/login")) ||
-      accessAuthenticate.includes("cloudflare-access");
+    const accessChallenge = isAccessChallengeHeaders(
+      response.headers.get("location"),
+      response.headers.get("www-authenticate"),
+    );
     const headers = Object.fromEntries(
       ["server", "cf-ray", "cf-cache-status", "content-type"]
         .map((name) => [name, response.headers.get(name)])
