@@ -342,7 +342,14 @@ describe("post-release-status", () => {
   it("reports an Access boundary diagnosis when production returns 302 with Cloudflare edge headers", async () => {
     const fetcher = vi.fn(async (url: string) => {
       if (isProductionUrl(url)) {
-        return new Response("", { status: 302, headers: { server: "cloudflare", "cf-ray": "abc-NRT" } });
+        return new Response("", {
+          status: 302,
+          headers: {
+            server: "cloudflare",
+            "cf-ray": "abc-NRT",
+            location: "https://example-team.cloudflareaccess.com/cdn-cgi/access/login/odip.example.com?kid=x",
+          },
+        });
       }
       return new Response("{}", { status: 200 });
     });
@@ -364,6 +371,123 @@ describe("post-release-status", () => {
     expect(diagnosis).toContain("Cloudflare Access boundary");
     expect(renderReport(report)).toContain("Access service token: not configured");
     expect(renderReport(report)).not.toContain("service-client-secret");
+  });
+
+  it("diagnoses a rejected service token when 302 persists although credentials are configured", async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      if (isProductionUrl(url)) {
+        return new Response("", {
+          status: 302,
+          headers: {
+            server: "cloudflare",
+            "cf-ray": "abc-NRT",
+            "www-authenticate": 'Cloudflare-Access resource_metadata="https://odip.example.com/.well-known/x"',
+          },
+        });
+      }
+      return new Response("{}", { status: 200 });
+    });
+
+    const report = await buildReport(
+      {
+        ...baseArgs,
+        strictProduction: true,
+        accessClientId: "service-client-id",
+        accessClientSecret: "service-client-secret",
+      },
+      {
+        resolver: {
+          resolve4: async () => ["203.0.113.10"],
+          resolve6: async () => [],
+        },
+        fetcher,
+      },
+    );
+
+    const diagnosis = report.productionDiagnosis.map((row) => row[0]).join(",");
+    // token設定済みで302が返るのは「Accessが有効なので期待動作」ではなく、
+    // 監視用service tokenがAccessに拒否されている状態。未設定時と同じ案内へ
+    // 落とすと、当番は設定済みsecretの再設定を試みて原因へ辿り着けない。
+    expect(diagnosis).toContain("Cloudflare Access service token rejected");
+    expect(diagnosis).not.toContain("Cloudflare Access boundary");
+
+    const rendered = renderReport(report);
+    expect(rendered).toContain("Access service token: configured");
+    // ID/secretのペア不一致という実際の原因を指し示すこと
+    expect(rendered).toContain("same service token");
+    // 診断を変えるだけで、障害そのものを緑化しない（症状抑制の禁止）
+    expect(report.productionConnected).toBe(false);
+    expect(report.ready).toBe(false);
+    // 資格情報を出力へ漏らさない
+    expect(rendered).not.toContain("service-client-secret");
+    expect(rendered).not.toContain("service-client-id");
+  });
+
+  it("does not blame the service token for a 302 that carries no Access challenge", async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      if (isProductionUrl(url)) {
+        // Accessを通過したあとにorigin自身がリダイレクトした場合。Cloudflare経由なので
+        // cf-ray は付くが、Accessのchallenge証跡は無い。
+        return new Response("", {
+          status: 302,
+          headers: { server: "cloudflare", "cf-ray": "abc-NRT", location: "https://odip.example.com/login" },
+        });
+      }
+      return new Response("{}", { status: 200 });
+    });
+
+    const report = await buildReport(
+      {
+        ...baseArgs,
+        strictProduction: true,
+        accessClientId: "service-client-id",
+        accessClientSecret: "service-client-secret",
+      },
+      {
+        resolver: {
+          resolve4: async () => ["203.0.113.10"],
+          resolve6: async () => [],
+        },
+        fetcher,
+      },
+    );
+
+    const diagnosis = report.productionDiagnosis.map((row) => row[0]).join(",");
+    expect(diagnosis).toContain("Production redirect without an Access challenge");
+    expect(diagnosis).not.toContain("Cloudflare Access service token rejected");
+    expect(diagnosis).not.toContain("Cloudflare Access boundary");
+    expect(report.ready).toBe(false);
+  });
+
+  it("identifies an Access challenge by strict hostname, not by substring", async () => {
+    const challenge = async (headers: Record<string, string>) => {
+      const result = await fetchWithTimeout("https://odip.example.com/api/health", {
+        fetcher: async () => new Response("", { status: 302, headers }),
+        timeoutMs: 1000,
+      });
+      return (result as { accessChallenge?: boolean }).accessChallenge;
+    };
+
+    // 正規のAccess login redirect
+    expect(
+      await challenge({ location: "https://team.cloudflareaccess.com/cdn-cgi/access/login/odip.example.com?kid=x" }),
+    ).toBe(true);
+    // WWW-Authenticate のscheme
+    expect(await challenge({ "www-authenticate": 'Cloudflare-Access resource_metadata="https://x/y"' })).toBe(true);
+
+    // substring判定なら通ってしまうなりすましホスト
+    expect(
+      await challenge({ location: "https://evil-cloudflareaccess.com.attacker.test/cdn-cgi/access/login/x" }),
+    ).toBe(false);
+    expect(
+      await challenge({ location: "https://attacker.test/cloudflareaccess.com/cdn-cgi/access/login/x" }),
+    ).toBe(false);
+    // 正規ホストでもlogin以外のpathはchallengeではない
+    expect(await challenge({ location: "https://team.cloudflareaccess.com/some/other/path" })).toBe(false);
+    // httpsでないredirect
+    expect(await challenge({ location: "http://team.cloudflareaccess.com/cdn-cgi/access/login/x" })).toBe(false);
+    // redirectなし
+    expect(await challenge({})).toBe(false);
   });
 
   it("records /api/ready database health when the endpoint returns the standard payload", () => {

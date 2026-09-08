@@ -109,6 +109,21 @@ Cloudflare zone APIが返した現行tokenの権限は `#dns_records:read` / `#a
 
 odipはCloudflare Access配下のため、workflowはGitHub Actions Secret `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`（Access service token）をprobeへ付与する。**2026-08-05にservice token・Service Auth policy・Secrets登録を完了し、workflow_dispatchで初回成功（run 30969524446）を確認済み**。以降は15分間隔のscheduled runがstrict判定を行う。token未設定時は302を検知し「Cloudflare Access boundary」の診断と設定手順を出力して失敗する（フォールバック）。Cloudflare/Neon API tokenやDB接続文字列は使用しない。
 
+> 🔐 **302の読み分け（2026-09-08 追加 / Issue #207 のRCA）**: 302は常に「Access境界＝期待動作」ではない。probeは302を**Accessのchallenge証跡**（`Location` が `*.cloudflareaccess.com/cdn-cgi/access/login`、または `WWW-Authenticate: Cloudflare-Access`）の有無で読み分ける。Cloudflare経由なら302でもorigin由来でも `cf-ray` は付くため、edge headerだけでは判別できない。
+>
+> - **証跡あり + service token設定済み** →「**Cloudflare Access service token rejected**」。Accessがtokenを受け入れていない、監視credential/policy側の障害。初動は下記1〜3。
+> - **証跡あり + token未設定** →「Cloudflare Access boundary」。secretの設定へ進む。
+> - **証跡なし** →「**Production redirect without an Access challenge**」。Accessは通過しoriginがリダイレクトしている可能性が高い。middleware・trailing slash・locale・アプリ側auth redirectを疑う（read-only health endpointは302を返さない想定）。
+>
+> service token拒否と判定された場合の初動は次の順で確認する。
+>
+> 1. `CF_ACCESS_CLIENT_ID` と `CF_ACCESS_CLIENT_SECRET` が**同一のservice tokenのペア**か。**片方だけをrotateするとこの症状になる**（IDだけ更新しsecretを据え置くと302が継続する）。GitHub上は `gh secret list` の更新日時が両者で乖離していないかで当たりを付けられる（値は読めない）。
+> 2. service tokenが失効（`expires_at`）していないか。
+> 3. Access applicationの**Service Auth policy**（`decision=non_identity`）が当該tokenをincludeしているか。Access applicationを再作成するとpolicyは引き継がれない。
+>
+> 復旧のためのsecret更新は**production secretの変更**にあたり、CLAUDE.md §5 の Approval PR / 人間承認事項である。Claude Codeは診断と手順提示までを行い、値の投入は行わない。
+
+
 **失敗時のincident Issue（2026-08-11 実装）**
 
 | 項目 | 挙動 |

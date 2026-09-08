@@ -122,6 +122,29 @@ async function resolveHost(hostname, resolver = dns) {
   return result;
 }
 
+// Accessのlogin redirectか否かを判定する。hostnameを厳密に比較すること。
+// substring判定 (`location.includes("cloudflareaccess.com")`) は
+// `https://evil-cloudflareaccess.com.attacker.test/` のようなホストも通すため使わない。
+function isAccessChallengeHeaders(locationHeader, wwwAuthenticateHeader) {
+  const scheme = String(wwwAuthenticateHeader ?? "")
+    .trim()
+    .toLowerCase();
+  if (scheme.startsWith("cloudflare-access")) return true;
+
+  const location = String(locationHeader ?? "").trim();
+  if (!location) return false;
+  let parsed;
+  try {
+    parsed = new URL(location);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "https:") return false;
+  const host = parsed.hostname.toLowerCase();
+  const isAccessHost = host === "cloudflareaccess.com" || host.endsWith(".cloudflareaccess.com");
+  return isAccessHost && parsed.pathname.startsWith("/cdn-cgi/access/login");
+}
+
 async function fetchWithTimeout(
   url,
   { fetcher = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS, headers: extraHeaders = {} } = {},
@@ -138,6 +161,12 @@ async function fetchWithTimeout(
     });
     const responseTimeMs = Date.now() - startedAt;
     const body = await response.text().catch(() => "");
+    // Accessのlogin URLにはJWT metaが載るため、Location / WWW-Authenticate は
+    // 生値を保持せず、challengeか否かの判定結果だけを持ち回す。
+    const accessChallenge = isAccessChallengeHeaders(
+      response.headers.get("location"),
+      response.headers.get("www-authenticate"),
+    );
     const headers = Object.fromEntries(
       ["server", "cf-ray", "cf-cache-status", "content-type"]
         .map((name) => [name, response.headers.get(name)])
@@ -151,6 +180,7 @@ async function fetchWithTimeout(
       state: `${response.status}`,
       bodyPreview: body.slice(0, 4096),
       headers,
+      accessChallenge,
     };
   } catch (error) {
     return {
@@ -161,6 +191,7 @@ async function fetchWithTimeout(
       state: error?.name === "AbortError" ? "timeout" : error?.code || error?.message || "request failed",
       bodyPreview: "",
       headers: {},
+      accessChallenge: false,
     };
   } finally {
     clearTimeout(timeout);
@@ -214,6 +245,13 @@ function isCloudflareEdgeResponse(probe) {
   return server.includes("cloudflare") || Boolean(probe.headers?.["cf-ray"]);
 }
 
+// Accessが認証を要求した応答か。Cloudflare経由なら302でもorigin由来でも cf-ray は付くため、
+// edge headerだけではAccessの拒否とoriginのリダイレクトを区別できない。
+// Accessのchallengeは login への Location か Cloudflare-Access の WWW-Authenticate を伴う。
+function isAccessChallengeResponse(probe) {
+  return probe.accessChallenge === true;
+}
+
 function diagnoseProductionIssue(report) {
   if (report.productionConnected) {
     return [["Production route", "OK", "DNS and read-only probes are healthy."]];
@@ -224,7 +262,45 @@ function diagnoseProductionIssue(report) {
   const has522 = probes.some((probe) => probe.status === 522);
   const edgeResponses = probes.filter(isCloudflareEdgeResponse);
 
+  const accessChallenges = probes.filter(isAccessChallengeResponse);
+
+  // Accessのchallengeを伴わない302は、Accessを通過したあとのorigin側リダイレクトの
+  // 可能性がある。証跡なしにservice token拒否と断定すると、本来直したかった
+  // 「302を一律に決めつける」誤診断を別方向で繰り返すことになる。
+  if (statuses.includes(302) && edgeResponses.length > 0 && accessChallenges.length === 0) {
+    return [
+      [
+        "Production redirect without an Access challenge",
+        "ATTENTION",
+        "Production returned 302 through the Cloudflare edge, but without an Access login redirect or a Cloudflare-Access WWW-Authenticate header. The request most likely reached the origin, so treat this as an application/route redirect rather than an Access rejection.",
+      ],
+      [
+        "Likely next check",
+        "ACTION",
+        "Inspect the redirect target of the probed paths on the origin (middleware, trailing-slash or locale redirects, or an auth redirect in the app itself). Read-only health endpoints are expected to answer 200 without redirecting.",
+      ],
+    ];
+  }
+
   if (statuses.includes(302) && edgeResponses.length > 0) {
+    // service tokenを送っているのに302が返るのは「Accessが有効なので期待動作」ではない。
+    // Accessがそのtokenを受け入れていない状態であり、監視credential/policy側の障害である。
+    // 未設定時と同じ「secretを設定せよ」を出すと、既に設定済みの当番は再設定を試みて
+    // 原因（ID/secretのペア不一致・token失効・policyのtoken未include）へ辿り着けない。
+    if (report.accessTokenConfigured) {
+      return [
+        [
+          "Cloudflare Access service token rejected",
+          "ATTENTION",
+          "An Access service token is configured, but production still returned 302 for the authenticated probe. Access did not accept the token, so this is a monitoring credential or policy failure rather than an application outage.",
+        ],
+        [
+          "Likely next check",
+          "ACTION",
+          "Verify that CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET belong to the same service token (rotating only one of the pair fails exactly this way), that the token has not expired, and that the Access application's Service Auth policy still includes that token.",
+        ],
+      ];
+    }
     return [
       [
         "Cloudflare Access boundary",
