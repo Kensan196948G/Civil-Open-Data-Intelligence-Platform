@@ -117,7 +117,7 @@ Issue #127 でこの構造は撤去した。既定値を削除し、`--restore-d
 | # | ゲート名（検査項目） | 供給元（ファイル:行） | 分類 | 偽陰性シナリオ | 是正案 |
 | ---: | --- | --- | :---: | --- | --- |
 | 18 | 依存監査（本番グラフ、`ci.yml:58`） | `npm audit --audit-level=moderate --omit=dev`（レジストリ実測） | 🟢 | — | 現状維持 |
-| 19 | 依存監査（全グラフ + allowlist、`ci.yml:65`） | `check-dependency-audit.js:115` `spawnSync("npm", ["audit","--json"])` | 🟢 | ⚠️ ただし `:21-32` の `ALLOWLIST` は人間の自己申告による抑止。`:131` の `--input` で保存済みレポートを評価する経路も存在する（CI では未使用） | **良い型の実例。** allowlist に `expires` / `owner` / `tracking` を必須化しており、自己申告に**時限**が付いている。`--input` は test 専用である旨をコメントで明示済み（`:11-12`） |
+| 19 | 依存監査（全グラフ + allowlist、`ci.yml:65`） | `check-dependency-audit.js:125` `spawnSync("npm", ["audit","--json"])` | 🟢 | ⚠️ ただし `:21-42` の `ALLOWLIST` は人間の自己申告による抑止。`:141` の `--input` で保存済みレポートを評価する経路も存在する（CI では未使用） | **良い型の実例。** allowlist に `expires` / `owner` / `tracking` を必須化しており、自己申告に**時限**が付いている。`--input` は test 専用である旨をコメントで明示済み（`:11-12`） |
 | 20 | production env 契約（synthetic） | `release-gate.js:63-70` がスクリプト内リテラルの `DATABASE_URL`（`example.com`）・`CODIP_ADMIN_TOKEN` を渡す。CI 版は `ci.yml:120-125` | 🔴 | **本番の env が壊れていてもこのゲートは通る。** 検査しているのは validator の挙動であって production の状態ではない | 是正不要だが名称の明確化を推奨。`release-gate.js:63` は既に `(synthetic)` と自己申告しており誠実。CI 側も同様に自己申告済み: ステップ名 `ci.yml:119` が `(synthetic values)` を含み、`:112-118` のコメントが「緑でも production の証跡ではない」ことを明示する（注記は 7f72626 で追加済みであり、当初指摘した欠落は解消している） |
 | 21 | SQLite 前提の DB ゲート群（`db:migrate` / `db:check-duplicates` / `db:check-standard-record-policy` / `db:prune --dry-run`。`ci.yml:99-104`、`release-gate.js:27,30-48`） | `DATABASE_URL: file:./dev.db`（`release-gate.js:27`）。`check-standard-record-policy.js:18-32` が SQLite を実クエリ | 🟡 | 同一 run で作った使い捨て SQLite を検査している。**本番 PostgreSQL のデータ状態は一切見ていない。** 例えば本番の重複 `officialUrl` は検知されない | 分類は 🟡 で妥当。ゲート名から「本番データの検査」と誤読されないよう文書側で区別する |
 | 22 | ドキュメント/API 契約検査群（`release:check-v1-contract` / `check-doc-api-contract` / `check-openapi-coverage` / `check-docker-contract` / `check-audit-contract` / `check-cloudflare-contract`。`ci.yml:80-87`） | いずれもリポジトリ内ファイルの実読み込み。例: `check-cloudflare-neon-contract.js:7-22`（`.env.example`・4 runbook・`wrangler.jsonc`・`src/lib/db.ts`・`schema.prisma` など13ファイル）、`check-audit-contract.js:17-20` | 🟡 | **群の最弱に合わせた分類（Issue #134）。** `check-audit-contract.js:55` は ADR 0002 の振る舞いの主張（監査INSERT失敗時の応答コード）を `src/lib/audit-events-client.ts` のコメント文字列の存在だけで検査するため、`src/app/api/admin/audit-events/route.ts:65` の status を書き換えても緑のまま通る（他5件は 🟢 相当） | ⚠️ **検査対象のズレ**: 「文書と実装の整合」を検査しており、実装が正しいことは保証しない。設計どおりの役割だが、**振る舞いの主張はコメント照合では守れない**。→ **是正済み（Issue #134）**: 失敗系の実測を `tests/unit/audit-transaction-routes.test.ts` に追加した（503 応答と、監査INSERT失敗時に業務側書き込みを commit しないこと）。ゲート自体の分類は 🟡 のまま（供給元はコメントのままで、テストは別経路の担保である） |
@@ -196,7 +196,7 @@ Issue #127 でこの構造は撤去した。既定値を削除し、`--restore-d
 リポジトリ内に、自己申告を安全に扱う実装が既に2つある。是正はこれらに寄せるのが最小変更である。
 
 1. **期待値のピン留め**（#12 / `validate-production-target-env.js:99-101`）— 値は `vars.*` 由来でも、期待値をコード内定数に固定すれば実行者は合格させられない
-2. **時限付き allowlist**（#19 / `check-dependency-audit.js:21-32`）— 自己申告による抑止を許すが、`expires` / `owner` / `tracking` を必須にし、期限切れをゲート失敗として扱う
+2. **時限付き allowlist**（#19 / `check-dependency-audit.js:21-42`）— 自己申告による抑止を許すが、`expires` / `owner` / `tracking` を必須にし、期限切れをゲート失敗として扱う
 
 ### 3.4 分類が 🟢 でも安心できない場合
 

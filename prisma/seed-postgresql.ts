@@ -1,3 +1,4 @@
+import { officialUrlKey } from "../scripts/lib/official-url";
 import { DEFAULT_ROLES, INITIAL_TAGS, PROVIDERS, SOURCES } from "./seed-data";
 import { seedWeatherDemo } from "./seed-weather-demo";
 import {
@@ -45,6 +46,12 @@ async function main() {
       tagMap.set(tag.name, tag.id);
     }
 
+    // 台帳規模 (数十〜数百件) なので一度だけ読み出し、正規化キーの索引を作る。
+    const existingSources = await prisma.dataSource.findMany({ select: { id: true, officialUrl: true } });
+    const existingByUrlKey = new Map(
+      existingSources.map((row: { id: string; officialUrl: string }) => [officialUrlKey(row.officialUrl), row]),
+    );
+
     for (const s of SOURCES) {
       const { providerName, tags, useCases, ...data } = s;
       const providerId = providerMap.get(providerName);
@@ -52,11 +59,13 @@ async function main() {
         throw new Error(`Unknown provider in seed data: ${providerName}`);
       }
 
-      const source = await prisma.dataSource.upsert({
-        where: { officialUrl: data.officialUrl },
-        update: { ...data, providerId },
-        create: { ...data, providerId },
-      });
+      // upsert の where は生文字列一致なので、scheme (http/https) が変わると
+      // 旧レコードが残ったまま新規作成され、二重登録になる (Issue #192)。
+      // 正規化キーで既存を引き当ててから update / create を選ぶ。
+      const existing = existingByUrlKey.get(officialUrlKey(data.officialUrl)) ?? null;
+      const source = existing
+        ? await prisma.dataSource.update({ where: { id: existing.id }, data: { ...data, providerId } })
+        : await prisma.dataSource.create({ data: { ...data, providerId } });
 
       for (const tagName of tags) {
         const tagId = tagMap.get(tagName);
