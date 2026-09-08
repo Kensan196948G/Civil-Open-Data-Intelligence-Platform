@@ -89,7 +89,9 @@ jobs:
           script: |
             const WORKFLOW_FILE = "production-smoke.yml";
             const DEDUPE_LABEL = "production-smoke";
-            const HISTORY_DEPTH = 10;
+            // listWorkflowRuns の per_page 上限。1リクエストで遡れる範囲がそのまま
+            // 連続失敗回数の観測窓になるため、上限まで使う (呼び出し回数は変わらない)。
+            const HISTORY_DEPTH = 100;
             // 通知受信テスト（workflow_dispatch input）の場合は、実障害と区別できる
             // 別ラベル・タイトル接頭辞を使い、既存の実incidentへ追記しない。
             // probeが失敗している場合は実障害として扱う（テスト分類しない）。
@@ -106,7 +108,13 @@ jobs:
             //
             // この履歴参照は補助情報にすぎない。通知そのものが安全網なので、
             // 履歴が取れなくてもIssue起票は必ず行う (fail-open)。
+            //
+            // 観測窓は有限なので、窓内が全て失敗だった場合に得られるのは「連続失敗が
+            // 何回だったか」ではなく「何回以上か」でしかない。この飽和を区別せずに
+            // 確定値として書くと、60時間継続した障害が "11 consecutive" として記録され、
+            // 当番は障害開始をおよそ3時間前と誤読する (Issue #207 で実際に発生)。
             let consecutiveFailures = isNotificationTest ? 1 : null;
+            let streakSaturated = false;
             if (!isNotificationTest) {
               try {
                 const { data: history } = await github.rest.actions.listWorkflowRuns({
@@ -118,10 +126,18 @@ jobs:
                 });
                 // このstepは failure() でのみ動くので、現runは失敗として1から数える。
                 consecutiveFailures = 1;
-                for (const run of history.workflow_runs.filter((r) => r.id !== context.runId)) {
-                  if (run.conclusion !== "failure") break;
+                const previousRuns = history.workflow_runs.filter((r) => r.id !== context.runId);
+                let sawNonFailure = false;
+                for (const run of previousRuns) {
+                  if (run.conclusion !== "failure") {
+                    sawNonFailure = true;
+                    break;
+                  }
                   consecutiveFailures += 1;
                 }
+                // 非失敗runに当たらないまま窓を使い切った = 実際の連続失敗はこれ以上。
+                // 窓が空 (previousRuns.length === 0) の場合も遡れていないので飽和扱い。
+                streakSaturated = !sawNonFailure;
               } catch (error) {
                 core.warning(`Could not read run history; reporting without a streak count: ${error.message}`);
               }
@@ -134,12 +150,18 @@ jobs:
               : consecutiveFailures !== null && consecutiveFailures >= 2
                 ? "P1"
                 : "P2";
+            // タイトル・本文で共有する連続失敗の表記。飽和時は必ず「以上」を伴わせ、
+            // 下限値であることを表記から落とさない。
+            const streakText =
+              consecutiveFailures === null ? "?" : `${consecutiveFailures}${streakSaturated ? "以上" : ""}`;
             const streakLabel =
               isNotificationTest
                 ? "テスト（実障害なし）"
                 : consecutiveFailures === null
                   ? "不明 (run履歴取得に失敗)"
-                  : `${consecutiveFailures} (直近${HISTORY_DEPTH}run参照)`;
+                  : streakSaturated
+                    ? `${streakText} (直近${HISTORY_DEPTH}runが全て失敗。実際の連続失敗はこれ以上)`
+                    : `${streakText} (直近${HISTORY_DEPTH}run参照)`;
             const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
 
             // 本文にはrunへの参照だけを書く。probe出力は redacted artifact 側に置き、
@@ -186,6 +208,12 @@ jobs:
             );
             await ensureLabel(severity, severity === "P1" ? "b60205" : "fbca04", `重大度 ${severity}`);
 
+            // タイトルは起票時点の観測ではなく「最新の観測」を表す。追記運用では
+            // 本文は最新でもタイトルが初回のまま凍結され、Issue一覧を見る当番には
+            // 継続中の障害が初回失敗のまま見える (Issue #207 は60時間経過後も
+            // "[P2] production smoke failure (1 consecutive)" のままだった)。
+            const incidentTitle = `${isNotificationTest ? "[TEST] " : ""}[${severity}] production smoke failure (${streakText} consecutive)`;
+
             // 15分間隔のprobeが継続失敗するとrun毎にIssueが増えるため、
             // 未クローズのincidentがあればコメント追記に寄せる。
             const { data: openIncidents } = await github.rest.issues.listForRepo({
@@ -213,15 +241,23 @@ jobs:
                   labels: ["P1"],
                 });
               }
-              core.notice(`Appended to incident #${incident.number} (${severity}, streak=${consecutiveFailures ?? "unknown"})`);
+              if (incident.title !== incidentTitle) {
+                await github.rest.issues.update({
+                  owner,
+                  repo,
+                  issue_number: incident.number,
+                  title: incidentTitle,
+                });
+              }
+              core.notice(`Appended to incident #${incident.number} (${severity}, streak=${streakText})`);
               return;
             }
 
             const { data: created } = await github.rest.issues.create({
               owner,
               repo,
-              title: `${isNotificationTest ? "[TEST] " : ""}[${severity}] production smoke failure (${consecutiveFailures ?? "?"} consecutive)`,
+              title: incidentTitle,
               labels: ["incident", severity, dedupeLabel],
               body,
             });
-            core.notice(`Opened incident #${created.number} (${severity}, streak=${consecutiveFailures ?? "unknown"})`);
+            core.notice(`Opened incident #${created.number} (${severity}, streak=${streakText})`);

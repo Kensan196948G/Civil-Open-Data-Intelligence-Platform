@@ -74,9 +74,11 @@ Cloudflare zone APIが返した現行tokenの権限は `#dns_records:read` / `#a
 | 管理保護 | 未認証 `GET /api/fetch-logs` | 401 以外 |
 | ブラウザ | ダッシュボード表示、console error/warn | 主要画面の描画失敗、console error |
 
-> 📌 **「連続」の判定主体（2026-08-11 実装）**: `scripts/tools/post-release-status.js` は1回の実行内でのみ判定して `process.exit(1)` するため、probe自身は連続性を知らない。連続性は `production-smoke.yml` の通知stepが担い、**GitHubのrun履歴から連続失敗回数を判定する**（`listWorkflowRuns` で直近10runの `conclusion` を新しい順に走査し、`failure` が途切れるまで数える）。連続2回以上でP1、初回はP2として起票する。
+> 📌 **「連続」の判定主体（2026-08-11 実装）**: `scripts/tools/post-release-status.js` は1回の実行内でのみ判定して `process.exit(1)` するため、probe自身は連続性を知らない。連続性は `production-smoke.yml` の通知stepが担い、**GitHubのrun履歴から連続失敗回数を判定する**（`listWorkflowRuns` で直近100run（`per_page` 上限）の `conclusion` を新しい順に走査し、`failure` が途切れるまで数える）。連続2回以上でP1、初回はP2として起票する。
 >
-> この方式は workflow 側に永続状態を持たない。状態をrepository variable等へ書く方式は、runがキャンセル/タイムアウトすると書き込みが飛び、次のrunが古い値を読む「静かな腐敗」を起こすため採用しない（GitHubのrun履歴を単一の真実とする）。ただし直近10runより長い連続失敗は10で頭打ちになる（P1判定には影響しない）。
+> この方式は workflow 側に永続状態を持たない。状態をrepository variable等へ書く方式は、runがキャンセル/タイムアウトすると書き込みが飛び、次のrunが古い値を読む「静かな腐敗」を起こすため採用しない（GitHubのrun履歴を単一の真実とする）。
+>
+> ⚠️ **観測窓の飽和（2026-09-08 是正 / Issue #207 RCA）**: 観測窓は有限なので、窓内が全て失敗だった場合に得られるのは「何回連続したか」ではなく「何回以上か」でしかない。この飽和を確定値として記録すると障害の長さを過小に伝える。実際 Issue #207 では約60時間・240run 継続した障害が本文「連続失敗回数 11（直近10run参照）」・タイトル「[P2] production smoke failure (1 consecutive)」として記録され、一覧上は初回失敗と区別できなかった。現在は (1) 窓を使い切っても非失敗runに当たらなければ `N以上` と下限値であることを明示し、(2) 継続中incidentのタイトルを最新の重大度・連続失敗回数へ毎回追随させる。挙動は `tests/unit/production-smoke-incident-report.test.ts` が workflow の inline script を実行して検証する。
 
 ## 1.1 アラート運用
 
