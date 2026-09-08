@@ -342,7 +342,14 @@ describe("post-release-status", () => {
   it("reports an Access boundary diagnosis when production returns 302 with Cloudflare edge headers", async () => {
     const fetcher = vi.fn(async (url: string) => {
       if (isProductionUrl(url)) {
-        return new Response("", { status: 302, headers: { server: "cloudflare", "cf-ray": "abc-NRT" } });
+        return new Response("", {
+          status: 302,
+          headers: {
+            server: "cloudflare",
+            "cf-ray": "abc-NRT",
+            location: "https://example-team.cloudflareaccess.com/cdn-cgi/access/login/odip.example.com?kid=x",
+          },
+        });
       }
       return new Response("{}", { status: 200 });
     });
@@ -369,7 +376,14 @@ describe("post-release-status", () => {
   it("diagnoses a rejected service token when 302 persists although credentials are configured", async () => {
     const fetcher = vi.fn(async (url: string) => {
       if (isProductionUrl(url)) {
-        return new Response("", { status: 302, headers: { server: "cloudflare", "cf-ray": "abc-NRT" } });
+        return new Response("", {
+          status: 302,
+          headers: {
+            server: "cloudflare",
+            "cf-ray": "abc-NRT",
+            "www-authenticate": 'Cloudflare-Access resource_metadata="https://odip.example.com/.well-known/x"',
+          },
+        });
       }
       return new Response("{}", { status: 200 });
     });
@@ -407,6 +421,42 @@ describe("post-release-status", () => {
     // 資格情報を出力へ漏らさない
     expect(rendered).not.toContain("service-client-secret");
     expect(rendered).not.toContain("service-client-id");
+  });
+
+  it("does not blame the service token for a 302 that carries no Access challenge", async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      if (isProductionUrl(url)) {
+        // Accessを通過したあとにorigin自身がリダイレクトした場合。Cloudflare経由なので
+        // cf-ray は付くが、Accessのchallenge証跡は無い。
+        return new Response("", {
+          status: 302,
+          headers: { server: "cloudflare", "cf-ray": "abc-NRT", location: "https://odip.example.com/login" },
+        });
+      }
+      return new Response("{}", { status: 200 });
+    });
+
+    const report = await buildReport(
+      {
+        ...baseArgs,
+        strictProduction: true,
+        accessClientId: "service-client-id",
+        accessClientSecret: "service-client-secret",
+      },
+      {
+        resolver: {
+          resolve4: async () => ["203.0.113.10"],
+          resolve6: async () => [],
+        },
+        fetcher,
+      },
+    );
+
+    const diagnosis = report.productionDiagnosis.map((row) => row[0]).join(",");
+    expect(diagnosis).toContain("Production redirect without an Access challenge");
+    expect(diagnosis).not.toContain("Cloudflare Access service token rejected");
+    expect(diagnosis).not.toContain("Cloudflare Access boundary");
+    expect(report.ready).toBe(false);
   });
 
   it("records /api/ready database health when the endpoint returns the standard payload", () => {
