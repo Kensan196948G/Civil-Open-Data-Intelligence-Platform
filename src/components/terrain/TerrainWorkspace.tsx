@@ -5,6 +5,7 @@ import { TerrainMapView, type MapFocusRequest, type SectionLineState } from "./M
 import { parseMapState, serializeMapState, type MapViewState } from "./map-state";
 import { BASE_LAYERS, OVERLAY_LAYERS } from "./layers";
 import { parseSearchQuery } from "./site-search";
+import { sectionLineLengthM } from "./section-line";
 import { QualityPanel } from "./QualityPanel";
 import { SectionProfileChart } from "./SectionProfileChart";
 import { formatDeg, formatPercent } from "@/lib/terrain/format";
@@ -271,6 +272,7 @@ export function TerrainWorkspace() {
       : `/api/v1/terrain/export?lat=${selectedPoint.lat}&lon=${selectedPoint.lon}&format=${format}`;
 
   const canRunSection = sectionLine !== null && sectionLine.start !== null && sectionLine.end !== null;
+  const sectionLengthM = sectionLineLengthM(sectionLine);
 
   return (
     <div className="flex flex-col gap-[14px]">
@@ -432,8 +434,8 @@ export function TerrainWorkspace() {
                   ? "始点をクリックしてください"
                   : sectionPicking === "end"
                     ? "終点をクリックしてください"
-                    : sectionLine?.start !== null && sectionLine?.end !== null
-                      ? `断面線: ${formatMeters(0)} 以上・20km 以下`
+                    : sectionLengthM !== null
+                      ? `断面線: ${formatMeters(sectionLengthM)}（有効範囲 30m〜20km）`
                       : "断面線は30m〜20kmで指定できます"}
               </span>
             </div>

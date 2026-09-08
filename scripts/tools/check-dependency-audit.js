@@ -29,6 +29,16 @@ const ALLOWLIST = [
     owner: "Kensan196948G",
     expires: "2026-09-30T00:00:00Z",
   },
+  {
+    ghsa: "GHSA-82fw-gwwq-j7x9",
+    severity: "moderate",
+    scope: "devDependencies (vitest / @vitest/mocker)",
+    reason:
+      "@vitest/mocker の redirect mock 経由の path traversal。修正は vitest 4.1.11+ / 5.0.0 だが、overrides の $postcss エイリアスと major 変更が競合して npm が依存を解決できず (Unable to resolve reference $postcss / edgesOut null)、lockfile 全面再生成が要る。テストフレームワークの major 移行として独立に扱う。テスト実行時のみのツールで本番バンドルへは同梱されない",
+    tracking: "Issue #222",
+    owner: "Kensan196948G",
+    expires: "2026-10-31T00:00:00Z",
+  },
 ];
 
 const BLOCKING_SEVERITIES = new Set(["moderate", "high", "critical"]);

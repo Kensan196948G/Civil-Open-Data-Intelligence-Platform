@@ -141,13 +141,16 @@ export function WeatherWorkspace({ initialTab }: { initialTab: TabId }) {
     }
   }
 
-  async function loadObservations() {
-    if (!siteId) return;
+  // 対象の現場IDは引数で受け取る。setSiteId は非同期に反映されるため、選択直後に
+  // 引数なしで呼ぶと、このレンダーがクロージャに閉じ込めた「選択前の siteId」で
+  // fetch してしまい、地図でマーカーを選び直しても観測データが切り替わらない。
+  async function loadObservations(targetSiteId: string = siteId) {
+    if (!targetSiteId) return;
     setMessage("");
     try {
       const [w, m] = await Promise.all([
-        fetch(`/api/v1/observations/weather?siteId=${encodeURIComponent(siteId)}&limit=200`),
-        fetch(`/api/v1/observations/marine?siteId=${encodeURIComponent(siteId)}&limit=200`),
+        fetch(`/api/v1/observations/weather?siteId=${encodeURIComponent(targetSiteId)}&limit=200`),
+        fetch(`/api/v1/observations/marine?siteId=${encodeURIComponent(targetSiteId)}&limit=200`),
       ]);
       const wb = await w.json();
       const mb = await m.json();
@@ -558,7 +561,8 @@ export function WeatherWorkspace({ initialTab }: { initialTab: TabId }) {
                 sites={sites}
                 onSelect={(site) => {
                   setSiteId(site.id);
-                  void loadObservations();
+                  // setSiteId の反映を待たずに読み込むため、選択した現場IDを明示的に渡す。
+                  void loadObservations(site.id);
                 }}
               />
             </div>

@@ -2,7 +2,9 @@
 
 import { useEffect, useRef } from "react";
 import type { ReactElement } from "react";
-import maplibregl from "maplibre-gl";
+// maplibre-gl v6 は default export を廃止したため namespace import を使う
+// (型として使う maplibregl.Map と、値として使う new maplibregl.Map の双方を保つ)。
+import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, GeoJSONSourceSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { applyLayerSelection, buildMapStyle } from "./layers";

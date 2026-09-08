@@ -4,6 +4,7 @@ import { requireAdminRequest } from "@/lib/admin-auth";
 import { auditLogCreateData } from "@/lib/audit";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 import { requestId } from "@/lib/v1-response";
+import { validateObservationBatch } from "@/lib/observation-batch";
 import { dateParam, intParam } from "@/lib/query-params";
 
 const RATE_LIMIT = 120;
@@ -52,15 +53,22 @@ export async function POST(request: NextRequest) {
   if (!rate.allowed) return rateLimitResponse(rate);
 
   const body = await request.json().catch(() => null);
-  if (!Array.isArray(body) || body.length === 0) {
-    return NextResponse.json({ error: { code: "invalid_query", message: "観測値の配列を指定してください" } }, { status: 400 });
+  const batch = validateObservationBatch(body);
+  if (!batch.ok) {
+    return NextResponse.json({ error: batch.error }, { status: 400 });
   }
 
   let inserted = 0;
   const updated = 0;
-  for (const row of body) {
+  for (const row of batch.rows as Array<Record<string, unknown>>) {
     const siteId = String(row.siteId ?? "");
-    const observedAt = row.observedAt ? new Date(row.observedAt) : null;
+    // row は unknown 由来なので Date へ渡す前に型を絞る。オブジェクトや配列が
+    // 来た場合に Invalid Date へ落ちるのではなく、明示的に不正入力として扱う。
+    const observedAtRaw = row.observedAt;
+    const observedAt =
+      typeof observedAtRaw === "string" || typeof observedAtRaw === "number"
+        ? new Date(observedAtRaw)
+        : null;
     if (!siteId || !observedAt || Number.isNaN(observedAt.getTime())) continue;
     const dataVersion = Number(row.dataVersion ?? 1);
     const data = {
@@ -88,9 +96,9 @@ export async function POST(request: NextRequest) {
     }
   }
   await prisma.auditLog.create({
-    data: auditLogCreateData({ action: "気象観測取り込み", target: "weather_observations", detail: `rows=${body.length}` }),
+    data: auditLogCreateData({ action: "気象観測取り込み", target: "weather_observations", detail: `rows=${batch.rows.length}` }),
   });
-  return NextResponse.json({ data: { inserted, updated, total: body.length } }, { status: 201 });
+  return NextResponse.json({ data: { inserted, updated, total: batch.rows.length } }, { status: 201 });
 }
 
 function toNumber(value: unknown): number | null {

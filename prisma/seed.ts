@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { officialUrlKey } from "../scripts/lib/official-url";
 import { DEFAULT_ROLES, INITIAL_TAGS, PROVIDERS, SOURCES } from "./seed-data";
 import { seedWeatherDemo } from "./seed-weather-demo";
 import {
@@ -46,6 +47,10 @@ async function main() {
   }
 
   // --- Data sources ---
+  // 台帳規模 (数十〜数百件) なので一度だけ読み出し、正規化キーの索引を作る。
+  const existingSources = await prisma.dataSource.findMany({ select: { id: true, officialUrl: true } });
+  const existingByUrlKey = new Map(existingSources.map((row) => [officialUrlKey(row.officialUrl), row]));
+
   for (const s of SOURCES) {
     const { providerName, tags, useCases, ...data } = s;
     const providerId = providerMap.get(providerName);
@@ -53,7 +58,9 @@ async function main() {
       throw new Error(`Unknown provider in seed data: ${providerName}`);
     }
 
-    const existing = await prisma.dataSource.findUnique({ where: { officialUrl: data.officialUrl } });
+    // 生文字列一致だと scheme (http/https) が変わったときに旧レコードが残り、
+    // 同じデータソースが二重登録される (Issue #192)。正規化キーで突き合わせる。
+    const existing = existingByUrlKey.get(officialUrlKey(data.officialUrl)) ?? null;
     const source = existing
       ? await prisma.dataSource.update({
           where: { id: existing.id },
