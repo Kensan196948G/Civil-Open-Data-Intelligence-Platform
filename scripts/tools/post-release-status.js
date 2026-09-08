@@ -225,6 +225,24 @@ function diagnoseProductionIssue(report) {
   const edgeResponses = probes.filter(isCloudflareEdgeResponse);
 
   if (statuses.includes(302) && edgeResponses.length > 0) {
+    // service tokenを送っているのに302が返るのは「Accessが有効なので期待動作」ではない。
+    // Accessがそのtokenを受け入れていない状態であり、監視credential/policy側の障害である。
+    // 未設定時と同じ「secretを設定せよ」を出すと、既に設定済みの当番は再設定を試みて
+    // 原因（ID/secretのペア不一致・token失効・policyのtoken未include）へ辿り着けない。
+    if (report.accessTokenConfigured) {
+      return [
+        [
+          "Cloudflare Access service token rejected",
+          "ATTENTION",
+          "An Access service token is configured, but production still returned 302 for the authenticated probe. Access did not accept the token, so this is a monitoring credential or policy failure rather than an application outage.",
+        ],
+        [
+          "Likely next check",
+          "ACTION",
+          "Verify that CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET belong to the same service token (rotating only one of the pair fails exactly this way), that the token has not expired, and that the Access application's Service Auth policy still includes that token.",
+        ],
+      ];
+    }
     return [
       [
         "Cloudflare Access boundary",

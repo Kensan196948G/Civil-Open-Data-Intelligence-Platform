@@ -366,6 +366,49 @@ describe("post-release-status", () => {
     expect(renderReport(report)).not.toContain("service-client-secret");
   });
 
+  it("diagnoses a rejected service token when 302 persists although credentials are configured", async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      if (isProductionUrl(url)) {
+        return new Response("", { status: 302, headers: { server: "cloudflare", "cf-ray": "abc-NRT" } });
+      }
+      return new Response("{}", { status: 200 });
+    });
+
+    const report = await buildReport(
+      {
+        ...baseArgs,
+        strictProduction: true,
+        accessClientId: "service-client-id",
+        accessClientSecret: "service-client-secret",
+      },
+      {
+        resolver: {
+          resolve4: async () => ["203.0.113.10"],
+          resolve6: async () => [],
+        },
+        fetcher,
+      },
+    );
+
+    const diagnosis = report.productionDiagnosis.map((row) => row[0]).join(",");
+    // token設定済みで302が返るのは「Accessが有効なので期待動作」ではなく、
+    // 監視用service tokenがAccessに拒否されている状態。未設定時と同じ案内へ
+    // 落とすと、当番は設定済みsecretの再設定を試みて原因へ辿り着けない。
+    expect(diagnosis).toContain("Cloudflare Access service token rejected");
+    expect(diagnosis).not.toContain("Cloudflare Access boundary");
+
+    const rendered = renderReport(report);
+    expect(rendered).toContain("Access service token: configured");
+    // ID/secretのペア不一致という実際の原因を指し示すこと
+    expect(rendered).toContain("same service token");
+    // 診断を変えるだけで、障害そのものを緑化しない（症状抑制の禁止）
+    expect(report.productionConnected).toBe(false);
+    expect(report.ready).toBe(false);
+    // 資格情報を出力へ漏らさない
+    expect(rendered).not.toContain("service-client-secret");
+    expect(rendered).not.toContain("service-client-id");
+  });
+
   it("records /api/ready database health when the endpoint returns the standard payload", () => {
     const probe = inspectProbe(
       "/api/ready",
