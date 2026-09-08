@@ -54,7 +54,7 @@ CODIP本番（`odip.mirai-dx-platform.com` / Worker `codip-production` / Neon `f
 | 項目 | 値 |
 | --- | --- |
 | Neon PITR | 24時間（`history_retention_seconds=86400`。2026-08-11 実測。現行Launchプランでは0〜7日で可変であり、24時間は下限固定ではない。詳細と引き上げ判断材料は `docs/runbooks/monitoring.md` §1.2.1） |
-| 定期pg_dump | 毎日 03:17 JST（ローカルsystemdタイマー `codip-backup.timer` → `scripts/local-cron/run-backup.sh`） |
+| 定期pg_dump | 毎日 03:17 JST（ローカルsystemdタイマー `codip-backup.timer` → `scripts/db/pg-backup.sh`） |
 | 暗号化 | GPG AES256（ローカルpassphrase `~/.config/codip/backup-passphrase.txt`） |
 | 保持 | 暗号化dump 14日 |
 | RPO（目標） | 24時間以内（PITR + 日次dump） |

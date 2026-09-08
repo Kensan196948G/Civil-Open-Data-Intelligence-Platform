@@ -283,7 +283,7 @@ Workersランタイムは外部URL取得が `unsupported_runtime` のため、�
 >   (`docs/16-release-readiness-checklist.md`) または `state.json` の検証記録に残す
 >
 > 整備済み: ローカルsystemdタイマー `codip-backup.timer`（日次03:17 JST）が
-> `scripts/local-cron/run-backup.sh` を実行し、ローカルPostgreSQLへ `pg_dump`
+> `scripts/db/pg-backup.sh` を実行し、ローカルPostgreSQLへ `pg_dump`
 > （custom形式・GPG AES256暗号化・14日保持）を行う。スクリプトは本番DB接続文字列を
 > 含むためリポジトリ非公開（`.gitignore` で除外）。旧GitHub Actions経路
 > （`.github/workflows/neon-backup.yml`）は2026-08-30にローカル移行のため削除済み。
