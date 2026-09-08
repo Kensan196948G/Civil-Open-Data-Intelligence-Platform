@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { TerrainMapView, type MapFocusRequest, type SectionLineState } from "./MapView";
-import { parseMapState, serializeMapState, type MapViewState } from "./map-state";
+import { DEFAULT_VIEW_STATE, parseMapState, serializeMapState, type MapViewState } from "./map-state";
 import { BASE_LAYERS, OVERLAY_LAYERS } from "./layers";
 import { parseSearchQuery } from "./site-search";
 import { sectionLineLengthM } from "./section-line";
@@ -49,12 +49,23 @@ const CLASS_LEGEND = [
 ] as const;
 
 export function TerrainWorkspace() {
-  const initial = useMemo(() => parseMapState(typeof window === "undefined" ? "" : window.location.hash), []);
-  const [view, setView] = useState<MapViewState>(initial.view);
+  // 初期値はサーバ描画と一致させるため常に既定値から始める。
+  //
+  // 以前は render 中に window.location.hash を読んでいた。このコンポーネントは
+  // dynamic(ssr:false) ではなく server component (app/terrain/page.tsx) から
+  // 直接読まれるため SSR される。サーバは hash を受け取らないので常に既定値を
+  // 描画し、クライアント初回描画だけが hash の値になる。つまり共有URLを開いた
+  // 瞬間に hydration mismatch が起きる — このコンポーネントの目玉機能である
+  // 共有URLを使ったときにだけ壊れる、という最悪の壊れ方をしていた。
+  // hash の復元はマウント後の effect で行う。
+  const [view, setView] = useState<MapViewState>(DEFAULT_VIEW_STATE);
   const [query, setQuery] = useState("");
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [selectedPoint, setSelectedPoint] = useState<{ lat: number; lon: number } | null>(initial.point);
-  const [tab, setTab] = useState<TabId>(initial.tab === "section" || initial.tab === "confirm" || initial.tab === "output" ? initial.tab : "terrain");
+  const [selectedPoint, setSelectedPoint] = useState<{ lat: number; lon: number } | null>(null);
+  const [tab, setTab] = useState<TabId>("terrain");
+  // hash から復元し終えるまで hash への書き戻しを止める番人。
+  // 復元前に書き戻すと、既定値で共有URLのhashを上書きして状態を失う。
+  const [hashRestored, setHashRestored] = useState(false);
   const [focus, setFocus] = useState<MapFocusRequest | null>(null);
   const [sectionLine, setSectionLine] = useState<SectionLineState | null>(null);
   const [sectionPicking, setSectionPicking] = useState<"idle" | "start" | "end">("idle");
@@ -70,18 +81,32 @@ export function TerrainWorkspace() {
   const [savedRuns, setSavedRuns] = useState<Array<{ id: string; lat: number; lon: number; tab: string; createdAt: string }>>([]);
   const [saveMessage, setSaveMessage] = useState("");
 
+  // マウント後に hash を読み、共有された状態を復元する。
+  useEffect(() => {
+    const restored = parseMapState(window.location.hash);
+    setView(restored.view);
+    setSelectedPoint(restored.point);
+    if (restored.tab === "section" || restored.tab === "confirm" || restored.tab === "output") {
+      setTab(restored.tab);
+    }
+    setHashRestored(true);
+  }, []);
+
   const shareUrl = useMemo(() => {
-    if (typeof window === "undefined") return "";
+    // 復元前は空文字。サーバ描画と一致させ、hydration mismatch を作らない。
+    if (!hashRestored) return "";
     const params = serializeMapState(view, { point: selectedPoint, tab });
     return `${window.location.origin}${window.location.pathname}#${params}`;
-  }, [view, selectedPoint, tab]);
+  }, [hashRestored, view, selectedPoint, tab]);
 
   useEffect(() => {
+    // 復元前に書き戻すと共有URLのhashを既定値で潰してしまう。
+    if (!hashRestored) return;
     const params = serializeMapState(view, { point: selectedPoint, tab });
     if (window.location.hash !== `#${params}`) {
       window.history.replaceState(null, "", `#${params}`);
     }
-  }, [view, selectedPoint, tab]);
+  }, [hashRestored, view, selectedPoint, tab]);
 
   const fetchElevation = useCallback(async (coordinate: { lat: number; lon: number }) => {
     setElevation({ kind: "error", message: "" });
