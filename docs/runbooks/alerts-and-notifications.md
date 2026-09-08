@@ -11,7 +11,7 @@ CODIPの障害検知（Production Smoke 15分毎・Neonバックアップ日次�
 | 監視対象 | 頻度 | 検知 | 通知 |
 | --- | --- | --- | --- |
 | 本番health/ready | 15分 | ✅ Production Smoke（`post-release-status --strict-production`）+ ローカル `codip-healthcheck.timer`（`/api/ready`） | 🟡 GitHub既定通知のみ（専用Webhook未設定） |
-| DBバックアップ | 日次 03:17 JST | ✅ ローカル `codip-backup.timer`（`scripts/local-cron/run-backup.sh`） | 🟡 ローカルログのみ（`~/backups/codip/backup.log`） |
+| DBバックアップ | 日次 03:17 JST | ✅ ローカル `codip-backup.timer`（`scripts/db/pg-backup.sh`） | 🟡 ローカルログのみ（`~/backups/codip/backup.log`） |
 | データ収集 | 10/30分 | ✅ ローカル `codip-weather.timer` / `codip-ingestion.timer` | 🟡 ローカルログのみ |
 | CI/ビルド | PR/merge毎 | ✅ `ci.yml` | 🟡 GitHub既定通知のみ |
 | Workersエラー | 日次確認 | ✅ Workers Logs/Traces（手動） | ✅ Cloudflare policy `CODIP Worker Error Alert`（2026-08-10作成・テスト送信済み） |

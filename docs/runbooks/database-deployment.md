@@ -110,7 +110,11 @@ CODIP_ADMIN_TOKEN="$CODIP_ADMIN_TOKEN" npm run release:smoke -- --base-url http:
 
 ## 4.1 ローカルPostgreSQLバックアップ証跡
 
-本番DBはローカルPostgreSQLへ移行済み（2026-08-30）。定期バックアップはローカルsystemdタイマー `codip-backup.timer`（日次03:17 JST）が `scripts/local-cron/run-backup.sh` を実行し、`pg_dump`（custom形式）をGPG AES256で暗号化して `~/backups/codip/` へ14日保持する。スクリプトは本番DB接続文字列とpassphraseを含むためリポジトリ非公開（`.gitignore` で除外）。旧GitHub Actions経路（`.github/workflows/neon-backup.yml`）はローカル移行のため削除された。
+本番DBはローカルPostgreSQLへ移行済み（2026-08-30）。定期バックアップはローカルsystemdタイマー `codip-backup.timer`（日次03:17 JST）が `scripts/db/pg-backup.sh` を実行し、`pg_dump`（custom形式）をGPG AES256で暗号化して `~/backups/codip/` へ14日保持する。スクリプトは git 管理下に置き、secret を一切含めない。接続文字列は systemd の `EnvironmentFile=%h/.config/codip/backup.env`（600）、GPG passphrase は `~/.config/codip/backup-passphrase.txt`（600）から読む。
+
+> ⚠️ **2026-09-09 是正（Issue #218）**: 旧 `scripts/local-cron/run-backup.sh` は接続文字列を内包していたため `.gitignore` で除外されており、2026-09-01 に実体が消失した際に git から復元できなかった。以後 7 日間バックアップが存在しないまま `codip-backup.timer` は毎日 203/EXEC で失敗し続け、文書上は ✅ のままだった。**復元不能な場所へ運用資産の実行主体を置かない。** secret はスクリプトではなく実行環境側へ分離する。`tests/unit/operational-scripts-tracked.test.ts` が、運用文書の指すスクリプトが git 管理下に在ることを機械的に検査する。
+>
+> 併せて、取得したダンプを **サーバのメジャーバージョンに一致する `pg_restore --list` で毎回検証**してから成功と記録する。PATH 上の `pg_dump`(17) / `pg_restore`(16) / `psql`(18) が食い違っていたため、2026-08-30〜09-01 の 3 世代は「取得はできるが、既定の `pg_restore` ではヘッダバージョン 1.16 非対応で開けない」状態だった（復号は可能で、PG17/18 の `pg_restore` でのみ読める）。旧GitHub Actions経路（`.github/workflows/neon-backup.yml`）はローカル移行のため削除された。
 
 ### 4.1.1 旧GitHub Actions定期pg_dump（2026-08-30廃止・記録）
 
