@@ -1,5 +1,9 @@
 # テスト計画
 
+> Product Assurance 観点 (Gate モデル・Golden Dataset・Tolerance・Metamorphic・Resilience・
+> Human Acceptance・AI Eval の扱い) は `docs/quality/TEST_STRATEGY.md` に拡張している。
+> 本書は従来どおり種別・コマンド・受入条件の正本である。
+
 ## 1. テスト方針
 
 台帳、取得、品質、地図、後続APIを壊さないことを重視する。公開APIは外部状況に左右されるため、単体テストではモックを使い、E2Eでは画面の主要導線を確認する。
@@ -9,6 +13,11 @@
 | 種別 | 対象 | コマンド |
 | --- | --- | --- |
 | 単体 | バリデーション、品質計算、URLガード、コネクタ | `npm run test` |
+| Golden Dataset | 判定エンジン・品質スコアの既知入力→期待結果 (testdata/golden) | `npm run test:golden` |
+| Metamorphic / 不変条件 | 再現期間・勾配・判定の入力変換不変条件 | `npm run test:domain` |
+| Data Quality | 台帳シードの列挙値・重複・範囲・タグ参照整合性 | `npm run test:data-quality` |
+| Resilience / Fail-Safe | 依存障害時に誤った値を正常結果として返さないこと | `npm run test:resilience` |
+| Gate 2 + Gate 4 一括 | 上記4種を CI の明示ステップとして実行 | `npm run test:logic` + `npm run test:resilience` |
 | E2E | ダッシュボード、台帳、詳細、地図、タグ、取得ログ、アクセシビリティ基本回帰、保護previewの管理セッション | `npm run test:e2e` |
 | Lint | TypeScript/React静的確認 | `npm run lint` |
 | Build | Next.jsビルド | `npm run build` |
