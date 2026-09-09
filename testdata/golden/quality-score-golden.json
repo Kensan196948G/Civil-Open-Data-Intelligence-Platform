@@ -1,0 +1,177 @@
+{
+  "$schema": "golden-dataset-v1",
+  "datasetId": "quality-score-golden",
+  "datasetVersion": "1.0.0",
+  "createdAt": "2026-09-09",
+  "source": "src/lib/quality.ts (deriveQualityScores, computeTotalScore)",
+  "tolerance": "exact (integer scoring per docs/08-data-quality-policy.md section 3)",
+  "spec": "docs/quality/TOLERANCE_SPEC.md 2.2",
+  "cases": [
+    {
+      "id": "G-QUAL-001",
+      "description": "理想的な国排名第一 (総合 100)",
+      "input": {
+        "organizationType": "national",
+        "lastCheckedAt": "2026-09-06T00:00:00Z",
+        "now": "2026-09-09T00:00:00Z",
+        "successCount": 100,
+        "failureCount": 0,
+        "licenseName": "政府標準利用規約",
+        "commercialUse": "allowed",
+        "dataFormat": "GeoJSON",
+        "category": "road"
+      },
+      "expected": {
+        "scores": {
+          "officialSourceScore": 20,
+          "freshnessScore": 15,
+          "accessibilityScore": 15,
+          "licenseClarityScore": 15,
+          "formatUsabilityScore": 15,
+          "constructionRelevanceScore": 20
+        },
+        "total": 100
+      }
+    },
+    {
+      "id": "G-QUAL-002",
+      "description": "未確認の未知ソース (総合 26)",
+      "input": {
+        "organizationType": "other",
+        "lastCheckedAt": null,
+        "now": "2026-09-09T00:00:00Z",
+        "successCount": 0,
+        "failureCount": 0,
+        "licenseName": null,
+        "commercialUse": "unknown",
+        "dataFormat": "other",
+        "category": "unknown-category"
+      },
+      "expected": {
+        "scores": {
+          "officialSourceScore": 5,
+          "freshnessScore": 3,
+          "accessibilityScore": 5,
+          "licenseClarityScore": 0,
+          "formatUsabilityScore": 5,
+          "constructionRelevanceScore": 8
+        },
+        "total": 26
+      }
+    },
+    {
+      "id": "G-QUAL-003",
+      "description": "中庸な自治体データ (総合 82)",
+      "input": {
+        "organizationType": "local",
+        "lastCheckedAt": "2026-08-20T00:00:00Z",
+        "now": "2026-09-09T00:00:00Z",
+        "successCount": 90,
+        "failureCount": 10,
+        "licenseName": "CC BY 4.0",
+        "commercialUse": "restricted",
+        "dataFormat": "CSV",
+        "category": "weather"
+      },
+      "expected": {
+        "scores": {
+          "officialSourceScore": 16,
+          "freshnessScore": 12,
+          "accessibilityScore": 12,
+          "licenseClarityScore": 13,
+          "formatUsabilityScore": 12,
+          "constructionRelevanceScore": 17
+        },
+        "total": 82
+      }
+    },
+    {
+      "id": "G-QUAL-004",
+      "description": "鮮度境界: ちょうど7日=15点, 7日超=12点, ちょうど30日=12点, ちょうど90日(staleDays)=8点",
+      "input": {
+        "organizationType": "national",
+        "now": "2026-09-09T00:00:00Z",
+        "successCount": 1,
+        "failureCount": 0,
+        "licenseName": "政府標準利用規約",
+        "commercialUse": "allowed",
+        "dataFormat": "JSON",
+        "category": "gis",
+        "variants": [
+          { "lastCheckedAt": "2026-09-02T00:00:00Z", "staleDays": 90, "freshnessScore": 15 },
+          { "lastCheckedAt": "2026-09-01T12:00:01Z", "staleDays": 90, "freshnessScore": 12 },
+          { "lastCheckedAt": "2026-08-10T00:00:00Z", "staleDays": 90, "freshnessScore": 12 },
+          { "lastCheckedAt": "2026-06-11T00:00:00Z", "staleDays": 90, "freshnessScore": 8 },
+          { "lastCheckedAt": "2026-06-10T12:00:01Z", "staleDays": 90, "freshnessScore": 3 }
+        ]
+      },
+      "expected": { "variantsOnly": true }
+    },
+    {
+      "id": "G-QUAL-005",
+      "description": "取得性境界: 成功率0.95=15点, 0.8=12点, 0.5=8点, 0.4=3点",
+      "input": {
+        "organizationType": "national",
+        "now": "2026-09-09T00:00:00Z",
+        "licenseName": "政府標準利用規約",
+        "commercialUse": "allowed",
+        "dataFormat": "JSON",
+        "category": "gis",
+        "lastCheckedAt": "2026-09-08T00:00:00Z",
+        "variants": [
+          { "successCount": 19, "failureCount": 1, "accessibilityScore": 15 },
+          { "successCount": 16, "failureCount": 4, "accessibilityScore": 12 },
+          { "successCount": 10, "failureCount": 10, "accessibilityScore": 8 },
+          { "successCount": 2, "failureCount": 3, "accessibilityScore": 3 }
+        ]
+      },
+      "expected": { "variantsOnly": true }
+    },
+    {
+      "id": "G-QUAL-006",
+      "description": "ライセンス配点: 名称+可=15, 名称+制限=13, 名称+未知=8, 無名称+可=7, 無名称+未知=0",
+      "input": {
+        "organizationType": "national",
+        "now": "2026-09-09T00:00:00Z",
+        "successCount": 1,
+        "failureCount": 0,
+        "dataFormat": "JSON",
+        "category": "gis",
+        "lastCheckedAt": "2026-09-08T00:00:00Z",
+        "variants": [
+          { "licenseName": "政府標準利用規約", "commercialUse": "allowed", "licenseClarityScore": 15 },
+          { "licenseName": "CC BY 4.0", "commercialUse": "restricted", "licenseClarityScore": 13 },
+          { "licenseName": "利用条件不明", "commercialUse": "unknown", "licenseClarityScore": 8 },
+          { "licenseName": null, "commercialUse": "allowed", "licenseClarityScore": 7 },
+          { "licenseName": null, "commercialUse": "unknown", "licenseClarityScore": 0 }
+        ]
+      },
+      "expected": { "variantsOnly": true }
+    },
+    {
+      "id": "G-QUAL-007",
+      "description": "clamp: 配点上限超過と負値は範囲内に丸められる",
+      "input": {
+        "scoresInput": {
+          "officialSourceScore": 999,
+          "freshnessScore": 99,
+          "accessibilityScore": 99,
+          "licenseClarityScore": -5,
+          "formatUsabilityScore": 99,
+          "constructionRelevanceScore": 99
+        }
+      },
+      "expected": {
+        "scores": {
+          "officialSourceScore": 20,
+          "freshnessScore": 15,
+          "accessibilityScore": 15,
+          "licenseClarityScore": 0,
+          "formatUsabilityScore": 15,
+          "constructionRelevanceScore": 20
+        },
+        "total": 85
+      }
+    }
+  ]
+}

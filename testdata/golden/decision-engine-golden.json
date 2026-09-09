@@ -1,0 +1,290 @@
+{
+  "$schema": "golden-dataset-v1",
+  "datasetId": "decision-engine-golden",
+  "datasetVersion": "1.0.0",
+  "createdAt": "2026-09-09",
+  "source": "src/lib/decision/engine.ts (evaluateDecision, isRuleInEffect)",
+  "tolerance": "exact (status, counts) / reasonContains (fail-closed spec sentences)",
+  "spec": "docs/quality/TOLERANCE_SPEC.md 2.1",
+  "cases": [
+    {
+      "id": "G-DEC-001",
+      "description": "全ルール通過で go (canonical reason)",
+      "input": {
+        "workType": "concrete",
+        "inputs": {
+          "precipMm1h": 2,
+          "windSpeedMs": 5
+        },
+        "rules": [
+          {
+            "metric": "precipMm1h",
+            "op": ">=",
+            "value": 10,
+            "severity": "stop"
+          },
+          {
+            "metric": "windSpeedMs",
+            "op": ">=",
+            "value": 15,
+            "severity": "warn"
+          }
+        ]
+      },
+      "expected": {
+        "status": "go",
+        "evaluatedCount": 2,
+        "matchedRulesCount": 0,
+        "unevaluatedRulesCount": 0,
+        "reasonContains": [
+          "全しきい値を満たしています。施工可。"
+        ]
+      }
+    },
+    {
+      "id": "G-DEC-002",
+      "description": "stop しきい値該当で stop",
+      "input": {
+        "workType": "concrete",
+        "inputs": {
+          "precipMm1h": 12
+        },
+        "rules": [
+          {
+            "metric": "precipMm1h",
+            "op": ">=",
+            "value": 10,
+            "severity": "stop"
+          }
+        ]
+      },
+      "expected": {
+        "status": "stop",
+        "evaluatedCount": 1,
+        "matchedRulesCount": 1,
+        "unevaluatedRulesCount": 0,
+        "reasonContains": [
+          "precipMm1h=12"
+        ]
+      }
+    },
+    {
+      "id": "G-DEC-003",
+      "description": "stop 違反 + 欠測併存でも stop は緩和されない (fail-closed)",
+      "input": {
+        "workType": "concrete",
+        "inputs": {
+          "precipMm1h": 20,
+          "windSpeedMs": null
+        },
+        "rules": [
+          {
+            "metric": "precipMm1h",
+            "op": ">=",
+            "value": 10,
+            "severity": "stop"
+          },
+          {
+            "metric": "windSpeedMs",
+            "op": ">=",
+            "value": 15,
+            "severity": "warn"
+          }
+        ]
+      },
+      "expected": {
+        "status": "stop",
+        "evaluatedCount": 1,
+        "matchedRulesCount": 1,
+        "unevaluatedRulesCount": 1,
+        "reasonContains": [
+          "欠測のため施工可とは判定できません"
+        ]
+      }
+    },
+    {
+      "id": "G-DEC-004",
+      "description": "欠測のみなら stop にはしないが go もしない (caution, fail-closed)",
+      "input": {
+        "workType": "concrete",
+        "inputs": {
+          "precipMm1h": null
+        },
+        "rules": [
+          {
+            "metric": "precipMm1h",
+            "op": ">=",
+            "value": 10,
+            "severity": "stop"
+          }
+        ]
+      },
+      "expected": {
+        "status": "caution",
+        "evaluatedCount": 0,
+        "matchedRulesCount": 0,
+        "unevaluatedRulesCount": 1,
+        "reasonContains": [
+          "欠測のため施工可とは判定できません"
+        ]
+      }
+    },
+    {
+      "id": "G-DEC-005",
+      "description": "ルール0件では go にしない (caution)",
+      "input": {
+        "workType": "concrete",
+        "inputs": {
+          "precipMm1h": 2
+        },
+        "rules": []
+      },
+      "expected": {
+        "status": "caution",
+        "evaluatedCount": 0,
+        "matchedRulesCount": 0,
+        "unevaluatedRulesCount": 0,
+        "reasonContains": [
+          "しきい値が 1 件も設定されていません"
+        ]
+      }
+    },
+    {
+      "id": "G-DEC-006",
+      "description": "有効期間外ルールのみでは判定根拠無しで caution",
+      "input": {
+        "workType": "concrete",
+        "inputs": {
+          "precipMm1h": 2
+        },
+        "rules": [],
+        "outOfEffectCount": 2
+      },
+      "expected": {
+        "status": "caution",
+        "evaluatedCount": 0,
+        "matchedRulesCount": 0,
+        "unevaluatedRulesCount": 0,
+        "reasonContains": [
+          "有効期間外"
+        ]
+      }
+    },
+    {
+      "id": "G-DEC-007",
+      "description": "不正演算子は unevaluated (unknown_operator) で caution",
+      "input": {
+        "workType": "concrete",
+        "inputs": {
+          "precipMm1h": 2
+        },
+        "rules": [
+          {
+            "metric": "precipMm1h",
+            "op": "!><",
+            "value": 10,
+            "severity": "warn"
+          }
+        ]
+      },
+      "expected": {
+        "status": "caution",
+        "evaluatedCount": 0,
+        "matchedRulesCount": 0,
+        "unevaluatedRulesCount": 1,
+        "reasonContains": [
+          "比較演算子が不正なしきい値"
+        ]
+      }
+    },
+    {
+      "id": "G-DEC-008",
+      "description": "warn 該当は caution、stop と併存時は worst-case の stop",
+      "input": {
+        "workType": "concrete",
+        "inputs": {
+          "precipMm1h": 5,
+          "windSpeedMs": 20
+        },
+        "rules": [
+          {
+            "metric": "precipMm1h",
+            "op": ">=",
+            "value": 3,
+            "severity": "warn"
+          },
+          {
+            "metric": "windSpeedMs",
+            "op": ">=",
+            "value": 15,
+            "severity": "stop"
+          }
+        ]
+      },
+      "expected": {
+        "status": "stop",
+        "evaluatedCount": 2,
+        "matchedRulesCount": 2,
+        "unevaluatedRulesCount": 0,
+        "reasonContains": [
+          "windSpeedMs=20"
+        ]
+      }
+    },
+    {
+      "id": "G-DEC-009",
+      "description": "他作業種別 (concrete) のルールは適用外 (applicable 0 で caution)",
+      "input": {
+        "workType": "scaffolding",
+        "inputs": {
+          "precipMm1h": 2
+        },
+        "rules": [
+          {
+            "metric": "precipMm1h",
+            "op": "<",
+            "value": 10,
+            "severity": "stop",
+            "workType": "concrete"
+          }
+        ]
+      },
+      "expected": {
+        "status": "caution",
+        "evaluatedCount": 0,
+        "matchedRulesCount": 0,
+        "unevaluatedRulesCount": 0,
+        "reasonContains": [
+          "しきい値が 1 件も設定されていません"
+        ]
+      }
+    },
+    {
+      "id": "G-DEC-010",
+      "description": "しきい値との一致は両端含む (境界値 =10 で stop)",
+      "input": {
+        "workType": "concrete",
+        "inputs": {
+          "precipMm1h": 10
+        },
+        "rules": [
+          {
+            "metric": "precipMm1h",
+            "op": ">=",
+            "value": 10,
+            "severity": "stop"
+          }
+        ]
+      },
+      "expected": {
+        "status": "stop",
+        "evaluatedCount": 1,
+        "matchedRulesCount": 1,
+        "unevaluatedRulesCount": 0,
+        "reasonContains": [
+          "precipMm1h=10"
+        ]
+      }
+    }
+  ]
+}
