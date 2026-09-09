@@ -26,12 +26,14 @@ test.describe("閾値管理タブ", () => {
 
     await expect(page.getByRole("heading", { name: /閾値一覧/ })).toBeVisible({ timeout: 20_000 });
     // 登録フォームの各項目が揃っている（ラベル無しのコントロールを作らない）。
+    // getByLabel は既定で部分一致するため、「種別」は「作業種別」にも当たって
+    // strict mode violation になる。短いラベルは exact で取る。
     await expect(page.getByLabel("適用範囲")).toBeVisible();
-    await expect(page.getByLabel("作業種別")).toBeVisible();
-    await expect(page.getByLabel("指標")).toBeVisible();
+    await expect(page.getByLabel("作業種別", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("指標", { exact: true })).toBeVisible();
     await expect(page.getByLabel("演算子")).toBeVisible();
-    await expect(page.getByLabel("値")).toBeVisible();
-    await expect(page.getByLabel("種別")).toBeVisible();
+    await expect(page.getByLabel("値", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("種別", { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: /再読込/ }).click();
     // 再読込で画面が壊れない。
@@ -45,7 +47,7 @@ test.describe("閾値管理タブ", () => {
     await page.goto("/weather");
     await page.waitForLoadState("load");
     await page.getByRole("button", { name: SITE_TAB }).click();
-    await expect(page.getByLabel("値")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByLabel("値", { exact: true })).toBeVisible({ timeout: 20_000 });
 
     await page.route("**/api/v1/thresholds", async (route) => {
       if (route.request().method() === "POST") {
@@ -55,7 +57,7 @@ test.describe("閾値管理タブ", () => {
       await route.continue();
     });
 
-    await page.getByLabel("値").fill("12.5");
+    await page.getByLabel("値", { exact: true }).fill("12.5");
     await page.getByRole("button", { name: /登録|追加|保存/ }).first().click();
 
     // 「何も起きない」ことこそが元の欠陥だったので、何か伝わることを主張する。
@@ -69,7 +71,7 @@ test.describe("閾値管理タブ", () => {
     await page.waitForLoadState("load");
     await page.getByRole("button", { name: SITE_TAB }).click();
 
-    const metric = page.getByLabel("指標");
+    const metric = page.getByLabel("指標", { exact: true });
     await expect(metric).toBeVisible({ timeout: 20_000 });
     for (const value of ["precipMm1h", "temperatureC", "windSpeedMs", "sigWaveHM"]) {
       await expect(metric.locator(`option[value="${value}"]`)).toHaveCount(1);
