@@ -133,6 +133,23 @@ const FILESYSTEM_PROBE = /\b(?:statSync|existsSync)\s*\(/g;
 const SUBSTRING_ASSERTION = /\.includes\(|requireText\(/g;
 
 /**
+ * シェルスクリプト用の対応表。
+ *
+ * 上の 3 つは JS の書き方しか知らないため、bash のゲート／運用スクリプトへ当てると
+ * 「外部を叩かない・ファイルを見ない」と導出してしまう。棚卸しの宣言値は導出値と
+ * 一致することを要求しているので、そのままだと **shell で書いた項目だけ全部 false**
+ * という嘘の記録が量産され、しかもテストは緑になる (等級1 の再発)。
+ *
+ * shell では「関数呼び出しの形」が無いので、外部を叩く実体はコマンド名で見る。
+ */
+const SHELL_EXTERNAL_PROBE =
+  /(?:^|[\s;&|(`$])(?:curl|wget|systemctl|journalctl|psql|pg_dump|pg_restore|gpg|git|npm|node)\s/gm;
+const SHELL_FILESYSTEM_PROBE = /\[\s+-(?:d|f|e|r|x|s)\s|\breadlink\s|\bls\s+-/g;
+const SHELL_SUBSTRING_ASSERTION = /\bgrep\s+-[a-zA-Z]*q|\[\[\s+"?\$\w+"?\s*==\s*\*/g;
+
+const isShellSource = (source: string): boolean => /^#!.*\b(?:bash|sh)\b/.test(source);
+
+/**
  * 閾値 10 は「たまたま 1-2 箇所 includes を使う」ゲートと
  * 「判定の全量が includes」のゲートを分けるための線。件数そのものは宣言せず
  * 真偽値だけを持つ (件数を書くとリファクタで無意味に落ちる)。
@@ -140,12 +157,19 @@ const SUBSTRING_ASSERTION = /\.includes\(|requireText\(/g;
 const SUBSTRING_DOMINANCE_THRESHOLD = 10;
 
 function deriveSignals(source: string): Signals {
-  const substringCount = (source.match(SUBSTRING_ASSERTION) ?? []).length;
-  const externalCount = (source.match(EXTERNAL_PROBE) ?? []).length;
+  // 言語を判定してから当てる。JS のパターンを shell へ当てても何も当たらず、
+  // 「外部を叩かない」と誤って導出する。
+  const shell = isShellSource(source);
+  const substringPattern = shell ? SHELL_SUBSTRING_ASSERTION : SUBSTRING_ASSERTION;
+  const externalPattern = shell ? SHELL_EXTERNAL_PROBE : EXTERNAL_PROBE;
+  const filesystemPattern = shell ? SHELL_FILESYSTEM_PROBE : FILESYSTEM_PROBE;
+
+  const substringCount = (source.match(substringPattern) ?? []).length;
+  const externalCount = (source.match(externalPattern) ?? []).length;
   return {
     substringDominant: substringCount >= SUBSTRING_DOMINANCE_THRESHOLD && externalCount === 0,
     probesExternal: externalCount > 0,
-    probesFs: (source.match(FILESYSTEM_PROBE) ?? []).length > 0,
+    probesFs: (source.match(filesystemPattern) ?? []).length > 0,
   };
 }
 
@@ -621,6 +645,16 @@ const SCRIPT_GATES: readonly GateEntry[] = [
       pattern: /missing required production evidence env/,
       means: "欠落を拒否理由として述べる throw が現物に在る。既定値で穴埋めする経路へ戻せば消える",
     },
+  },
+  {
+    file: "scripts/deploy/deploy-local-production.sh",
+    grade: 0,
+    issue: "none",
+    why: "ローカル本番 (codip-production.service) のリリース経路 (Issue #231)。合否を作るゲートではなく配備手順だが、『デプロイした』を『動いている』の証拠として扱わない設計にしてある。再起動後に /api/ready が通るまで待ち、通らなければ直前のリリースへ自動で切り戻して非ゼロ終了する。判定は curl の実測のみで、自己申告の入力を受け取らない",
+    signals: { substringDominant: false, probesExternal: true, probesFs: true },
+    runsOn: "unwired",
+    notRunMeans:
+      "workflow からは呼ばれず、人が手で実行するローカル本番デプロイ経路。本番ホストにしか存在しない ~/deploy/codip を対象にするため CI からは実行できない。この分岐の退行はデプロイ当日まで現れない",
   },
   {
     file: "scripts/deploy/deploy-mvp.mjs",
