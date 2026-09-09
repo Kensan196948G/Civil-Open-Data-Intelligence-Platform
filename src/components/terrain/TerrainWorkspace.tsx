@@ -252,18 +252,24 @@ export function TerrainWorkspace() {
           : tab === "confirm" && confirm !== null
             ? { confirm, point: selectedPoint }
             : { point: selectedPoint };
-    const response = await fetch("/api/v1/terrain/runs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lat: selectedPoint.lat, lon: selectedPoint.lon, tab, payload }),
-    });
-    const body = await response.json();
-    if (!response.ok) {
-      setSaveMessage(body?.error?.message ?? "案件保存に失敗しました (管理認証が必要です)");
-      return;
+    // fetch 自体が reject する経路 (ネットワーク断) を捕捉しないと、未処理の
+    // promise rejection になり保存ボタンを押しても何も表示されない。
+    try {
+      const response = await fetch("/api/v1/terrain/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lat: selectedPoint.lat, lon: selectedPoint.lon, tab, payload }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        setSaveMessage(body?.error?.message ?? "案件保存に失敗しました (管理認証が必要です)");
+        return;
+      }
+      setSaveMessage("✅ 案件を保存しました");
+      void loadSavedRuns();
+    } catch {
+      setSaveMessage("案件保存に失敗しました (ネットワークを確認してください)");
     }
-    setSaveMessage("✅ 案件を保存しました");
-    void loadSavedRuns();
   }
 
   const exportUrl = (format: "markdown" | "csv" | "json") =>

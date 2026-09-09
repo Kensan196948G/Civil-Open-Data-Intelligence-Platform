@@ -28,6 +28,10 @@ export default function WatchlistPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [identity, setIdentity] = useState<string | null>(null);
   const [needsLogin, setNeedsLogin] = useState(false);
+  // 「0件」と「取得できなかった」を分ける。両者を同じ空配列で表すと、取得失敗時に
+  // 「登録はありません。下のフォームから追加できます」という誤った案内が出て、
+  // 利用者は登録済みの内容が消えたと誤認する (実際に同時表示されていた)。
+  const [loadFailed, setLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"success" | "error">("success");
@@ -49,15 +53,22 @@ export default function WatchlistPage() {
         setNeedsLogin(true);
         setEntries([]);
         setIdentity(null);
+        setLoadFailed(false);
+        return;
+      }
+      if (!res.ok) {
+        // HTTPエラーも取得失敗として扱う。従来は本文のJSON化に失敗しない限り
+        // 素通りし、空配列のまま「登録はありません」を表示していた。
+        setLoadFailed(true);
         return;
       }
       const body = await res.json();
       setNeedsLogin(false);
       setIdentity(body?.data?.identity ?? null);
       setEntries(body?.data?.entries ?? []);
+      setLoadFailed(false);
     } catch {
-      setMessage("ウォッチリストの取得に失敗しました");
-      setTone("error");
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -223,6 +234,15 @@ export default function WatchlistPage() {
         <h2 className="mb-3 mt-0 text-sm font-semibold text-[var(--ink)]">📋 登録一覧（{entries.length}件）</h2>
         {loading ? (
           <p className="mb-0 text-[12.5px] text-[var(--muted)]">⏳ 読み込み中...</p>
+        ) : loadFailed ? (
+          <div role="alert">
+            <p className="mb-2 text-[12.5px] text-[var(--red)]">
+              ⚠️ ウォッチリストを取得できませんでした。登録内容は失われていません。
+            </p>
+            <button type="button" className="dc-btn-ghost" onClick={() => void load()}>
+              🔄 再読み込み
+            </button>
+          </div>
         ) : entries.length === 0 ? (
           <p className="mb-0 text-[12.5px] text-[var(--ink-2)]">登録はありません。下のフォームから追加できます。</p>
         ) : (
