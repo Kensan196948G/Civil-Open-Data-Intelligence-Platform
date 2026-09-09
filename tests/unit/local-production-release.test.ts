@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -86,12 +87,28 @@ describe("deploy-local-production.sh の契約", () => {
     expect(scriptSource).toMatch(/\[ -L "\$1" \] \|\| return 0/);
   });
 
-  it("未設定リンクの表示を戻り値ではなく解決結果の空判定で決める", () => {
+  it("--status が未設定リンクを空欄ではなく代替文言で表示する", () => {
     // resolve_link は未設定でも成功終了するため、`|| echo '(未設定)'` では
-    // 代替文言が出ず空欄になる (CodeRabbit 指摘)。
-    expect(scriptSource).toContain("describe_link");
-    expect(scriptSource).not.toMatch(/resolve_link "\$CURRENT_LINK" \|\| echo/);
-    expect(scriptSource).not.toMatch(/resolve_link "\$PREVIOUS_LINK" \|\| echo/);
+    // 代替文言が出ず空欄になっていた (CodeRabbit 指摘)。
+    //
+    // ソースに describe_link が在ることだけを見ると、定義したまま表示経路が
+    // 呼んでいない実装でも緑になる (これも CodeRabbit の指摘)。実際に
+    // --status を走らせて出力を見る。
+    const root = mkdtempSync(path.join(tmpdir(), "codip-deploy-status-"));
+    try {
+      const output = execFileSync("bash", [path.join(repoRoot, scriptPath), "--status"], {
+        env: { ...process.env, CODIP_DEPLOY_ROOT: root },
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      expect(output).toMatch(/current\s*:\s*\(未設定\)/);
+      expect(output).toMatch(/previous\s*:\s*\(なし\)/);
+      // 空欄で出ていないこと (行末が値なしで終わらない)。
+      expect(output).not.toMatch(/current\s*:\s*$/m);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("成功ログでスコープ外の変数を参照しない", () => {
