@@ -78,6 +78,23 @@ describe("deploy-local-production.sh の契約", () => {
     expect(scriptSource).toContain("keep_previous");
   });
 
+  it("未作成のリンクを解決したことにしない", () => {
+    // readlink -f は「最後の要素が存在しない」パスでも正規化した文字列を返す。
+    // その値を previous として記録すると previous が current を指すエイリアスに
+    // なり、ロールバックが自分自身への切り替え = 無効化される。初回デプロイで
+    // 実際に起きた (current 未作成のまま previous へ current のパスを書いた)。
+    expect(scriptSource).toMatch(/\[ -L "\$1" \] \|\| return 0/);
+  });
+
+  it("成功ログでスコープ外の変数を参照しない", () => {
+    // build_release を関数へ切り出した際、deploy 側に残った $short が
+    // スコープ外になり、set -u で「unbound variable」になって再起動後に落ちた。
+    // ヘルスチェックまで通ったあとで異常終了するため、成功か失敗か分からない
+    // 終わり方になる。
+    const deploySection = scriptSource.slice(scriptSource.indexOf("deploy() {"));
+    expect(deploySection).not.toMatch(/\$short\b/);
+  });
+
   it("配備したリリース識別子を EnvironmentFile へ書き出す", () => {
     // どの commit を配信しているかを外形から確認できるようにする。
     expect(scriptSource).toContain("CODIP_RELEASE_SHA");

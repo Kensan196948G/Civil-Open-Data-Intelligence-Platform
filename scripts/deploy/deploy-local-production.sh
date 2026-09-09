@@ -47,7 +47,15 @@ SOURCE_REPO="${CODIP_SOURCE_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." &&
 log() { echo "[deploy] $*"; }
 fail() { echo "[deploy][error] $*" >&2; exit 1; }
 
-resolve_link() { readlink -f "$1" 2>/dev/null || true; }
+# シンボリックリンクとして存在するときだけ解決する。
+# readlink -f は「最後の要素が存在しない」パスでも正規化した文字列を返すため、
+# 未作成の current に対して非空の値が返ってしまう。その値を previous として
+# 記録すると previous が current を指すエイリアスになり、ロールバックが
+# 自分自身への切り替え = 無効化される (初回デプロイで実際に起きた)。
+resolve_link() {
+  [ -L "$1" ] || return 0
+  readlink -f "$1" 2>/dev/null || true
+}
 
 show_status() {
   log "deploy root : $DEPLOY_ROOT"
@@ -161,7 +169,7 @@ deploy() {
   before="$(resolve_link "$CURRENT_LINK")"
 
   if switch_to "$target"; then
-    log "デプロイ成功: $short"
+    log "デプロイ成功: $(basename "$target")"
   else
     log "ヘルスチェックが通りませんでした。切り戻します。"
     if [ -n "$before" ]; then
