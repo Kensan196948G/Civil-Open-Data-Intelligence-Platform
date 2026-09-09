@@ -202,28 +202,39 @@ export function WeatherWorkspace({ initialTab }: { initialTab: TabId }) {
       severity: String(form.get("severity") ?? "warn"),
       note: String(form.get("note") ?? "").trim() || null,
     };
-    const response = await fetch("/api/v1/thresholds", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const body = await response.json();
-    if (!response.ok) {
-      setMessage(body?.error?.message ?? "閾値登録に失敗しました (管理認証が必要です)");
-      return;
+    // fetch 自体が reject する経路 (ネットワーク断・DNS失敗) を捕捉しないと、
+    // 未処理の promise rejection になりボタンを押しても何も起きない。
+    // 同ファイルの runEtl / runAi 等は try/catch 済みで、ここだけ不統一だった。
+    try {
+      const response = await fetch("/api/v1/thresholds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        setMessage(body?.error?.message ?? "閾値登録に失敗しました (管理認証が必要です)");
+        return;
+      }
+      setMessage("✅ 閾値を登録しました");
+      void loadThresholds();
+    } catch {
+      setMessage("閾値登録に失敗しました (ネットワークを確認してください)");
     }
-    setMessage("✅ 閾値を登録しました");
-    void loadThresholds();
   }
 
   async function deleteThreshold(id: string) {
-    const response = await fetch(`/api/v1/thresholds/${id}`, { method: "DELETE" });
-    if (!response.ok) {
-      setMessage("閾値削除に失敗しました (管理認証が必要です)");
-      return;
+    try {
+      const response = await fetch(`/api/v1/thresholds/${id}`, { method: "DELETE" });
+      if (!response.ok) {
+        setMessage("閾値削除に失敗しました (管理認証が必要です)");
+        return;
+      }
+      setMessage("✅ 閾値を削除しました");
+      void loadThresholds();
+    } catch {
+      setMessage("閾値削除に失敗しました (ネットワークを確認してください)");
     }
-    setMessage("✅ 閾値を削除しました");
-    void loadThresholds();
   }
 
   async function runEtl(jobId: number) {
@@ -300,18 +311,22 @@ export function WeatherWorkspace({ initialTab }: { initialTab: TabId }) {
       jmaStationId: String(form.get("jmaStationId") ?? "").trim() || null,
       address: String(form.get("address") ?? "").trim() || null,
     };
-    const response = await fetch("/api/v1/sites", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const body = await response.json();
-    if (!response.ok) {
-      setMessage(body?.error?.message ?? "現場登録に失敗しました (管理認証が必要です)");
-      return;
+    try {
+      const response = await fetch("/api/v1/sites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        setMessage(body?.error?.message ?? "現場登録に失敗しました (管理認証が必要です)");
+        return;
+      }
+      setMessage("✅ 現場を登録しました");
+      void loadSites();
+    } catch {
+      setMessage("現場登録に失敗しました (ネットワークを確認してください)");
     }
-    setMessage("✅ 現場を登録しました");
-    void loadSites();
   }
 
   function downloadReport(event: FormEvent<HTMLFormElement>) {
