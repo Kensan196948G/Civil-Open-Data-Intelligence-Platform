@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { attachmentDisposition } from "@/lib/content-disposition";
 import { checkRateLimit, clientIdentifier, rateLimitResponse } from "@/lib/rate-limit";
 import { renderReport, REPORT_FORMATS, type ReportFormat } from "@/lib/report-export";
 import { requireRoleOrAdmin } from "@/lib/rbac";
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
   return new NextResponse(rendered.body, {
     headers: {
       "Content-Type": rendered.contentType,
-      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Disposition": attachmentDisposition(filename),
     },
   });
 }

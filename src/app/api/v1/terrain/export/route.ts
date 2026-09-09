@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeTerrain } from "@/lib/terrain/terrain-service";
+import { attachmentDisposition } from "@/lib/content-disposition";
 import { DemTileStore } from "@/lib/terrain/elevation-sampler";
 import { gsiFetch } from "@/lib/terrain/gsi-fetch";
 import { buildConfirmCards } from "@/lib/terrain/confirm-cards";
@@ -150,7 +151,7 @@ export async function GET(request: NextRequest) {
       },
       {
         headers: {
-          "Content-Disposition": `attachment; filename="${filename}"`,
+          "Content-Disposition": attachmentDisposition(filename),
         },
       },
     );
@@ -160,7 +161,7 @@ export async function GET(request: NextRequest) {
   return new NextResponse(content, {
     headers: {
       "Content-Type": format === "csv" ? "text/csv; charset=utf-8" : "text/markdown; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Disposition": attachmentDisposition(filename),
     },
   });
 }
