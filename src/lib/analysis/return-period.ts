@@ -28,25 +28,35 @@ function weibullFit(values: number[]): { k: number; lambda: number } {
   if (n < 5 || sorted.some((v) => v <= 0)) {
     throw new RangeError("Weibull needs at least 5 positive annual maxima");
   }
-  // Gringorten plotting position, log-linear regression of x on y
+  // Gringorten plotting position. Weibull モデル:
+  //   log x = (1/k) * log(-ln(1-p)) + log λ   (p は非超過確率)
+  // のため、回帰は「log x を log u (u=-ln(1-p)) に回帰」すらか。
+  // 旧実装は sxx (log x 側の分散) で割っており回帰軸が逆で、
+  // k が不正値になり量子位が T に対して非単調・非現実的になっていた
+  // (docs/quality/TEST_EVIDENCE.md §4 参照)。
   const ys = sorted.map((_, i) => Math.log(-Math.log(1 - (i + 1 - 0.44) / (n + 0.12))));
   const xs = sorted.map((v) => Math.log(v));
   const meanX = xs.reduce((a, b) => a + b, 0) / n;
   const meanY = ys.reduce((a, b) => a + b, 0) / n;
   let sxy = 0;
-  let sxx = 0;
+  let syy = 0;
   for (let i = 0; i < n; i++) {
     sxy += (xs[i] - meanX) * (ys[i] - meanY);
-    sxx += (xs[i] - meanX) ** 2;
+    syy += (ys[i] - meanY) ** 2;
   }
-  const slope = sxy / sxx;
+  if (syy <= 0 || sxy <= 0) {
+    throw new RangeError("Weibull fit is degenerate for the given sample");
+  }
+  const slope = sxy / syy; // = 1/k (log x on log u)
   const intercept = meanX - slope * meanY;
   return { k: 1 / slope, lambda: Math.exp(intercept) };
 }
 
 function weibullQuantile(k: number, lambda: number, periodYears: number): number {
   if (periodYears <= 1) throw new RangeError("return period T must be > 1");
-  return lambda * Math.pow(-Math.log(1 - 1 / periodYears), 1 / k);
+  // F(x_T) = 1 - 1/T より x_T = λ * (ln T)^(1/k)。
+  // 旧実装は -ln(1-1/T) を使っており T>2 で単調減少する誤りだった。
+  return lambda * Math.pow(Math.log(periodYears), 1 / k);
 }
 
 export const DEFAULT_RETURN_PERIODS = [2, 5, 10, 20, 50, 100];
