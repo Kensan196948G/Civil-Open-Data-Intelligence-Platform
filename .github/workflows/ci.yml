@@ -95,6 +95,16 @@ jobs:
       - name: Unit tests
         run: npm run test
 
+      # Gate 2 (docs/quality/TEST_STRATEGY.md): 既知入力→期待結果 (golden)、
+      # 不変条件 (metamorphic)、台帳シードの品質ポリシー。単体テスト内にも
+      # 含まれるが、Gate として明示的に分離して証跡を残す。
+      - name: Logic and Data quality (Gate 2)
+        run: npm run test:logic
+
+      # Gate 4: 依存障害時に誤った値を正常結果として返さないことの不変条件。
+      - name: Fail-safe invariants (Gate 4)
+        run: npm run test:resilience
+
       - name: Migrate & seed (smoke)
         run: |
           npx prisma migrate deploy
