@@ -35,7 +35,9 @@ test.describe("ウォッチリストの取得失敗表示", () => {
     await page.waitForLoadState("load");
 
     // 取得失敗として示される。
-    const alert = page.getByRole("alert");
+    // 同じページの WatchToggle も /api/v1/watchlist を叩いており、遮断すると
+    // それぞれが独自の role="alert" を出す。一覧の取得失敗表示を testid で特定する。
+    const alert = page.getByTestId("watchlist-load-error");
     await expect(alert).toContainText("取得できませんでした", { timeout: 10_000 });
     // 登録内容が失われたわけではないことを明示する。
     await expect(alert).toContainText("失われていません");
@@ -92,7 +94,9 @@ test.describe("ウォッチリストの取得失敗表示", () => {
     await page.goto("/watchlist");
     await page.waitForLoadState("load");
 
-    await expect(page.getByRole("alert")).toContainText("取得できませんでした", { timeout: 10_000 });
+    await expect(page.getByTestId("watchlist-load-error")).toContainText("取得できませんでした", {
+      timeout: 10_000,
+    });
     await expect(page.getByText("登録はありません。下のフォームから追加できます。")).toHaveCount(0);
   });
 });

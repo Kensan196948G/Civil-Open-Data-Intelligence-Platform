@@ -235,7 +235,7 @@ export default function WatchlistPage() {
         {loading ? (
           <p className="mb-0 text-[12.5px] text-[var(--muted)]">⏳ 読み込み中...</p>
         ) : loadFailed ? (
-          <div role="alert">
+          <div role="alert" data-testid="watchlist-load-error">
             <p className="mb-2 text-[12.5px] text-[var(--red)]">
               ⚠️ ウォッチリストを取得できませんでした。登録内容は失われていません。
             </p>
