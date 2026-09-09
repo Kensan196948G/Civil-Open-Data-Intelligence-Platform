@@ -67,10 +67,30 @@ test.describe("統合後画面: 地形分析", () => {
     await page.getByRole("button", { name: /🧾 出力・共有/ }).click();
     await expect(page.getByLabel("共有URL")).toBeVisible();
     await expect(page.getByLabel("共有URL")).toHaveValue(/#.*35\.3606.*138\.7274/);
+    // 2026-09-09 以降、地点が選ばれているときの出力は <a>（role=link）になった。
+    // 以前は <a> の中に <button> を入れていたが、対話要素の入れ子は HTML 仕様
+    // 違反で、しかも無効化がキーボードに効いていなかったため解消した。
+    // 「URL を新しいタブで開く」操作の意味論としても link が正しい。
     for (const format of ["MARKDOWN", "CSV", "JSON"]) {
-      await expect(page.getByRole("button", { name: new RegExp(`レポート出力 \\(${format}\\)`) })).toBeEnabled();
+      const link = page.getByRole("link", { name: new RegExp(`レポート出力 \\(${format}\\)`) });
+      await expect(link).toBeVisible();
+      await expect(link).toHaveAttribute("href", /\/api\/v1\/terrain\/export/);
     }
     await expect(page.getByRole("button", { name: /💾 案件を保存/ })).toBeEnabled();
+  });
+
+  test("地点未選択のレポート出力はリンクではなく無効なボタンである", async ({ page }) => {
+    // 以前は <a href="#"> に pointer-events-none を掛けていただけで、
+    // キーボードでは Tab → Enter で "#" へ遷移でき、無効化をすり抜けていた。
+    // 要素そのものをリンクにしないことで、経路自体を無くす。
+    await page.goto("/terrain");
+    await page.getByRole("button", { name: /🧾 出力・共有/ }).click();
+
+    for (const format of ["MARKDOWN", "CSV", "JSON"]) {
+      const name = new RegExp(`レポート出力 \\(${format}\\)`);
+      await expect(page.getByRole("link", { name })).toHaveCount(0);
+      await expect(page.getByRole("button", { name })).toBeDisabled();
+    }
   });
 
   test("レイヤー切替と断面タブの状態遷移が表示される", async ({ page }) => {
