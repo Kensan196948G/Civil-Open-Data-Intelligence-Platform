@@ -4,7 +4,20 @@ import { expect, test } from "@playwright/test";
 // mobile 側は本 spec のみを testMatch で対象にしており、既存 spec のモバイル互換性は問わない
 // (既存 spec はデスクトップ前提のセレクタを含むため)。
 
-const PAGES = ["/", "/sources", "/map", "/tags", "/logs", "/settings"];
+// 2026-09-09 追加: /terrain /weather /watchlist は列数の多いテーブルと幅広の
+// input を持つ最も横に広がりやすい画面なのに、横スクロール回帰の対象外だった。
+// 「対象が古いまま増えない」ことが、モバイル破綻の検知漏れを作る。
+const PAGES = [
+  "/",
+  "/sources",
+  "/map",
+  "/tags",
+  "/logs",
+  "/settings",
+  "/terrain",
+  "/weather",
+  "/watchlist",
+];
 
 test.describe("レスポンシブ基本回帰", () => {
   for (const path of PAGES) {
