@@ -57,10 +57,18 @@ resolve_link() {
   readlink -f "$1" 2>/dev/null || true
 }
 
+# 表示用。resolve_link は未設定でも成功終了するため、`|| echo` では代替文言が
+# 出ない (空欄になる)。戻り値ではなく解決結果が空かどうかで判断する。
+describe_link() {
+  local resolved
+  resolved="$(resolve_link "$1")"
+  if [ -n "$resolved" ]; then printf '%s' "$resolved"; else printf '%s' "$2"; fi
+}
+
 show_status() {
   log "deploy root : $DEPLOY_ROOT"
-  log "current     : $(resolve_link "$CURRENT_LINK" || echo '(未設定)')"
-  log "previous    : $(resolve_link "$PREVIOUS_LINK" || echo '(なし)')"
+  log "current     : $(describe_link "$CURRENT_LINK" '(未設定)')"
+  log "previous    : $(describe_link "$PREVIOUS_LINK" '(なし)')"
   log "service     : $(systemctl --user is-active "$SERVICE" 2>/dev/null || echo unknown)"
   if command -v curl >/dev/null 2>&1; then
     log "health      : $(curl -s --max-time 10 "${HEALTH_URL%/api/ready}/api/health" 2>/dev/null || echo '(取得失敗)')"

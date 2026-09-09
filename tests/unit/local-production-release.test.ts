@@ -86,6 +86,14 @@ describe("deploy-local-production.sh の契約", () => {
     expect(scriptSource).toMatch(/\[ -L "\$1" \] \|\| return 0/);
   });
 
+  it("未設定リンクの表示を戻り値ではなく解決結果の空判定で決める", () => {
+    // resolve_link は未設定でも成功終了するため、`|| echo '(未設定)'` では
+    // 代替文言が出ず空欄になる (CodeRabbit 指摘)。
+    expect(scriptSource).toContain("describe_link");
+    expect(scriptSource).not.toMatch(/resolve_link "\$CURRENT_LINK" \|\| echo/);
+    expect(scriptSource).not.toMatch(/resolve_link "\$PREVIOUS_LINK" \|\| echo/);
+  });
+
   it("成功ログでスコープ外の変数を参照しない", () => {
     // build_release を関数へ切り出した際、deploy 側に残った $short が
     // スコープ外になり、set -u で「unbound variable」になって再起動後に落ちた。
