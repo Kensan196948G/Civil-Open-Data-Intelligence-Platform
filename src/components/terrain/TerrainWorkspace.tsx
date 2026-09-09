@@ -512,18 +512,31 @@ export function TerrainWorkspace() {
             <div className="flex flex-wrap gap-2">
               {(["markdown", "csv", "json"] as const).map((format) => {
                 const url = exportUrl(format);
+                // 以前は <a> の中に <button> を入れていた。HTML 仕様違反
+                // (対話要素の入れ子) で、スクリーンリーダーやキーボードでの
+                // 役割とフォーカス順序が曖昧になる。さらに無効時の
+                // pointer-events-none はマウスしか止めず、<a> 自体は Tab で
+                // フォーカスできるため Enter で "#" へ遷移できてしまい、
+                // 無効化の意図をすり抜けていた (aria-disabled は伝達だけで
+                // 遷移を止めない)。
+                //
+                // 地点未選択なら要素をリンクにせず、無効な button として出す。
+                if (url === null) {
+                  return (
+                    <button key={format} type="button" className="dc-btn-ghost" disabled>
+                      ⬇️ レポート出力 ({format.toUpperCase()})
+                    </button>
+                  );
+                }
                 return (
                   <a
                     key={format}
-                    href={url ?? "#"}
+                    href={url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={url === null ? "pointer-events-none opacity-40" : ""}
-                    aria-disabled={url === null}
+                    className="dc-btn-ghost inline-flex items-center"
                   >
-                    <button type="button" className="dc-btn-ghost" disabled={url === null}>
-                      ⬇️ レポート出力 ({format.toUpperCase()})
-                    </button>
+                    ⬇️ レポート出力 ({format.toUpperCase()})
                   </a>
                 );
               })}

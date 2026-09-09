@@ -1,5 +1,17 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { startAdminSession } from "./admin-session";
+
+/**
+ * 失効はアクセス権のはく奪という取り消せない破壊的操作なので、
+ * 2026-09-09 から window.confirm を挟んでいる (DeleteSourceButton と同じ作法)。
+ * Playwright は dialog を既定で自動 dismiss するため、受理を明示しないと
+ * 失効が実行されない。
+ */
+async function acceptNextConfirm(page: Page): Promise<void> {
+  page.once("dialog", (dialog) => {
+    void dialog.accept();
+  });
+}
 
 test.describe("ロール管理UI（/settings・管理者のみ）", () => {
   test("管理者セッションでロール割当・失効ができる", async ({ page }) => {
@@ -19,6 +31,7 @@ test.describe("ロール管理UI（/settings・管理者のみ）", () => {
     await expect(page.getByRole("status")).toContainText("割当しました");
     await expect(page.getByRole("cell", { name: email, exact: true })).toBeVisible();
 
+    await acceptNextConfirm(page);
     await page.getByRole("button", { name: `${email} の engineer (global) を失効` }).click();
     await expect(page.getByRole("status")).toContainText("失効しました");
   });
@@ -49,6 +62,7 @@ test.describe("ロール管理UI（/settings・管理者のみ）", () => {
     // クリーンアップ: 割当を失効して次回実行へ状態を漏らさない
     // （dev.db は実行間で永続し、残存割当が緩いセレクタと競合して flaky になる。
     // テスト1と同様に失効する）。
+    await acceptNextConfirm(page);
     await page.getByRole("button", { name: `${email} の data-steward (site:site-1) を失効` }).click();
     await expect(page.getByRole("status")).toContainText("失効しました");
   });

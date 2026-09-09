@@ -224,6 +224,11 @@ export function WeatherWorkspace({ initialTab }: { initialTab: TabId }) {
   }
 
   async function deleteThreshold(id: string) {
+    // 施工可否判定の基準値を消す破壊的操作。誤クリックで即座に消えていた
+    // (DeleteSourceButton は window.confirm を挟んでおり、ここだけ不統一だった)。
+    if (!window.confirm("この閾値を削除しますか？施工可否判定の基準から外れます。")) {
+      return;
+    }
     try {
       const response = await fetch(`/api/v1/thresholds/${id}`, { method: "DELETE" });
       if (!response.ok) {
@@ -645,7 +650,12 @@ export function WeatherWorkspace({ initialTab }: { initialTab: TabId }) {
                       </td>
                       <td className="py-1 pr-2">{threshold.note ?? "—"}</td>
                       <td className="py-1 pr-2">
-                        <button type="button" className="dc-btn-ghost" onClick={() => void deleteThreshold(threshold.id)}>
+                        <button
+                          type="button"
+                          className="dc-btn-ghost"
+                          onClick={() => void deleteThreshold(threshold.id)}
+                          aria-label={`${threshold.workType} の ${threshold.metric} ${threshold.op} ${threshold.value} の閾値を削除`}
+                        >
                           🗑️
                         </button>
                       </td>

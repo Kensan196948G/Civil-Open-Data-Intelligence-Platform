@@ -91,6 +91,11 @@ export function RoleManagementPanel({
   }
 
   async function revoke(id: string, userEmail: string) {
+    // アクセス権のはく奪は取り消せない破壊的操作。DeleteSourceButton は
+    // window.confirm を挟んでおり、ここだけ挟んでいなかった (パターンの不統一)。
+    if (!window.confirm(`${userEmail} のロール割当を失効しますか？アクセス権が即座に失われます。`)) {
+      return;
+    }
     setBusy(true);
     try {
       const result = await api<{ revoked: string }>(`/api/admin/roles/${id}`, {
