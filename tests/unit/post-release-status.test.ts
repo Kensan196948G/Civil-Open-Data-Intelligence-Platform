@@ -10,6 +10,7 @@ const {
   renderReport,
   fetchWithTimeout,
   inspectProbe,
+  buildIncidentDigest,
   escapeMarkdownTable,
 } = require("../../scripts/tools/post-release-status.js") as {
   DEFAULT_PREVIEW_URL: string;
@@ -23,6 +24,7 @@ const {
     maxResponseMs: number;
     accessClientId: string;
     accessClientSecret: string;
+    diagnosisOut: string;
   };
   buildReport: (
     args: {
@@ -50,6 +52,13 @@ const {
     accessTokenConfigured: boolean;
   }>;
   renderReport: (report: unknown) => string;
+  buildIncidentDigest: (report: unknown) => {
+    overall: string;
+    productionConnected: boolean;
+    accessTokenConfigured: boolean;
+    productionStatuses: { path: string; status: number }[];
+    diagnosis: { check: string; state: string; detail: string }[];
+  };
   fetchWithTimeout: (
     url: string,
     options: {
@@ -421,6 +430,94 @@ describe("post-release-status", () => {
     // 資格情報を出力へ漏らさない
     expect(rendered).not.toContain("service-client-secret");
     expect(rendered).not.toContain("service-client-id");
+  });
+
+  // Issue #207: probeは初回失敗の時点で「service tokenが拒否されている」と正しく
+  // 診断していたが、その結論はartifact側にしか残らず、incident Issue本文にはrunへの
+  // リンクしか載らなかった。結果として101回以上・4日間・352コメントの間、当番は
+  // Issueを見ても原因へ辿り着けなかった。digestは通知へ載せる分の契約である。
+  it("exposes the rejected-token diagnosis in the non-secret incident digest", async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      if (isProductionUrl(url)) {
+        return new Response("", {
+          status: 302,
+          headers: {
+            server: "cloudflare",
+            "cf-ray": "abc-NRT",
+            "www-authenticate": 'Cloudflare-Access resource_metadata="https://odip.example.com/.well-known/x"',
+          },
+        });
+      }
+      return new Response("{}", { status: 200 });
+    });
+
+    const report = await buildReport(
+      {
+        ...baseArgs,
+        strictProduction: true,
+        accessClientId: "service-client-id",
+        accessClientSecret: "service-client-secret",
+      },
+      {
+        resolver: { resolve4: async () => ["203.0.113.10"], resolve6: async () => [] },
+        fetcher,
+      },
+    );
+
+    const digest = buildIncidentDigest(report);
+    const serialized = JSON.stringify(digest);
+
+    // 当番が最初に読む一行が「本番が落ちた」ではなく「監視credentialが拒否された」であること
+    expect(digest.diagnosis.map((row) => row.check)).toContain("Cloudflare Access service token rejected");
+    // ペア不一致という実際の原因を、artifactを取得しなくても本文だけで辿れること
+    expect(serialized).toContain("same service token");
+    expect(digest.accessTokenConfigured).toBe(true);
+    expect(digest.overall).toBe("ATTENTION");
+    expect(digest.productionConnected).toBe(false);
+    // 初動に必要な応答コードは載せる
+    expect(digest.productionStatuses).toEqual([
+      { path: "/api/health", status: 302 },
+      { path: "/api/ready", status: 302 },
+    ]);
+
+    // digestはIssue本文へ入る。資格情報を持ち込まないことが成立条件。
+    expect(serialized).not.toContain("service-client-secret");
+    expect(serialized).not.toContain("service-client-id");
+  });
+
+  it("keeps the digest free of endpoint-controlled text and table-breaking characters", async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      if (isProductionUrl(url)) {
+        // endpointが制御できる本文・ヘッダを返しても、digestへは載らないこと。
+        return new Response("| injected | row |\n## fake heading", {
+          status: 500,
+          headers: { server: "cloudflare", "cf-ray": "x", "x-evil": "| pipe |\n newline" },
+        });
+      }
+      return new Response("{}", { status: 200 });
+    });
+
+    const report = await buildReport(
+      { ...baseArgs, strictProduction: true },
+      { resolver: { resolve4: async () => ["203.0.113.10"], resolve6: async () => [] }, fetcher },
+    );
+
+    const digest = buildIncidentDigest(report);
+    for (const row of digest.diagnosis) {
+      for (const value of [row.check, row.state, row.detail]) {
+        expect(value).not.toMatch(/[\r\n]/);
+        expect(value.length).toBeLessThanOrEqual(500);
+      }
+    }
+    expect(JSON.stringify(digest)).not.toContain("injected");
+    expect(digest.productionStatuses.every((probe) => Number.isInteger(probe.status))).toBe(true);
+  });
+
+  it("accepts --diagnosis-out and defaults it to disabled", () => {
+    expect(parseArgs([]).diagnosisOut).toBe("");
+    expect(parseArgs(["--diagnosis-out", "production-diagnosis.json"]).diagnosisOut).toBe(
+      "production-diagnosis.json",
+    );
   });
 
   it("does not blame the service token for a 302 that carries no Access challenge", async () => {

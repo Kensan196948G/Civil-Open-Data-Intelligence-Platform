@@ -65,7 +65,36 @@ interface RunIncidentOptions {
   notificationTestInput?: boolean;
   /** listWorkflowRuns を失敗させ、履歴取得不能時の挙動を見る。 */
   historyThrows?: boolean;
+  /**
+   * probe が書く production-diagnosis.json の中身。null はファイル無し (digest 無しでも
+   * 通知は落とさないことを見る)。既定は Issue #207 の実障害と同じ digest。
+   */
+  digestFile?: string | null;
 }
+
+// Issue #207 で probe が実際に出していた診断 (buildIncidentDigest の出力形)。
+const DEFAULT_DIGEST = JSON.stringify({
+  overall: "ATTENTION",
+  productionConnected: false,
+  accessTokenConfigured: true,
+  productionStatuses: [
+    { path: "/api/health", status: 302 },
+    { path: "/api/ready", status: 302 },
+  ],
+  diagnosis: [
+    {
+      check: "Cloudflare Access service token rejected",
+      state: "ATTENTION",
+      detail:
+        "An Access service token is configured, but production still returned 302 for the authenticated probe.",
+    },
+    {
+      check: "Likely next check",
+      state: "ACTION",
+      detail: "Verify that CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET belong to the same service token.",
+    },
+  ],
+});
 
 async function runIncidentScript(options: RunIncidentOptions) {
   const {
@@ -74,6 +103,7 @@ async function runIncidentScript(options: RunIncidentOptions) {
     probeOutcome = "failure",
     notificationTestInput = false,
     historyThrows = false,
+    digestFile = DEFAULT_DIGEST,
   } = options;
 
   const calls: Call[] = [];
@@ -125,8 +155,23 @@ async function runIncidentScript(options: RunIncidentOptions) {
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (
     ...args: string[]
   ) => (...args: unknown[]) => Promise<unknown>;
-  const fn = new AsyncFunction("github", "context", "core", "process", inlineScript);
-  await fn(github, context, core, { env: { PROBE_OUTCOME: probeOutcome } });
+  // actions/github-script は inline script のスコープへ require を提供する。
+  // ハーネスが渡さないと、本番では動く script がテストだけで落ちる (逆も起きうる)。
+  // fs は digest の読み出しにだけ使うので、readFileSync のみ差し替え可能にする。
+  const sandboxRequire = (specifier: string) => {
+    if (specifier === "node:fs" || specifier === "fs") {
+      return {
+        readFileSync: (file: string) => {
+          if (file !== "production-diagnosis.json") throw new Error(`unexpected read: ${file}`);
+          if (digestFile === null) throw new Error("ENOENT: no such file or directory");
+          return digestFile;
+        },
+      };
+    }
+    throw new Error(`unexpected require: ${specifier}`);
+  };
+  const fn = new AsyncFunction("github", "context", "core", "process", "require", inlineScript);
+  await fn(github, context, core, { env: { PROBE_OUTCOME: probeOutcome } }, sandboxRequire);
 
   const find = (name: string) => calls.find((call) => call.name === name);
   return {
@@ -257,5 +302,66 @@ describe("production smoke incident report / タイトルの追随", () => {
 
     expect(result.createdIssue?.title).toBe("[TEST] [P2] production smoke failure (1 consecutive)");
     expect(result.calls.some((call) => call.name === "actions.listWorkflowRuns")).toBe(false);
+  });
+});
+
+// Issue #207 の本体。probe は初回失敗の時点で「監視用 service token が Access に
+// 拒否されている」と正しく診断していたのに、incident 本文には run へのリンクしか
+// 載らなかった。当番は Issue を開いても原因が読めず、artifact を取得しない限り
+// 到達できない。結果、101回以上・4日間・352コメントの間、誰も直せなかった。
+describe("production smoke incident report / 診断の伝達 (Issue #207)", () => {
+  it("probe が確定させた診断を incident 本文へ載せる", async () => {
+    const result = await runIncidentScript({ previousRuns: [] });
+    const body = String(result.createdIssue?.body ?? "");
+
+    // 当番が最初に読む場所に「本番が落ちた」ではなく実際の原因が出ること
+    expect(body).toContain("Cloudflare Access service token rejected");
+    // ペア不一致という具体的な次の一手まで、artifact を取らずに辿れること
+    expect(body).toContain("belong to the same service token");
+    expect(body).toContain("Access service token: configured");
+    // 初動に必要な応答コード
+    expect(body).toContain("`/api/health` → 302");
+    expect(body).toContain("`/api/ready` → 302");
+  });
+
+  it("継続中 incident への追記コメントにも毎回の診断を載せる", async () => {
+    const result = await runIncidentScript({
+      previousRuns: [{ id: 1, conclusion: "failure" }],
+      openIncident: { number: 207, title: "[P2] production smoke failure (1 consecutive)", labels: [] },
+    });
+    const body = String(result.comment?.body ?? "");
+
+    // 追記が「また失敗した」だけだと、352件積んでも原因は伝わらない。
+    expect(body).toContain("Cloudflare Access service token rejected");
+    expect(result.createdIssue).toBeUndefined();
+  });
+
+  it("digest が無くても通知そのものは落とさない (fail-open)", async () => {
+    const result = await runIncidentScript({ previousRuns: [], digestFile: null });
+    const body = String(result.createdIssue?.body ?? "");
+
+    // 通知は安全網なので、診断を載せられないことを理由に起票を止めない。
+    expect(body).toContain("production smoke");
+    expect(body).toContain("失敗run");
+    expect(body).not.toContain("probeの診断");
+    expect(result.warnings.join(" ")).toContain("diagnosis digest");
+  });
+
+  it("digest が壊れていても起票し、診断欄だけを落とす", async () => {
+    const result = await runIncidentScript({ previousRuns: [], digestFile: "{ not json" });
+    expect(String(result.createdIssue?.body ?? "")).toContain("失敗run");
+    expect(result.warnings.join(" ")).toContain("diagnosis digest");
+  });
+
+  it("診断の値が表を壊さないようパイプをエスケープする", async () => {
+    const digest = JSON.stringify({
+      overall: "ATTENTION",
+      productionConnected: false,
+      accessTokenConfigured: false,
+      productionStatuses: [],
+      diagnosis: [{ check: "a|b", state: "ATTENTION", detail: "c|d" }],
+    });
+    const body = String((await runIncidentScript({ previousRuns: [], digestFile: digest })).createdIssue?.body ?? "");
+    expect(body).toContain("| a\\|b | ATTENTION | c\\|d |");
   });
 });
