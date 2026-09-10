@@ -1,5 +1,12 @@
 import { createRequire } from "node:module";
+import { spawn } from "node:child_process";
+import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
+
+const scriptPath = join(dirname(fileURLToPath(import.meta.url)), "../../scripts/tools/post-release-status.js");
 
 const require = createRequire(import.meta.url);
 const {
@@ -647,4 +654,70 @@ describe("post-release-status", () => {
       "ready\\|spoofed \\| injected \\| row",
     );
   });
+});
+
+// CodeRabbit 指摘: 引数解析だけでは「main() が実際に digest を書く」契約を守れない。
+// parseArgs が通っても書き出し側が壊れれば、incident 本文から診断が黙って消える。
+describe("post-release-status / --diagnosis-out のファイル出力契約", () => {
+  const runProbe = (extraArgs: string[]) =>
+    new Promise<{ code: number | null; stdout: string }>((resolve) => {
+      const child = spawn(
+        process.execPath,
+        [
+          scriptPath,
+          // 到達不能な宛先へ向けて短いタイムアウトで落とす。ネットワークに依存せず
+          // 「失敗経路でも digest が書かれる」ことを見る (書かれなければ本番と同じ盲点)。
+          "--production-url",
+          "http://127.0.0.1:1",
+          "--preview-url",
+          "http://127.0.0.1:1",
+          "--timeout-ms",
+          "300",
+          ...extraArgs,
+        ],
+        { stdio: ["ignore", "pipe", "pipe"] },
+      );
+      let stdout = "";
+      child.stdout.on("data", (chunk) => (stdout += String(chunk)));
+      child.stderr.on("data", (chunk) => (stdout += String(chunk)));
+      child.on("close", (code) => resolve({ code, stdout }));
+    });
+
+  it("指定パスへ digest を JSON として書き出す", async () => {
+    const out = join(mkdtempSync(join(tmpdir(), "codip-digest-")), "production-diagnosis.json");
+    const { code } = await runProbe(["--diagnosis-out", out]);
+
+    // 本番が落ちている以上、終了コードは失敗のままであること（診断を書いても緑化しない）
+    expect(code).toBe(1);
+    const digest = JSON.parse(readFileSync(out, "utf8"));
+    expect(digest.overall).toBe("ATTENTION");
+    expect(digest.productionConnected).toBe(false);
+    expect(Array.isArray(digest.diagnosis)).toBe(true);
+    expect(digest.diagnosis.length).toBeGreaterThan(0);
+    for (const row of digest.diagnosis) {
+      expect(typeof row.check).toBe("string");
+      expect(typeof row.state).toBe("string");
+      expect(typeof row.detail).toBe("string");
+    }
+    expect(digest.productionStatuses.every((probe: { status: number }) => Number.isInteger(probe.status))).toBe(true);
+  }, 20_000);
+
+  it("--diagnosis-out を渡さなければファイルを作らない", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "codip-digest-"));
+    const { code } = await runProbe([]);
+    expect(code).toBe(1);
+    expect(readdirSync(dir)).toEqual([]);
+  }, 20_000);
+
+  it("書き出しに失敗しても本来の判定と終了コードは落とさない", async () => {
+    // 存在しないディレクトリ配下を指定して writeFileSync を失敗させる。
+    const out = join(mkdtempSync(join(tmpdir(), "codip-digest-")), "missing-dir", "d.json");
+    const { code, stdout } = await runProbe(["--diagnosis-out", out]);
+
+    expect(code).toBe(1);
+    // 握り潰さず理由を残すこと
+    expect(stdout).toContain("could not write diagnosis digest");
+    // digest を書けなくても本番状態の判定自体は出力されること
+    expect(stdout).toContain("Post-release Runtime Status");
+  }, 20_000);
 });
