@@ -1,5 +1,12 @@
 import { createRequire } from "node:module";
+import { spawn } from "node:child_process";
+import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
+
+const scriptPath = join(dirname(fileURLToPath(import.meta.url)), "../../scripts/tools/post-release-status.js");
 
 const require = createRequire(import.meta.url);
 const {
@@ -10,6 +17,7 @@ const {
   renderReport,
   fetchWithTimeout,
   inspectProbe,
+  buildIncidentDigest,
   escapeMarkdownTable,
 } = require("../../scripts/tools/post-release-status.js") as {
   DEFAULT_PREVIEW_URL: string;
@@ -23,6 +31,7 @@ const {
     maxResponseMs: number;
     accessClientId: string;
     accessClientSecret: string;
+    diagnosisOut: string;
   };
   buildReport: (
     args: {
@@ -50,6 +59,13 @@ const {
     accessTokenConfigured: boolean;
   }>;
   renderReport: (report: unknown) => string;
+  buildIncidentDigest: (report: unknown) => {
+    overall: string;
+    productionConnected: boolean;
+    accessTokenConfigured: boolean;
+    productionStatuses: { path: string; status: number }[];
+    diagnosis: { check: string; state: string; detail: string }[];
+  };
   fetchWithTimeout: (
     url: string,
     options: {
@@ -423,6 +439,94 @@ describe("post-release-status", () => {
     expect(rendered).not.toContain("service-client-id");
   });
 
+  // Issue #207: probeは初回失敗の時点で「service tokenが拒否されている」と正しく
+  // 診断していたが、その結論はartifact側にしか残らず、incident Issue本文にはrunへの
+  // リンクしか載らなかった。結果として101回以上・4日間・352コメントの間、当番は
+  // Issueを見ても原因へ辿り着けなかった。digestは通知へ載せる分の契約である。
+  it("exposes the rejected-token diagnosis in the non-secret incident digest", async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      if (isProductionUrl(url)) {
+        return new Response("", {
+          status: 302,
+          headers: {
+            server: "cloudflare",
+            "cf-ray": "abc-NRT",
+            "www-authenticate": 'Cloudflare-Access resource_metadata="https://odip.example.com/.well-known/x"',
+          },
+        });
+      }
+      return new Response("{}", { status: 200 });
+    });
+
+    const report = await buildReport(
+      {
+        ...baseArgs,
+        strictProduction: true,
+        accessClientId: "service-client-id",
+        accessClientSecret: "service-client-secret",
+      },
+      {
+        resolver: { resolve4: async () => ["203.0.113.10"], resolve6: async () => [] },
+        fetcher,
+      },
+    );
+
+    const digest = buildIncidentDigest(report);
+    const serialized = JSON.stringify(digest);
+
+    // 当番が最初に読む一行が「本番が落ちた」ではなく「監視credentialが拒否された」であること
+    expect(digest.diagnosis.map((row) => row.check)).toContain("Cloudflare Access service token rejected");
+    // ペア不一致という実際の原因を、artifactを取得しなくても本文だけで辿れること
+    expect(serialized).toContain("same service token");
+    expect(digest.accessTokenConfigured).toBe(true);
+    expect(digest.overall).toBe("ATTENTION");
+    expect(digest.productionConnected).toBe(false);
+    // 初動に必要な応答コードは載せる
+    expect(digest.productionStatuses).toEqual([
+      { path: "/api/health", status: 302 },
+      { path: "/api/ready", status: 302 },
+    ]);
+
+    // digestはIssue本文へ入る。資格情報を持ち込まないことが成立条件。
+    expect(serialized).not.toContain("service-client-secret");
+    expect(serialized).not.toContain("service-client-id");
+  });
+
+  it("keeps the digest free of endpoint-controlled text and table-breaking characters", async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      if (isProductionUrl(url)) {
+        // endpointが制御できる本文・ヘッダを返しても、digestへは載らないこと。
+        return new Response("| injected | row |\n## fake heading", {
+          status: 500,
+          headers: { server: "cloudflare", "cf-ray": "x", "x-evil": "| pipe |\n newline" },
+        });
+      }
+      return new Response("{}", { status: 200 });
+    });
+
+    const report = await buildReport(
+      { ...baseArgs, strictProduction: true },
+      { resolver: { resolve4: async () => ["203.0.113.10"], resolve6: async () => [] }, fetcher },
+    );
+
+    const digest = buildIncidentDigest(report);
+    for (const row of digest.diagnosis) {
+      for (const value of [row.check, row.state, row.detail]) {
+        expect(value).not.toMatch(/[\r\n]/);
+        expect(value.length).toBeLessThanOrEqual(500);
+      }
+    }
+    expect(JSON.stringify(digest)).not.toContain("injected");
+    expect(digest.productionStatuses.every((probe) => Number.isInteger(probe.status))).toBe(true);
+  });
+
+  it("accepts --diagnosis-out and defaults it to disabled", () => {
+    expect(parseArgs([]).diagnosisOut).toBe("");
+    expect(parseArgs(["--diagnosis-out", "production-diagnosis.json"]).diagnosisOut).toBe(
+      "production-diagnosis.json",
+    );
+  });
+
   it("does not blame the service token for a 302 that carries no Access challenge", async () => {
     const fetcher = vi.fn(async (url: string) => {
       if (isProductionUrl(url)) {
@@ -550,4 +654,70 @@ describe("post-release-status", () => {
       "ready\\|spoofed \\| injected \\| row",
     );
   });
+});
+
+// CodeRabbit 指摘: 引数解析だけでは「main() が実際に digest を書く」契約を守れない。
+// parseArgs が通っても書き出し側が壊れれば、incident 本文から診断が黙って消える。
+describe("post-release-status / --diagnosis-out のファイル出力契約", () => {
+  const runProbe = (extraArgs: string[]) =>
+    new Promise<{ code: number | null; stdout: string }>((resolve) => {
+      const child = spawn(
+        process.execPath,
+        [
+          scriptPath,
+          // 到達不能な宛先へ向けて短いタイムアウトで落とす。ネットワークに依存せず
+          // 「失敗経路でも digest が書かれる」ことを見る (書かれなければ本番と同じ盲点)。
+          "--production-url",
+          "http://127.0.0.1:1",
+          "--preview-url",
+          "http://127.0.0.1:1",
+          "--timeout-ms",
+          "300",
+          ...extraArgs,
+        ],
+        { stdio: ["ignore", "pipe", "pipe"] },
+      );
+      let stdout = "";
+      child.stdout.on("data", (chunk) => (stdout += String(chunk)));
+      child.stderr.on("data", (chunk) => (stdout += String(chunk)));
+      child.on("close", (code) => resolve({ code, stdout }));
+    });
+
+  it("指定パスへ digest を JSON として書き出す", async () => {
+    const out = join(mkdtempSync(join(tmpdir(), "codip-digest-")), "production-diagnosis.json");
+    const { code } = await runProbe(["--diagnosis-out", out]);
+
+    // 本番が落ちている以上、終了コードは失敗のままであること（診断を書いても緑化しない）
+    expect(code).toBe(1);
+    const digest = JSON.parse(readFileSync(out, "utf8"));
+    expect(digest.overall).toBe("ATTENTION");
+    expect(digest.productionConnected).toBe(false);
+    expect(Array.isArray(digest.diagnosis)).toBe(true);
+    expect(digest.diagnosis.length).toBeGreaterThan(0);
+    for (const row of digest.diagnosis) {
+      expect(typeof row.check).toBe("string");
+      expect(typeof row.state).toBe("string");
+      expect(typeof row.detail).toBe("string");
+    }
+    expect(digest.productionStatuses.every((probe: { status: number }) => Number.isInteger(probe.status))).toBe(true);
+  }, 20_000);
+
+  it("--diagnosis-out を渡さなければファイルを作らない", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "codip-digest-"));
+    const { code } = await runProbe([]);
+    expect(code).toBe(1);
+    expect(readdirSync(dir)).toEqual([]);
+  }, 20_000);
+
+  it("書き出しに失敗しても本来の判定と終了コードは落とさない", async () => {
+    // 存在しないディレクトリ配下を指定して writeFileSync を失敗させる。
+    const out = join(mkdtempSync(join(tmpdir(), "codip-digest-")), "missing-dir", "d.json");
+    const { code, stdout } = await runProbe(["--diagnosis-out", out]);
+
+    expect(code).toBe(1);
+    // 握り潰さず理由を残すこと
+    expect(stdout).toContain("could not write diagnosis digest");
+    // digest を書けなくても本番状態の判定自体は出力されること
+    expect(stdout).toContain("Post-release Runtime Status");
+  }, 20_000);
 });

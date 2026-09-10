@@ -128,7 +128,7 @@ Issue #127 でこの構造は撤去した。既定値を削除し、`--restore-d
 
 | # | ゲート名（検査項目） | 供給元（ファイル:行） | 分類 | 偽陰性シナリオ | 是正案 |
 | ---: | --- | --- | :---: | --- | --- |
-| 25 | production readiness（`production-smoke.yml` の `production-status` step → `Enforce production readiness`） | `post-release-status.js:383` `probeUrl(args.productionUrl, PRODUCTION_PATHS)` の実 HTTP。既定 URL は `:5` の定数、対象パスは `:11` | 🟢 | — | **自己申告入力を持たない唯一のゲート。** `CODIP_PRODUCTION_URL` で上書き可能だが workflow は渡していない（`production-smoke.yml` の env は Access 用 secret 2件のみ） |
+| 25 | production readiness（`production-smoke.yml` の `production-status` step → `Enforce production readiness`） | `post-release-status.js:499` `probeUrl(args.productionUrl, PRODUCTION_PATHS)` の実 HTTP。既定 URL は `:6` の定数、対象パスは `:12` | 🟢 | — | **自己申告入力を持たない唯一のゲート。** `CODIP_PRODUCTION_URL` で上書き可能だが workflow は渡していない（`production-smoke.yml` の env は Access 用 secret 2件のみ） |
 | 26 | 「連続2回以上の失敗で P1」の評価 | 供給元となる実装が存在しない。run 間の状態を保持しないことは `tests/unit/monitoring-runbook-contract.test.ts:111-117` で固定済み | 🔴 | **人間の記憶が唯一の供給元。** 前回 run の結果を機械が保持しないため、2回連続失敗しても自動では P1 と判定されない | backend への変更仕様は monitoring.md §1.1.4 に記載済み（T-B3） |
 
 ### 2.5 偽陰性シナリオの現況（実行検査される）

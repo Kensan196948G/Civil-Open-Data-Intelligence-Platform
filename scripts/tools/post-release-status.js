@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const dns = require("node:dns/promises");
+const fs = require("node:fs");
 
 const DEFAULT_PRODUCTION_URL = "https://odip.mirai-dx-platform.com";
 const DEFAULT_PREVIEW_URL = "http://192.168.0.185:3100";
@@ -23,6 +24,7 @@ function parseArgs(argv) {
     maxResponseMs: Number.parseInt(process.env.CODIP_MAX_RESPONSE_MS || "", 10) || DEFAULT_MAX_RESPONSE_MS,
     accessClientId: (process.env.CF_ACCESS_CLIENT_ID || "").trim(),
     accessClientSecret: (process.env.CF_ACCESS_CLIENT_SECRET || "").trim(),
+    diagnosisOut: "",
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -45,6 +47,8 @@ function parseArgs(argv) {
       args.accessClientId = (argv[++index] ?? "").trim();
     } else if (arg === "--access-client-secret") {
       args.accessClientSecret = (argv[++index] ?? "").trim();
+    } else if (arg === "--diagnosis-out") {
+      args.diagnosisOut = (argv[++index] ?? "").trim();
     } else if (arg === "--help" || arg === "-h") {
       args.help = true;
     }
@@ -66,6 +70,7 @@ function usage() {
     "  --max-response-ms <ms>    Mark probes slower than this as not ready. Default: 5000.",
     "  --access-client-id <id>   Cloudflare Access service token client ID (also CF_ACCESS_CLIENT_ID).",
     "  --access-client-secret    Cloudflare Access service token secret (also CF_ACCESS_CLIENT_SECRET).",
+    "  --diagnosis-out <path>    Write the non-secret incident digest (diagnosis + overall state) as JSON.",
   ].join("\n");
 }
 
@@ -402,6 +407,41 @@ function escapeMarkdownTable(value) {
     .replace(/[\r\n]+/g, " ");
 }
 
+// incident通知へ載せてよい「非機密の診断サマリ」を組み立てる。
+// 機密判定はprobe側の責務にする。workflow側でproduction-status.mdを後追いパースすると、
+// probeの出力形式が変わったときに静かに壊れるか、逆にendpoint由来の文字列を
+// そのままIssueへ持ち込む。ここで載せるのは
+//   - diagnoseProductionIssue が返すコード内固定文言 (Check / State / Detail)
+//   - 真偽値から導いた状態
+//   - HTTPステータスコード (整数のみ)
+// だけで、レスポンスボディ・ヘッダ値・URL・token・PIIは一切含めない。
+const DIGEST_FIELD_MAX_LENGTH = 500;
+
+function digestText(value) {
+  return String(value ?? "")
+    .replace(/[\r\n]+/g, " ")
+    .slice(0, DIGEST_FIELD_MAX_LENGTH);
+}
+
+function buildIncidentDigest(report) {
+  return {
+    overall: report.ready ? "OK" : "ATTENTION",
+    productionConnected: Boolean(report.productionConnected),
+    accessTokenConfigured: Boolean(report.accessTokenConfigured),
+    // 「どのpathが何を返したか」は当番の初動に必要だが、pathはPRODUCTION_PATHS由来の
+    // 固定値、statusは整数に限る。整数化できない応答 (timeout等) は0として扱う。
+    productionStatuses: (report.productionProbes || []).map((probe) => ({
+      path: digestText(probe.path),
+      status: Number.isInteger(probe.status) ? probe.status : 0,
+    })),
+    diagnosis: (report.productionDiagnosis || []).map(([check, state, detail]) => ({
+      check: digestText(check),
+      state: digestText(state),
+      detail: digestText(detail),
+    })),
+  };
+}
+
 function renderReport(report) {
   const lines = [
     "# Post-release Runtime Status",
@@ -515,6 +555,15 @@ async function main() {
 
   const report = await buildReport(args);
   console.log(renderReport(report));
+  if (args.diagnosisOut) {
+    // digestの書き出しに失敗しても本来の役目 (本番状態の判定と終了コード) は落とさない。
+    // 逆に握り潰すと通知が静かに痩せるため、必ずstderrへ理由を残す。
+    try {
+      fs.writeFileSync(args.diagnosisOut, `${JSON.stringify(buildIncidentDigest(report), null, 2)}\n`);
+    } catch (error) {
+      console.error(`[post-release-status][warn] could not write diagnosis digest: ${error?.message || error}`);
+    }
+  }
   if (!report.ready) process.exit(1);
 }
 
@@ -535,5 +584,6 @@ module.exports = {
   renderReport,
   inspectProbe,
   diagnoseProductionIssue,
+  buildIncidentDigest,
   escapeMarkdownTable,
 };

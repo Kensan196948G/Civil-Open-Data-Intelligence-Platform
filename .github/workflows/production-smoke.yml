@@ -53,6 +53,7 @@ jobs:
           --strict-production
           --allow-preview-down
           --max-response-ms 5000
+          --diagnosis-out production-diagnosis.json
           > production-status.md 2>&1
 
       - name: Publish run summary
@@ -87,6 +88,7 @@ jobs:
           PROBE_OUTCOME: ${{ steps.production-status.outcome }}
         with:
           script: |
+            const fs = require("node:fs");
             const WORKFLOW_FILE = "production-smoke.yml";
             const DEDUPE_LABEL = "production-smoke";
             // listWorkflowRuns の per_page 上限。1リクエストで遡れる範囲がそのまま
@@ -166,8 +168,44 @@ jobs:
                     : `${streakText} (直近${HISTORY_DEPTH}run参照)`;
             const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
 
-            // 本文にはrunへの参照だけを書く。probe出力は redacted artifact 側に置き、
-            // Secret / 認証情報 / PII をIssueへ持ち込まない。
+            // probeが確定させた診断結論を本文へ載せる。runへの参照だけを書いていた頃は、
+            // 当番がIssueを開いても「何が壊れたか」が分からず、artifactを取得するまで
+            // 原因へ辿り着けなかった (Issue #207 は352コメント積まれても未解決のままだった)。
+            // 載せるのは post-release-status.js の buildIncidentDigest が返す非機密digestに限る。
+            // probe出力そのもの (endpoint由来の文字列を含む) は従来どおり artifact 側に置く。
+            const readDigest = () => {
+              try {
+                const parsed = JSON.parse(fs.readFileSync("production-diagnosis.json", "utf8"));
+                return Array.isArray(parsed?.diagnosis) ? parsed : null;
+              } catch (error) {
+                // digestが無い/壊れていても通知は落とさない (fail-open)。
+                core.warning(`Could not read the diagnosis digest; reporting without it: ${error.message}`);
+                return null;
+              }
+            };
+            const digest = readDigest();
+            // digestの各セルはprobe側で改行除去・長さ上限済みだが、表を壊さないよう
+            // パイプだけはこちらでもエスケープする。
+            const cell = (value) => String(value ?? "").replace(/\|/g, "\\|");
+            const diagnosisLines = digest
+              ? [
+                  "",
+                  `**probeの診断** (Overall: ${cell(digest.overall)} / Access service token: ${
+                    digest.accessTokenConfigured ? "configured" : "not configured"
+                  })`,
+                  "",
+                  "| Check | State | Detail |",
+                  "| --- | --- | --- |",
+                  ...digest.diagnosis.map((row) => `| ${cell(row.check)} | ${cell(row.state)} | ${cell(row.detail)} |`),
+                  "",
+                  `本番probeの応答: ${
+                    (digest.productionStatuses ?? [])
+                      .map((probe) => `\`${cell(probe.path)}\` → ${Number(probe.status) || "no response"}`)
+                      .join(" / ") || "(なし)"
+                  }`,
+                ]
+              : [];
+
             const body = [
               `${isNotificationTest ? "【通知受信テスト】" : ""}production smoke (\`${WORKFLOW_FILE}\`) が失敗しました。`,
               "",
@@ -186,6 +224,7 @@ jobs:
                 : consecutiveFailures === null
                   ? "連続失敗回数を判定できなかったため P2 として起票しています。run履歴を目視で確認してください。"
                   : "初回失敗のため P2。次runも失敗した場合は自動でP1へ昇格します。",
+              ...diagnosisLines,
               "",
               "詳細は run の Summary と `production-status` artifact (14日保持) を参照してください。",
             ].join("\n");
