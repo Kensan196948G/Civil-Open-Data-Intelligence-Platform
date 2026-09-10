@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -76,6 +77,47 @@ describe("deploy-local-production.sh の契約", () => {
   it("整理処理が current と previous を消さない", () => {
     expect(scriptSource).toContain("keep_current");
     expect(scriptSource).toContain("keep_previous");
+  });
+
+  it("未作成のリンクを解決したことにしない", () => {
+    // readlink -f は「最後の要素が存在しない」パスでも正規化した文字列を返す。
+    // その値を previous として記録すると previous が current を指すエイリアスに
+    // なり、ロールバックが自分自身への切り替え = 無効化される。初回デプロイで
+    // 実際に起きた (current 未作成のまま previous へ current のパスを書いた)。
+    expect(scriptSource).toMatch(/\[ -L "\$1" \] \|\| return 0/);
+  });
+
+  it("--status が未設定リンクを空欄ではなく代替文言で表示する", () => {
+    // resolve_link は未設定でも成功終了するため、`|| echo '(未設定)'` では
+    // 代替文言が出ず空欄になっていた (CodeRabbit 指摘)。
+    //
+    // ソースに describe_link が在ることだけを見ると、定義したまま表示経路が
+    // 呼んでいない実装でも緑になる (これも CodeRabbit の指摘)。実際に
+    // --status を走らせて出力を見る。
+    const root = mkdtempSync(path.join(tmpdir(), "codip-deploy-status-"));
+    try {
+      const output = execFileSync("bash", [path.join(repoRoot, scriptPath), "--status"], {
+        env: { ...process.env, CODIP_DEPLOY_ROOT: root },
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      expect(output).toMatch(/current\s*:\s*\(未設定\)/);
+      expect(output).toMatch(/previous\s*:\s*\(なし\)/);
+      // 空欄で出ていないこと (行末が値なしで終わらない)。
+      expect(output).not.toMatch(/current\s*:\s*$/m);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("成功ログでスコープ外の変数を参照しない", () => {
+    // build_release を関数へ切り出した際、deploy 側に残った $short が
+    // スコープ外になり、set -u で「unbound variable」になって再起動後に落ちた。
+    // ヘルスチェックまで通ったあとで異常終了するため、成功か失敗か分からない
+    // 終わり方になる。
+    const deploySection = scriptSource.slice(scriptSource.indexOf("deploy() {"));
+    expect(deploySection).not.toMatch(/\$short\b/);
   });
 
   it("配備したリリース識別子を EnvironmentFile へ書き出す", () => {
